@@ -2,7 +2,7 @@
 
 AI Clip Memory is a local-first desktop application and browser extension for saving and reusing useful pieces of AI conversations.
 
-This repository currently contains only the Milestone 0 foundation. It does not include clip storage, browser capture, accounts, cloud services, telemetry, or networking.
+This repository contains the Milestone 0 foundation and the Milestone 1 desktop shell. It does not include clip storage, browser capture, accounts, cloud services, telemetry, or networking.
 
 ## Repository structure
 
@@ -24,6 +24,7 @@ This repository currently contains only the Milestone 0 foundation. It does not 
 pnpm install
 pnpm format:check
 pnpm lint
+pnpm test
 pnpm typecheck
 pnpm build:extension
 pnpm build:desktop
