@@ -1,0 +1,30 @@
+{
+  "name": "@ai-clip-memory/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm run build:frontend",
+    "build:frontend": "tsc -b && vite build",
+    "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml",
+    "dev": "vite",
+    "format:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
+    "format:rust:check": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check",
+    "tauri": "tauri",
+    "tauri:build": "tauri build --no-bundle",
+    "tauri:dev": "tauri dev",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@ai-clip-memory/shared": "workspace:*",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "typescript": "catalog:",
+    "vite": "8.2.2"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "ai-clip-memory",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": "^22.13.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "pnpm --recursive --if-present build",
+    "build:desktop": "pnpm --filter @ai-clip-memory/desktop build",
+    "build:extension": "pnpm --filter @ai-clip-memory/extension build",
+    "check:rust": "pnpm --filter @ai-clip-memory/desktop check:rust",
+    "dev:desktop": "pnpm --filter @ai-clip-memory/desktop tauri:dev",
+    "format": "prettier --write . && pnpm format:rust",
+    "format:check": "prettier --check . && pnpm format:rust:check",
+    "format:rust": "pnpm --filter @ai-clip-memory/desktop format:rust",
+    "format:rust:check": "pnpm --filter @ai-clip-memory/desktop format:rust:check",
+    "lint": "eslint .",
+    "typecheck": "pnpm --recursive --if-present typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.9.1",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.12.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.69.0"
+  }
+}

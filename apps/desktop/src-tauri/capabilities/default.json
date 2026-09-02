@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "No frontend-to-native permissions are required for Milestone 0.",
+  "windows": ["main"],
+  "permissions": []
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@ai-clip-memory/extension",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit --pretty false"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite": "8.2.2"
+  }
+}
