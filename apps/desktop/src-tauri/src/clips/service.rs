@@ -43,6 +43,10 @@ impl ClipService {
         self.repository.get(id)
     }
 
+    pub fn list(&self) -> Result<Vec<Clip>> {
+        self.repository.list()
+    }
+
     pub fn update(&self, id: &str, input: UpdateClip) -> Result<Option<Clip>> {
         let Some(existing_clip) = self.repository.get(id)? else {
             return Ok(None);

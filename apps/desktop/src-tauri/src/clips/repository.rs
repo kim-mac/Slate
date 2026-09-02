@@ -68,6 +68,27 @@ impl ClipRepository {
             .optional()
     }
 
+    pub(crate) fn list(&self) -> Result<Vec<Clip>> {
+        let connection = self.database.connect()?;
+        let mut statement = connection.prepare(
+            "SELECT
+                id,
+                content,
+                content_type,
+                title,
+                source_app,
+                source_url,
+                source_page_title,
+                is_pinned,
+                created_at,
+                updated_at
+            FROM clips
+            ORDER BY created_at DESC, id ASC",
+        )?;
+        let clips = statement.query_map([], map_clip)?.collect();
+        clips
+    }
+
     pub(crate) fn update(&self, clip: &Clip) -> Result<bool> {
         let connection = self.database.connect()?;
         let changed_rows = connection.execute(

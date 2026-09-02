@@ -216,3 +216,27 @@ fn persists_a_clip_after_the_database_is_closed_and_reopened() {
         .expect("the clip should survive reopening the database");
     assert_eq!(persisted, created);
 }
+
+#[test]
+fn lists_clips_newest_first_with_a_stable_id_tiebreaker() {
+    let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let path = database_path(&temp_directory);
+    let service = open_service(&path);
+
+    let first = service
+        .create(new_clip("First clip"))
+        .expect("the first clip should be created");
+    let second = service
+        .create(new_clip("Second clip"))
+        .expect("the second clip should be created");
+
+    let listed = service.list().expect("clips should be listed");
+
+    assert_eq!(listed.len(), 2);
+    assert!(listed.windows(2).all(|clips| {
+        clips[0].created_at > clips[1].created_at
+            || (clips[0].created_at == clips[1].created_at && clips[0].id < clips[1].id)
+    }));
+    assert!(listed.iter().any(|clip| clip.id == first.id));
+    assert!(listed.iter().any(|clip| clip.id == second.id));
+}

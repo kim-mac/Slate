@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "No frontend-to-native permissions are required for Milestone 0.",
+  "description": "The main window uses only application-defined clip commands.",
   "windows": ["main"],
   "permissions": []
 }
