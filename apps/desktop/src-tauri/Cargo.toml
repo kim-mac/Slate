@@ -13,4 +13,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"] }
 tauri = { version = "2", features = [] }
+uuid = { version = "1.26.0", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"

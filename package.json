@@ -18,8 +18,9 @@
     "format:rust": "pnpm --filter @ai-clip-memory/desktop format:rust",
     "format:rust:check": "pnpm --filter @ai-clip-memory/desktop format:rust:check",
     "lint": "eslint .",
-    "test": "pnpm --recursive --if-present test",
+    "test": "pnpm --recursive --if-present test && pnpm test:rust",
     "test:desktop": "pnpm --filter @ai-clip-memory/desktop test",
+    "test:rust": "pnpm --filter @ai-clip-memory/desktop test:rust",
     "typecheck": "pnpm --recursive --if-present typecheck"
   },
   "devDependencies": {
