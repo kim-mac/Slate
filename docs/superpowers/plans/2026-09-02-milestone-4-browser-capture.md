@@ -37,7 +37,7 @@ Run `pnpm install` and confirm the supply-chain policy succeeds.
 Run:
 
 ```powershell
-pnpm --filter @ai-clip-memory/extension exec vitest run --passWithNoTests
+pnpm --filter @ai-clip-memory/extension test --passWithNoTests
 ```
 
 Expected: exit code 0 with no extension tests found yet.

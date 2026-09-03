@@ -1,7 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2023", "WebWorker"]
+    "lib": ["ES2023", "WebWorker"],
+    "resolveJsonModule": true,
+    "types": ["chrome"]
   },
   "include": ["src", "vite.config.ts"]
 }

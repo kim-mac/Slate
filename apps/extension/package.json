@@ -5,10 +5,16 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit --pretty false"
   },
+  "dependencies": {
+    "@ai-clip-memory/shared": "workspace:*"
+  },
   "devDependencies": {
+    "@types/chrome": "0.2.8",
     "typescript": "catalog:",
-    "vite": "8.2.2"
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
   }
 }
