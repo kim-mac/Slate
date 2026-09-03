@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "pnpm --recursive --if-present build",
+    "build:bridge": "pnpm --filter @ai-clip-memory/desktop build:bridge",
     "build:desktop": "pnpm --filter @ai-clip-memory/desktop build",
     "build:extension": "pnpm --filter @ai-clip-memory/extension build",
     "check:rust": "pnpm --filter @ai-clip-memory/desktop check:rust",

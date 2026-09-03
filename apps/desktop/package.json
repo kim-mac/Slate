@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm run build:frontend",
+    "build:bridge": "cargo build --manifest-path src-tauri/Cargo.toml --bin ai-clip-memory-native-host",
     "build:frontend": "tsc -b && vite build",
     "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml",
     "dev": "vite",

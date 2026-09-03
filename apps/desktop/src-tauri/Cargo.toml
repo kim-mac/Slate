@@ -4,6 +4,11 @@ version = "0.0.0"
 description = "Local-first AI clip memory desktop application"
 authors = ["AI Clip Memory contributors"]
 edition = "2021"
+default-run = "ai-clip-memory-desktop"
+
+[[bin]]
+name = "ai-clip-memory-native-host"
+path = "src/bin/ai-clip-memory-native-host.rs"
 
 [lib]
 name = "ai_clip_memory_desktop_lib"
@@ -14,8 +19,10 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+dirs = "6"
 rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-opener = "2"

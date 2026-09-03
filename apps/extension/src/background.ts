@@ -1,5 +1,9 @@
-import type { BrowserCapturePayload } from '@ai-clip-memory/shared';
+import type {
+  BrowserCapturePayload,
+  CaptureClipResponse,
+} from '@ai-clip-memory/shared';
 
+import { sendCaptureToDesktop, type SendNativeMessage } from './bridge';
 import { createCapturePayload, type BrowserCaptureInput } from './capture';
 import { CAPTURE_CONTEXT_MENU } from './contextMenu';
 
@@ -24,6 +28,17 @@ export function createCapturePayloadFromContextMenu(
   return createCapturePayload(input);
 }
 
+export async function handleCaptureClick(
+  info: CaptureClickInfo,
+  tab?: CaptureTab,
+  sendNativeMessage?: SendNativeMessage,
+): Promise<CaptureClipResponse | null> {
+  const payload = createCapturePayloadFromContextMenu(info, tab);
+  if (payload === null) return null;
+
+  return sendCaptureToDesktop(payload, sendNativeMessage);
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create(CAPTURE_CONTEXT_MENU);
@@ -31,5 +46,5 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  createCapturePayloadFromContextMenu(info, tab);
+  void handleCaptureClick(info, tab);
 });
