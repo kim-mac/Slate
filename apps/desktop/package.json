@@ -14,10 +14,12 @@
     "tauri:build": "tauri build --no-bundle",
     "tauri:dev": "tauri dev",
     "test": "vitest run",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
     "@ai-clip-memory/shared": "workspace:*",
+    "@tauri-apps/api": "2.11.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
