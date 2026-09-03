@@ -6,6 +6,17 @@ import {
 } from '@ai-clip-memory/shared';
 import { useState, type FormEvent } from 'react';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+
 interface ClipFormProps {
   clip?: Clip;
   isSaving: boolean;
@@ -49,77 +60,85 @@ export function ClipForm({
   }
 
   return (
-    <section className="clip-form-view" aria-labelledby="clip-form-heading">
-      <header className="section-header">
-        <h1 id="clip-form-heading">{clip ? 'Edit clip' : 'Create clip'}</h1>
-        <p>
-          {clip ? 'Replace the editable clip fields.' : 'Save a clip locally.'}
-        </p>
-      </header>
-
-      <form className="clip-form" onSubmit={handleSubmit}>
-        <label>
-          Content
-          <textarea
-            required
-            rows={9}
-            value={content}
-            onChange={(event) => setContent(event.currentTarget.value)}
-          />
-        </label>
-        <label>
-          Content type
-          <select
-            value={contentType}
-            onChange={(event) =>
-              setContentType(event.currentTarget.value as ClipContentType)
-            }
-          >
+    <form className="clip-form" onSubmit={handleSubmit}>
+      <label htmlFor="clip-content">
+        Content
+        <Textarea
+          id="clip-content"
+          className="clip-form-content"
+          required
+          rows={8}
+          value={content}
+          onChange={(event) => setContent(event.currentTarget.value)}
+        />
+      </label>
+      <label htmlFor="clip-content-type">
+        Content type
+        <Select
+          value={contentType}
+          onValueChange={(value) => {
+            if (value) setContentType(value as ClipContentType);
+          }}
+        >
+          <SelectTrigger id="clip-content-type" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
             {CLIP_CONTENT_TYPES.map((type) => (
-              <option value={type} key={type}>
+              <SelectItem
+                value={type}
+                key={type}
+                onClick={() => setContentType(type)}
+              >
                 {type}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-        </label>
-        <label>
+          </SelectContent>
+        </Select>
+      </label>
+      <div className="clip-form-grid">
+        <label htmlFor="clip-title">
           Title
-          <input
+          <Input
+            id="clip-title"
             value={title}
             onChange={(event) => setTitle(event.currentTarget.value)}
           />
         </label>
-        <label>
+        <label htmlFor="clip-source-app">
           Source app
-          <input
+          <Input
+            id="clip-source-app"
             value={sourceApp}
             onChange={(event) => setSourceApp(event.currentTarget.value)}
           />
         </label>
-        <label>
+        <label htmlFor="clip-source-url">
           Source URL
-          <input
+          <Input
+            id="clip-source-url"
             type="url"
             value={sourceUrl}
             onChange={(event) => setSourceUrl(event.currentTarget.value)}
           />
         </label>
-        <label>
+        <label htmlFor="clip-source-page-title">
           Source page title
-          <input
+          <Input
+            id="clip-source-page-title"
             value={sourcePageTitle}
             onChange={(event) => setSourcePageTitle(event.currentTarget.value)}
           />
         </label>
-        <div className="form-actions">
-          <button type="button" onClick={onCancel}>
-            Cancel
-          </button>
-          <button className="primary-button" type="submit" disabled={isSaving}>
-            {isSaving ? 'Saving…' : clip ? 'Save changes' : 'Save clip'}
-          </button>
-        </div>
-      </form>
-    </section>
+      </div>
+      <div className="form-actions">
+        <Button variant="outline" type="button" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSaving}>
+          {isSaving ? 'Saving…' : clip ? 'Save changes' : 'Save clip'}
+        </Button>
+      </div>
+    </form>
   );
 }

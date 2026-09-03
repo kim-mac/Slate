@@ -71,6 +71,25 @@ describe('App', () => {
     ).toBeTruthy();
   });
 
+  test('keeps local status, search, and create controls in the sidebar', async () => {
+    const { client } = fakeClient();
+    render(<App client={client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+
+    const sidebar = screen
+      .getByRole('navigation', { name: 'Clip library' })
+      .closest<HTMLElement>('[data-slot="sidebar"]');
+
+    expect(sidebar).not.toBeNull();
+    expect(within(sidebar!).getByText('Local only')).toBeTruthy();
+    expect(
+      within(sidebar!).getByRole('searchbox', { name: 'Search clips' }),
+    ).toBeTruthy();
+    expect(
+      within(sidebar!).getByRole('button', { name: 'New clip' }),
+    ).toBeTruthy();
+  });
+
   test('renders clips, real counts, and the selected clip detail', async () => {
     const { client } = fakeClient([firstClip, pinnedClip]);
     render(<App client={client} />);
@@ -79,12 +98,17 @@ describe('App', () => {
     expect(
       screen.getByRole('heading', { name: firstClip.title! }),
     ).toBeTruthy();
-    expect(
-      within(screen.getByRole('button', { name: /All Clips/ })).getByText('2'),
-    ).toBeTruthy();
-    expect(
-      within(screen.getByRole('button', { name: /Pinned/ })).getByText('1'),
-    ).toBeTruthy();
+    const allClipsItem = screen
+      .getByRole('button', { name: 'All Clips' })
+      .closest<HTMLElement>('[data-slot="sidebar-menu-item"]');
+    const pinnedItem = screen
+      .getByRole('button', { name: 'Pinned' })
+      .closest<HTMLElement>('[data-slot="sidebar-menu-item"]');
+
+    expect(allClipsItem).not.toBeNull();
+    expect(pinnedItem).not.toBeNull();
+    expect(within(allClipsItem!).getByText('2')).toBeTruthy();
+    expect(within(pinnedItem!).getByText('1')).toBeTruthy();
   });
 
   test('filters the loaded list with case-insensitive substring search', async () => {
@@ -117,16 +141,18 @@ describe('App', () => {
     await screen.findByRole('heading', { name: 'No clips yet' });
 
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
-    fireEvent.change(screen.getByLabelText('Content'), {
+    const dialog = screen.getByRole('dialog', { name: 'Create clip' });
+    fireEvent.change(within(dialog).getByLabelText('Content'), {
       target: { value: created.content },
     });
-    fireEvent.change(screen.getByLabelText('Content type'), {
-      target: { value: 'prompt' },
-    });
-    fireEvent.change(screen.getByLabelText('Title'), {
+    fireEvent.click(
+      within(dialog).getByRole('combobox', { name: 'Content type' }),
+    );
+    fireEvent.click(screen.getByRole('option', { name: 'prompt' }));
+    fireEvent.change(within(dialog).getByLabelText('Title'), {
       target: { value: created.title },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save clip' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save clip' }));
 
     await waitFor(() =>
       expect(fake.create).toHaveBeenCalledWith({
@@ -147,6 +173,28 @@ describe('App', () => {
     ).toBeTruthy();
   });
 
+  test('keeps a failed create error visible inside the open dialog', async () => {
+    const fake = fakeClient();
+    fake.create.mockRejectedValue({
+      code: 'invalid_input',
+      message: 'Content is required.',
+    });
+    render(<App client={fake.client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create clip' });
+    fireEvent.change(within(dialog).getByLabelText('Content'), {
+      target: { value: 'Valid local content' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save clip' }));
+
+    await waitFor(() => expect(fake.create).toHaveBeenCalledTimes(1));
+    expect(within(dialog).getByRole('alert').textContent).toContain(
+      'Content is required.',
+    );
+  });
+
   test('edits a clip using full-replacement input', async () => {
     const updated: Clip = {
       ...firstClip,
@@ -160,13 +208,16 @@ describe('App', () => {
     await screen.findByText(firstClip.content);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    fireEvent.change(screen.getByLabelText('Content'), {
+    const dialog = screen.getByRole('dialog', { name: 'Edit clip' });
+    fireEvent.change(within(dialog).getByLabelText('Content'), {
       target: { value: updated.content },
     });
-    fireEvent.change(screen.getByLabelText('Title'), {
+    fireEvent.change(within(dialog).getByLabelText('Title'), {
       target: { value: '' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' }),
+    );
 
     await waitFor(() =>
       expect(fake.update).toHaveBeenCalledWith(firstClip.id, {
@@ -181,13 +232,44 @@ describe('App', () => {
     expect(screen.getByText('Updated content')).toBeTruthy();
   });
 
-  test('deletes a clip after confirmation', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  test('cancels create without calling the client', async () => {
+    const fake = fakeClient();
+    render(<App client={fake.client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create clip' });
+    fireEvent.change(within(dialog).getByLabelText('Content'), {
+      target: { value: 'Do not save this' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(fake.create).not.toHaveBeenCalled();
+    expect(fake.update).not.toHaveBeenCalled();
+  });
+
+  test('cancels deletion without calling the client', async () => {
     const fake = fakeClient([firstClip]);
     render(<App client={fake.client} />);
     await screen.findByText(firstClip.content);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const alert = screen.getByRole('alertdialog', { name: 'Delete clip?' });
+    fireEvent.click(within(alert).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(fake.delete).not.toHaveBeenCalled();
+  });
+
+  test('deletes a clip after alert-dialog confirmation', async () => {
+    const fake = fakeClient([firstClip]);
+    render(<App client={fake.client} />);
+    await screen.findByText(firstClip.content);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const alert = screen.getByRole('alertdialog', { name: 'Delete clip?' });
+    fireEvent.click(within(alert).getByRole('button', { name: 'Delete clip' }));
 
     await waitFor(() => expect(fake.delete).toHaveBeenCalledWith(firstClip.id));
     expect(screen.getByRole('heading', { name: 'No clips yet' })).toBeTruthy();
@@ -203,9 +285,11 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
     await screen.findByRole('button', { name: 'Unpin' });
-    expect(
-      within(screen.getByRole('button', { name: /Pinned/ })).getByText('1'),
-    ).toBeTruthy();
+    const pinnedItem = screen
+      .getByRole('button', { name: 'Pinned' })
+      .closest<HTMLElement>('[data-slot="sidebar-menu-item"]');
+    expect(pinnedItem).not.toBeNull();
+    expect(within(pinnedItem!).getByText('1')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Unpin' }));
     await waitFor(() => expect(fake.setPinned).toHaveBeenCalledTimes(2));
