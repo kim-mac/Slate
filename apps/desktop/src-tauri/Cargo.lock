@@ -22,8 +22,10 @@ name = "ai-clip-memory-desktop"
 version = "0.0.0"
 dependencies = [
  "chrono",
+ "dirs",
  "rusqlite",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",

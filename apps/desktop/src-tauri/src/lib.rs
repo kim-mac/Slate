@@ -1,9 +1,12 @@
+pub mod app_paths;
+pub mod bridge;
 pub mod clips;
 mod commands;
 mod database;
 
 use std::fs;
 
+use app_paths::clip_database_path_from_app_data_dir;
 use clips::ClipService;
 use tauri::Manager;
 
@@ -15,7 +18,8 @@ pub fn run() {
         .setup(|app| {
             let application_data_directory = app.path().app_data_dir()?;
             fs::create_dir_all(&application_data_directory)?;
-            let clip_service = ClipService::open(application_data_directory.join("clips.sqlite3"))?;
+            let database_path = clip_database_path_from_app_data_dir(&application_data_directory);
+            let clip_service = ClipService::open(database_path)?;
             app.manage(clip_service);
             Ok(())
         })

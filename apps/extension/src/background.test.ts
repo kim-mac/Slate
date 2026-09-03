@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { CAPTURE_CONTEXT_MENU } from './contextMenu';
+import type { SendNativeMessage } from './bridge';
 
 type ClickListener = (
   info: chrome.contextMenus.OnClickData,
@@ -120,5 +121,94 @@ describe('Manifest V3 background service worker', () => {
         selectionText: 'Selected text',
       }),
     ).toMatchObject({ sourcePageTitle: '' });
+  });
+
+  test('sends a valid capture through native messaging exactly once', async () => {
+    const state: FakeChromeState = { removedMenus: false };
+    installFakeChrome(state);
+    const { handleCaptureClick } = await import('./background');
+    const sendNativeMessage = vi.fn<SendNativeMessage>().mockResolvedValue({
+      version: 1,
+      ok: true,
+      clipId: 'f7a6c48d-bfd5-4f13-b54d-e238f7cd7842',
+    });
+
+    await expect(
+      handleCaptureClick(
+        {
+          menuItemId: CAPTURE_CONTEXT_MENU.id!,
+          pageUrl: 'https://chatgpt.com/c/example',
+          selectionText: '  exact selection\n',
+        },
+        { title: 'ChatGPT conversation' },
+        sendNativeMessage,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(sendNativeMessage).toHaveBeenCalledTimes(1);
+    expect(sendNativeMessage).toHaveBeenCalledWith('com.aiclipmemory.bridge', {
+      version: 1,
+      type: 'capture_clip',
+      payload: {
+        content: '  exact selection\n',
+        contentType: 'text',
+        sourceApp: 'ChatGPT',
+        sourceUrl: 'https://chatgpt.com/c/example',
+        sourcePageTitle: 'ChatGPT conversation',
+      },
+    });
+  });
+
+  test('does not contact the bridge for invalid capture input', async () => {
+    const state: FakeChromeState = { removedMenus: false };
+    installFakeChrome(state);
+    const { handleCaptureClick } = await import('./background');
+    const sendNativeMessage = vi.fn<SendNativeMessage>();
+
+    await expect(
+      handleCaptureClick(
+        {
+          menuItemId: CAPTURE_CONTEXT_MENU.id!,
+          pageUrl: 'https://example.com/',
+          selectionText: '   ',
+        },
+        undefined,
+        sendNativeMessage,
+      ),
+    ).resolves.toBeNull();
+    expect(sendNativeMessage).not.toHaveBeenCalled();
+  });
+
+  test('handles bridge failure without logging or changing the menu', async () => {
+    const state: FakeChromeState = { removedMenus: false };
+    installFakeChrome(state);
+    const { handleCaptureClick } = await import('./background');
+    const consoleLog = vi
+      .spyOn(console, 'log')
+      .mockImplementation(() => undefined);
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const sendNativeMessage = vi
+      .fn<SendNativeMessage>()
+      .mockRejectedValue(new Error('native host unavailable'));
+
+    await expect(
+      handleCaptureClick(
+        {
+          menuItemId: CAPTURE_CONTEXT_MENU.id!,
+          pageUrl: 'https://example.com/',
+          selectionText: 'sensitive selection',
+        },
+        undefined,
+        sendNativeMessage,
+      ),
+    ).resolves.toEqual({
+      version: 1,
+      ok: false,
+      error: 'storage_unavailable',
+    });
+    expect(consoleLog).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(state.createdMenu).toBeUndefined();
   });
 });
