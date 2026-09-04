@@ -1,5 +1,6 @@
 import type { Clip } from '@ai-clip-memory/shared';
 import { Copy, ExternalLink, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import { displayTitle } from '@/lib/clipRetrieval';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import {
 
 interface ClipDetailProps {
   clip: Clip;
+  disabled: boolean;
   onCopy: () => void;
   onDelete: () => void;
   onEdit: () => void;
@@ -23,6 +25,7 @@ interface ClipDetailProps {
 
 export function ClipDetail({
   clip,
+  disabled,
   onCopy,
   onDelete,
   onEdit,
@@ -37,19 +40,31 @@ export function ClipDetail({
             <div className="clip-heading">
               <Badge variant="secondary">{clip.contentType}</Badge>
               <CardTitle>
-                <h2>{clip.title ?? 'Untitled clip'}</h2>
+                <h2>{displayTitle(clip)}</h2>
               </CardTitle>
             </div>
             <div className="clip-actions">
-              <ActionButton label="Copy" icon={<Copy />} onClick={onCopy} />
+              <ActionButton
+                disabled={disabled}
+                label="Copy"
+                icon={<Copy />}
+                onClick={onCopy}
+              />
               <ActionButton
                 label={clip.isPinned ? 'Unpin' : 'Pin'}
+                disabled={disabled}
                 icon={clip.isPinned ? <PinOff /> : <Pin />}
                 onClick={() => onSetPinned(!clip.isPinned)}
               />
-              <ActionButton label="Edit" icon={<Pencil />} onClick={onEdit} />
+              <ActionButton
+                disabled={disabled}
+                label="Edit"
+                icon={<Pencil />}
+                onClick={onEdit}
+              />
               <ActionButton
                 label="Delete"
+                disabled={disabled}
                 icon={<Trash2 />}
                 onClick={onDelete}
                 destructive
@@ -80,7 +95,12 @@ export function ClipDetail({
             </dl>
 
             {clip.sourceUrl && (
-              <Button variant="outline" type="button" onClick={onOpenSource}>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={onOpenSource}
+                disabled={disabled}
+              >
                 <ExternalLink aria-hidden="true" />
                 Open source
               </Button>
@@ -93,6 +113,7 @@ export function ClipDetail({
 }
 
 interface ActionButtonProps {
+  disabled: boolean;
   destructive?: boolean;
   icon: React.ReactNode;
   label: string;
@@ -100,6 +121,7 @@ interface ActionButtonProps {
 }
 
 function ActionButton({
+  disabled,
   destructive = false,
   icon,
   label,
@@ -114,13 +136,16 @@ function ActionButton({
             size="sm"
             type="button"
             onClick={onClick}
+            disabled={disabled}
           />
         }
       >
         {icon}
         {label}
       </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent>
+        {label === 'Copy' ? 'Copy (Ctrl/Cmd+Shift+C)' : label}
+      </TooltipContent>
     </Tooltip>
   );
 }
