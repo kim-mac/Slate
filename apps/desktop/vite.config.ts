@@ -9,6 +9,14 @@ const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   clearScreen: false,
   plugins: [react(), tailwindcss()],
+  build: {
+    rolldownOptions: {
+      input: {
+        main: path.resolve(currentDirectory, 'index.html'),
+        launcher: path.resolve(currentDirectory, 'launcher.html'),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(currentDirectory, './src'),

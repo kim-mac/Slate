@@ -91,3 +91,25 @@ The Native Messaging host is a short-lived local process. Chrome or Edge launche
   failures. There is no polling, automatic deduplication, or background refresh.
 - Copy/save/delete/pin confirmations disappear after four seconds or dismissal.
   Errors remain available for retry; clip contents are never included in feedback.
+
+## Windows quick search (Milestone 7)
+
+- While the desktop app is running, **Ctrl+Shift+Space** opens a separate compact
+  launcher, including when the main window is minimized. Repeated invocation
+  focuses the same launcher without clearing its current query.
+- Each new opening focuses search, clears the previous query and reloads local
+  clips. Empty search shows newest-first clips; typing uses the same literal,
+  case-insensitive, multi-term search as the desktop library.
+- Up/Down selects results while keeping search focused. Enter copies the selected
+  stored clip and closes the launcher only after success. Escape closes without
+  copying. IME composition and repeated Enter do not trigger copies. Home/End
+  keep their normal text-caret behavior.
+- Losing focus or closing the launcher hides it for reuse. Main-window filters,
+  selection and unsaved forms are independent. There is no direct paste or input
+  injection, background service, tray residency or autostart.
+- Closing the main window exits the app and releases the shortcut. If another
+  app owns the shortcut, the main library remains usable and shows a safe notice;
+  release the conflicting shortcut and restart AI Clip Memory to retry.
+- The launcher is bounded to the monitor work area and inherits the system
+  light/dark theme. The Windows adapter owns native shortcut/window behavior;
+  macOS shortcut support is not implemented in this milestone.

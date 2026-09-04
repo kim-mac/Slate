@@ -11,6 +11,15 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { App } from './App';
 import type { ClipClient } from './clipClient';
+import { getLauncherStatus } from './launcher/launcherClient';
+
+vi.mock('./launcher/launcherClient', () => ({
+  getLauncherStatus: vi.fn(async () => ({
+    available: true,
+    shortcut: 'Ctrl+Shift+Space',
+    errorCode: null,
+  })),
+}));
 
 const firstClip: Clip = {
   id: '029e215c-cdda-41ba-99c7-366219ad1219',
@@ -59,6 +68,34 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  test('distinguishes launcher startup failure from a shortcut conflict', async () => {
+    vi.mocked(getLauncherStatus).mockResolvedValueOnce({
+      available: false,
+      shortcut: 'Ctrl+Shift+Space',
+      errorCode: 'launcher_unavailable',
+    });
+    render(<App client={fakeClient().client} />);
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'could not start',
+    );
+    expect(screen.getByRole('alert').textContent).not.toContain('Another app');
+  });
+  test('reports an unavailable shortcut safely without disabling the library', async () => {
+    vi.mocked(getLauncherStatus).mockResolvedValueOnce({
+      available: false,
+      shortcut: 'Ctrl+Shift+Space',
+      errorCode: 'shortcut_unavailable',
+    });
+    render(<App client={fakeClient().client} />);
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Ctrl+Shift+Space',
+    );
+    expect(screen.getByRole('alert').closest('.content')).toBeNull();
+    expect(screen.getByRole('button', { name: 'New clip' })).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { name: 'All Clips', level: 1 }),
+    ).toBeTruthy();
+  });
   test('collapses to icons and preserves filters, counts and selected clips', async () => {
     render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
     await screen.findByText(firstClip.content, { selector: '.clip-content' });

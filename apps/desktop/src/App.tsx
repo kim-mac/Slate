@@ -11,6 +11,7 @@ import { flushSync } from 'react-dom';
 import { useClipLibrary } from './hooks/useClipLibrary';
 import { matchesSearch, recentClips } from './lib/clipRetrieval';
 import { ClipFeedback } from './components/ClipFeedback';
+import { LauncherAvailability } from './components/LauncherAvailability';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -333,6 +334,7 @@ export function App({ client = tauriClipClient }: AppProps) {
                 {activeView === 'settings' ? 'Settings & About' : 'Library'}
               </span>
             </header>
+            <LauncherAvailability />
             <div className="content">
               {error && !formMode && (
                 <p role="alert" className="error-message">
