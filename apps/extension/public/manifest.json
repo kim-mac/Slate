@@ -4,6 +4,20 @@
   "description": "Local-first AI clip memory browser extension.",
   "version": "0.0.1",
   "permissions": ["activeTab", "contextMenus", "nativeMessaging"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false,
+      "world": "ISOLATED"
+    }
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"

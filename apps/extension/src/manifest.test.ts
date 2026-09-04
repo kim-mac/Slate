@@ -13,7 +13,22 @@ describe('extension manifest', () => {
 
   test('does not request persistent host or unrelated privileged access', () => {
     expect(manifest).not.toHaveProperty('host_permissions');
-    expect(manifest).not.toHaveProperty('content_scripts');
+    expect(manifest).not.toHaveProperty('action');
+    expect(manifest).not.toHaveProperty('web_accessible_resources');
+    expect(manifest).toHaveProperty('content_scripts', [
+      {
+        matches: [
+          'https://chatgpt.com/*',
+          'https://chat.openai.com/*',
+          'https://claude.ai/*',
+          'https://gemini.google.com/*',
+        ],
+        js: ['content.js'],
+        run_at: 'document_idle',
+        all_frames: false,
+        world: 'ISOLATED',
+      },
+    ]);
 
     const permissions = new Set<string>(manifest.permissions);
     for (const forbiddenPermission of [
