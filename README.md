@@ -113,3 +113,50 @@ The Native Messaging host is a short-lived local process. Chrome or Edge launche
 - The launcher is bounded to the monitor work area and inherits the system
   light/dark theme. The Windows adapter owns native shortcut/window behavior;
   macOS shortcut support is not implemented in this milestone.
+
+## Floating browser Save (Milestone 8)
+
+- On exactly `https://chatgpt.com/*`, `https://chat.openai.com/*`,
+  `https://claude.ai/*`, and `https://gemini.google.com/*`, selecting nonblank
+  page text reveals a small Save control. Other sites/subdomains retain the
+  unchanged `Save to AI Clip Memory` context-menu fallback.
+- This requires narrowly scoped automatic content-script access on those four
+  hosts; Chrome/Edge may request approval of updated site access. API permissions
+  remain exactly `activeTab`, `contextMenus`, and `nativeMessaging`. There are no
+  wildcard hosts, host_permissions, scripting, storage, popup or remote assets.
+- Nothing is sent until Save is explicitly activated. Exact selected text and
+  page metadata pass through a validated internal message to the existing native
+  bridge and local SQLite. No captured content is logged or stored by the extension.
+- Save is keyboard-focusable; Enter/Space activates it. Escape, click-away,
+  scroll, resize, page navigation or clearing selection dismisses it without
+  clearing the page selection. Editing fields, IME composition and active drag
+  selection are excluded. A small confirmation follows success; failures offer
+  explicit Retry. There are no automatic retries or duplicate detection.
+- Dismissing after Save cannot cancel a request already delivered to the native
+  host. If a response is lost, check desktop Refresh before retrying: the save
+  may have completed. Refresh remains manual; launcher/desktop behavior is unchanged.
+- UI styles are scoped to Shadow DOM and follow system light/dark preferences.
+  Only top-level documents are supported, not embedded frames, browser/PDF pages,
+  or text inside editable/shadow-root controls. Site interference cannot be
+  eliminated on a hostile page; the context menu remains available as fallback.
+
+### Manual Milestone 8 verification
+
+1. In the Milestone 8 worktree run `pnpm build:extension` and `pnpm build:bridge`.
+2. Load/reload `apps/extension/dist` in Chrome/Edge; approve only the four listed
+   site matches. Reload existing supported-site tabs to load the content script.
+3. Use the existing per-user registration instructions above with this unpacked
+   extension's exact ID and the built native-host executable. No schema or host
+   protocol changes are required.
+4. On ChatGPT, Claude and Gemini, select a short synthetic passage, then a
+   multiline passage. Try legacy chat.openai.com if reachable; it may redirect.
+   Check Save near viewport edges, scrolling, zoom and in-site navigation.
+5. Check keyboard Tab focus and Enter/Space, Escape/click-away, repeated clicks,
+   editable fields and both system themes. Selection alone must never save.
+6. Save one clearly marked synthetic verification passage; open the desktop and
+   press Refresh. Confirm exact text/metadata. Repeat the context-menu fallback.
+7. If the local host is unavailable, check safe error/Retry; after restoring the
+   registration, retry explicitly. Check for an existing saved clip first if a
+   response was lost. Do not change another installation's registration for tests.
+8. Report outcomes and any site-specific issue. Remove only identified test clips
+   and registrations created specifically for verification after approval.

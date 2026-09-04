@@ -1,0 +1,52 @@
+:host {
+  color-scheme: light dark;
+  font:
+    13px/1.4 system-ui,
+    sans-serif;
+  color: #171717;
+}
+button {
+  appearance: none;
+  font:
+    13px/1.4 system-ui,
+    sans-serif;
+  font-weight: 600;
+  color: #171717;
+  background: #fff;
+  border: 1px solid #a3a3a3;
+  border-radius: 7px;
+  padding: 6px 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px #0002;
+}
+button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+button:disabled {
+  cursor: default;
+}
+span {
+  font:
+    13px/1.4 system-ui,
+    sans-serif;
+  display: block;
+  max-width: min(220px, calc(100vw - 32px));
+  border-radius: 4px;
+  background: #fff;
+  color: #171717;
+}
+span:not(:empty) {
+  margin-top: 4px;
+  padding: 4px 6px;
+}
+@media (prefers-color-scheme: dark) {
+  button,
+  span {
+    background: #171717;
+    color: #fafafa;
+  }
+  button {
+    border-color: #737373;
+  }
+}

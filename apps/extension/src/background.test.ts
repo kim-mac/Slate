@@ -9,6 +9,11 @@ type ClickListener = (
 ) => void;
 
 interface FakeChromeState {
+  messageListener?: (
+    message: unknown,
+    sender: chrome.runtime.MessageSender,
+    respond: (response: unknown) => void,
+  ) => boolean | undefined;
   clickListener?: ClickListener;
   createdMenu?: chrome.contextMenus.CreateProperties;
   installListener?: () => void;
@@ -32,6 +37,12 @@ function installFakeChrome(state: FakeChromeState) {
       },
     },
     runtime: {
+      id: 'own-id',
+      onMessage: {
+        addListener(listener: NonNullable<FakeChromeState['messageListener']>) {
+          state.messageListener = listener;
+        },
+      },
       onInstalled: {
         addListener(listener: () => void) {
           state.installListener = listener;
@@ -42,6 +53,32 @@ function installFakeChrome(state: FakeChromeState) {
 }
 
 describe('Manifest V3 background service worker', () => {
+  test('routes internal messages asynchronously and rejects unrelated senders safely', async () => {
+    const state: FakeChromeState = { removedMenus: false };
+    installFakeChrome(state);
+    await import('./background');
+    const respond = vi.fn();
+    expect(state.messageListener).toBeTypeOf('function');
+    expect(
+      state.messageListener?.(
+        { type: 'floating_capture', payload: {} },
+        {},
+        respond,
+      ),
+    ).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(respond).toHaveBeenCalledWith({
+      version: 1,
+      ok: false,
+      error: 'invalid_payload',
+    });
+    respond.mockClear();
+    expect(
+      state.messageListener?.({ type: 'unrelated' }, {}, respond),
+    ).toBeUndefined();
+    expect(respond).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.resetModules();
   });

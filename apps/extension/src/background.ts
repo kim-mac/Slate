@@ -6,6 +6,10 @@ import type {
 import { sendCaptureToDesktop, type SendNativeMessage } from './bridge';
 import { createCapturePayload, type BrowserCaptureInput } from './capture';
 import { CAPTURE_CONTEXT_MENU } from './contextMenu';
+import {
+  FLOATING_CAPTURE_MESSAGE,
+  handleFloatingCapture,
+} from './captureMessage';
 
 type CaptureClickInfo = Pick<
   chrome.contextMenus.OnClickData,
@@ -47,4 +51,19 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   void handleCaptureClick(info, tab);
+});
+
+chrome.runtime.onMessage.addListener((message: unknown, sender, respond) => {
+  if (
+    typeof message !== 'object' ||
+    message === null ||
+    !('type' in message) ||
+    message.type !== FLOATING_CAPTURE_MESSAGE
+  )
+    return;
+  void handleFloatingCapture(message, sender, chrome.runtime.id).then(
+    respond,
+    () => respond({ version: 1, ok: false, error: 'invalid_payload' }),
+  );
+  return true;
 });
