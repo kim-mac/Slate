@@ -1,7 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window uses only application-defined clip commands.",
+  "description": "The main library can manage clips and inspect launcher availability.",
   "windows": ["main"],
-  "permissions": []
+  "permissions": [
+    "allow-list-clips",
+    "allow-create-clip",
+    "allow-update-clip",
+    "allow-delete-clip",
+    "allow-set-clip-pinned",
+    "allow-copy-clip-content",
+    "allow-open-clip-source",
+    "allow-get-launcher-status"
+  ]
 }
