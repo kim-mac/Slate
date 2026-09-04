@@ -1,6 +1,24 @@
-import { APP_NAME, type Clip, type ClipInput } from '@ai-clip-memory/shared';
+import {
+  APP_NAME,
+  CLIP_CONTENT_TYPES,
+  type ClipContentType,
+  type Clip,
+  type ClipInput,
+} from '@ai-clip-memory/shared';
 import { ShieldCheck } from 'lucide-react';
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { useClipLibrary } from './hooks/useClipLibrary';
+import { matchesSearch, recentClips } from './lib/clipRetrieval';
+import { ClipFeedback } from './components/ClipFeedback';
+import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 
 import { tauriClipClient, type ClipClient } from './clipClient';
 import { AppSidebar, type AppView } from './components/AppSidebar';
@@ -19,28 +37,17 @@ import {
 } from './components/ui/alert-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Separator } from './components/ui/separator';
-import { SidebarInset, SidebarProvider } from './components/ui/sidebar';
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from './components/ui/sidebar';
 import { TooltipProvider } from './components/ui/tooltip';
 
 type FormMode = { type: 'create' } | { type: 'edit'; clip: Clip };
 
 interface AppProps {
   client?: ClipClient;
-}
-
-function matchesSearch(clip: Clip, searchText: string): boolean {
-  const query = searchText.trim().toLocaleLowerCase();
-  if (!query) return true;
-  return [
-    clip.content,
-    clip.title,
-    clip.sourceApp,
-    clip.sourceUrl,
-    clip.sourcePageTitle,
-    clip.contentType,
-  ]
-    .filter((value): value is string => value !== null)
-    .some((value) => value.toLocaleLowerCase().includes(query));
 }
 
 function safeErrorMessage(error: unknown): string {
@@ -58,59 +65,87 @@ function safeErrorMessage(error: unknown): string {
 }
 
 export function App({ client = tauriClipClient }: AppProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<AppView>('all');
-  const [clips, setClips] = useState<Clip[]>([]);
+  const {
+    clips,
+    setClips,
+    isLoading,
+    isRefreshing,
+    loadError,
+    refresh,
+    invalidate,
+  } = useClipLibrary(client);
   const [deleteTarget, setDeleteTarget] = useState<Clip | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+  const operationPending = useRef(false);
+  const [contentType, setContentType] = useState<ClipContentType | 'all'>(
+    'all',
+  );
+  const searchRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLElement>(null);
   const [searchText, setSearchText] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isCurrent = true;
-    void client
-      .list()
-      .then((loadedClips) => {
-        if (!isCurrent) return;
-        setClips(loadedClips);
-        setSelectedId(loadedClips[0]?.id ?? null);
-      })
-      .catch((loadError: unknown) => {
-        if (isCurrent) setError(safeErrorMessage(loadError));
-      })
-      .finally(() => {
-        if (isCurrent) setIsLoading(false);
-      });
-    return () => {
-      isCurrent = false;
-    };
-  }, [client]);
+  const [status, setStatus] = useState<{ message: string; id: number } | null>(
+    null,
+  );
+  const noticeId = useRef(0);
+  const dismissStatus = useCallback(() => setStatus(null), []);
+  function notify(message: string) {
+    setStatus({ message, id: ++noticeId.current });
+  }
+  function beginOperation() {
+    if (operationPending.current || isRefreshing || isLoading) return false;
+    operationPending.current = true;
+    invalidate();
+    setIsBusy(true);
+    setError(null);
+    setStatus(null);
+    return true;
+  }
+  function finishOperation() {
+    operationPending.current = false;
+    setIsBusy(false);
+  }
 
   const visibleClips = useMemo(
     () =>
-      clips.filter(
+      recentClips(clips).filter(
         (clip) =>
           (activeView !== 'pinned' || clip.isPinned) &&
+          (contentType === 'all' || clip.contentType === contentType) &&
           matchesSearch(clip, searchText),
       ),
-    [activeView, clips, searchText],
+    [activeView, clips, searchText, contentType],
   );
   const selectedClip =
     visibleClips.find((clip) => clip.id === selectedId) ??
     visibleClips[0] ??
     null;
   const pinnedCount = clips.filter((clip) => clip.isPinned).length;
+  useEffect(() => {
+    setSelectedId((current) =>
+      visibleClips.some((clip) => clip.id === current)
+        ? current
+        : (visibleClips[0]?.id ?? null),
+    );
+  }, [visibleClips]);
+  const hasFilters = !!searchText.trim() || contentType !== 'all';
+  function clearFilters() {
+    setSearchText('');
+    setContentType('all');
+  }
 
   function showLibrary(view: Exclude<AppView, 'settings'>) {
     setActiveView(view);
     setFormMode(null);
-    setError(null);
   }
 
   async function saveClip(input: ClipInput) {
+    if (!beginOperation()) return;
     setError(null);
     setIsSaving(true);
     try {
@@ -127,68 +162,150 @@ export function App({ client = tauriClipClient }: AppProps) {
         setSelectedId(created.id);
       }
       setFormMode(null);
+      notify('Clip saved.');
     } catch (saveError) {
       setError(safeErrorMessage(saveError));
     } finally {
       setIsSaving(false);
+      finishOperation();
     }
   }
 
   async function setPinned(clip: Clip, isPinned: boolean) {
+    if (!beginOperation()) return;
     setError(null);
     try {
       const updated = await client.setPinned(clip.id, isPinned);
       setClips((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
+      notify(isPinned ? 'Clip pinned.' : 'Clip unpinned.');
     } catch (pinError) {
       setError(safeErrorMessage(pinError));
+    } finally {
+      finishOperation();
     }
   }
 
   async function deleteClip(clip: Clip) {
+    if (!beginOperation()) return;
     setDeleteTarget(null);
     setError(null);
     try {
       await client.delete(clip.id);
       setClips((current) => current.filter((item) => item.id !== clip.id));
       setSelectedId(null);
+      notify('Clip deleted.');
     } catch (deleteError) {
       setError(safeErrorMessage(deleteError));
+    } finally {
+      finishOperation();
     }
   }
 
   async function copyClip(clip: Clip) {
+    if (!beginOperation()) return;
     setError(null);
     try {
       await client.copyContent(clip.id);
-      setStatus('Clip copied.');
+      notify('Clip copied.');
     } catch (copyError) {
       setError(safeErrorMessage(copyError));
+    } finally {
+      finishOperation();
     }
   }
 
   async function openSource(clip: Clip) {
+    if (!beginOperation()) return;
     setError(null);
     try {
       await client.openSource(clip.id);
     } catch (openError) {
       setError(safeErrorMessage(openError));
+    } finally {
+      finishOperation();
     }
   }
+
+  function focusSearch() {
+    flushSync(() => {
+      setSidebarOpen(true);
+      if (activeView === 'settings') setActiveView('all');
+    });
+    searchRef.current?.focus();
+    searchRef.current?.select();
+  }
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.repeat ||
+        event.altKey
+      )
+        return;
+      if (!(event.ctrlKey || event.metaKey)) return;
+      if (formMode || deleteTarget) {
+        if (
+          (event.key.toLowerCase() === 'f' && !event.shiftKey) ||
+          (event.key.toLowerCase() === 'c' && event.shiftKey)
+        )
+          event.preventDefault();
+        return;
+      }
+      if (event.key.toLowerCase() === 'f' && !event.shiftKey) {
+        event.preventDefault();
+        focusSearch();
+      } else if (
+        event.key.toLowerCase() === 'c' &&
+        event.shiftKey &&
+        activeView !== 'settings' &&
+        selectedClip
+      ) {
+        const target = event.target;
+        if (
+          !(target instanceof HTMLElement) ||
+          !libraryRef.current?.contains(target) ||
+          target.closest(
+            'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="combobox"], [role="dialog"], [role="alertdialog"]',
+          )
+        )
+          return;
+        if (window.getSelection()?.toString()) return;
+        event.preventDefault();
+        void copyClip(selectedClip);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
 
   return (
     <TooltipProvider>
       <div className="app-shell">
         <SidebarProvider
           className="workspace min-h-0"
-          style={{ '--sidebar-width': '15rem' } as CSSProperties}
+          open={sidebarOpen}
+          onOpenChange={setSidebarOpen}
         >
           <AppSidebar
             activeView={activeView}
             allCount={clips.length}
             searchText={searchText}
             pinnedCount={pinnedCount}
+            searchRef={searchRef}
+            onFocusSearch={focusSearch}
+            disabled={isLoading || isRefreshing || isBusy}
+            onSearchResults={() => {
+              if (activeView === 'settings') return;
+              libraryRef.current
+                ?.querySelector<HTMLButtonElement>(
+                  '.clip-list-item[aria-pressed="true"]',
+                )
+                ?.focus({ preventScroll: true });
+            }}
             onNewClip={() => {
               setActiveView('all');
               setFormMode({ type: 'create' });
@@ -199,139 +316,227 @@ export function App({ client = tauriClipClient }: AppProps) {
               if (view === 'settings') {
                 setActiveView('settings');
                 setFormMode(null);
-                setError(null);
               } else {
                 showLibrary(view);
               }
             }}
           />
 
-          <SidebarInset className="content">
-            {error && !formMode && (
-              <p role="alert" className="error-message">
-                {error}
-              </p>
-            )}
-            {status && (
-              <p role="status" className="status-message">
-                {status}
-              </p>
-            )}
+          <SidebarInset className="desktop-main">
+            <header className="desktop-header">
+              <SidebarTrigger aria-expanded={sidebarOpen} />
+              <Separator
+                orientation="vertical"
+                className="data-vertical:h-4 data-vertical:self-auto"
+              />
+              <span>
+                {activeView === 'settings' ? 'Settings & About' : 'Library'}
+              </span>
+            </header>
+            <div className="content">
+              {error && !formMode && (
+                <p role="alert" className="error-message">
+                  {error} Try the action again, or refresh the library.
+                </p>
+              )}
 
-            {activeView !== 'settings' && (
-              <section
-                className="library-view"
-                aria-labelledby="library-heading"
-              >
-                <header className="section-header library-header">
-                  <div>
-                    <h1 id="library-heading">
-                      {activeView === 'pinned' ? 'Pinned' : 'All Clips'}
-                    </h1>
-                    <p>
-                      {activeView === 'pinned'
-                        ? 'Keep frequently used clips within easy reach.'
-                        : 'Your saved clips, newest first.'}
-                    </p>
-                  </div>
-                </header>
-
-                {isLoading ? (
-                  <div className="empty-state">
-                    <p>Loading clips…</p>
-                  </div>
-                ) : visibleClips.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-state-mark" aria-hidden="true">
-                      {activeView === 'pinned' ? '◇' : '□'}
-                    </div>
-                    <h2>
-                      {searchText.trim()
-                        ? 'No matching clips'
-                        : activeView === 'pinned'
-                          ? 'No pinned clips'
-                          : 'No clips yet'}
-                    </h2>
-                    <p>
-                      {searchText.trim()
-                        ? 'Try a different search.'
-                        : activeView === 'pinned'
-                          ? 'Clips you pin will appear here.'
-                          : 'Create a clip here or save one from your browser.'}
-                    </p>
-                  </div>
-                ) : (
-                  <Card className="library-grid">
-                    <ClipList
-                      clips={visibleClips}
-                      selectedId={selectedClip?.id ?? null}
-                      onSelect={setSelectedId}
-                    />
-                    {selectedClip && (
-                      <ClipDetail
-                        clip={selectedClip}
-                        onCopy={() => void copyClip(selectedClip)}
-                        onDelete={() => setDeleteTarget(selectedClip)}
-                        onEdit={() =>
-                          setFormMode({ type: 'edit', clip: selectedClip })
-                        }
-                        onOpenSource={() => void openSource(selectedClip)}
-                        onSetPinned={(isPinned) =>
-                          void setPinned(selectedClip, isPinned)
-                        }
-                      />
-                    )}
-                  </Card>
-                )}
-              </section>
-            )}
-
-            {activeView === 'settings' && (
-              <section
-                className="settings-view"
-                aria-labelledby="settings-heading"
-              >
-                <header className="section-header">
-                  <h1 id="settings-heading">Settings &amp; About</h1>
-                  <p>Basic information about this local-first application.</p>
-                </header>
-
-                <Card
-                  className="privacy-note"
-                  aria-labelledby="privacy-heading"
+              {activeView !== 'settings' && (
+                <section
+                  className="library-view"
+                  ref={libraryRef}
+                  aria-labelledby="library-heading"
                 >
-                  <CardHeader>
-                    <div className="privacy-heading-row">
-                      <span className="privacy-mark" aria-hidden="true">
-                        <ShieldCheck />
-                      </span>
-                      <CardTitle>
-                        <h2 id="privacy-heading">Private by default</h2>
-                      </CardTitle>
+                  <header className="section-header library-header">
+                    <div>
+                      <h1 id="library-heading">
+                        {activeView === 'pinned' ? 'Pinned' : 'All Clips'}
+                      </h1>
+                      <p>
+                        {activeView === 'pinned'
+                          ? 'Keep frequently used clips within easy reach.'
+                          : 'Your saved clips, newest first.'}
+                      </p>
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p>
-                      Your clips are stored locally on this computer. No account
-                      or cloud connection is required.
-                    </p>
-                    <Separator />
-                    <dl className="about-list">
-                      <div>
-                        <dt>Application</dt>
-                        <dd>{APP_NAME}</dd>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (!operationPending.current) void refresh();
+                      }}
+                      disabled={
+                        isRefreshing || isBusy || !!formMode || !!deleteTarget
+                      }
+                    >
+                      {isRefreshing ? 'Refreshing…' : 'Refresh'}
+                    </Button>
+                  </header>
+                  <div className="retrieval-toolbar">
+                    <Select
+                      value={contentType}
+                      onValueChange={(value) => {
+                        if (
+                          value === 'all' ||
+                          CLIP_CONTENT_TYPES.includes(value as ClipContentType)
+                        )
+                          setContentType(value as ClipContentType | 'all');
+                      }}
+                    >
+                      <SelectTrigger aria-label="Content type filter">
+                        <SelectValue>
+                          {contentType === 'all' ? 'All types' : contentType}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent
+                        align="start"
+                        alignItemWithTrigger={false}
+                        className="min-w-0"
+                      >
+                        <SelectItem value="all">All types</SelectItem>
+                        {CLIP_CONTENT_TYPES.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!isLoading && (
+                      <span className="result-count" aria-live="polite">
+                        {visibleClips.length}{' '}
+                        {visibleClips.length === 1 ? 'result' : 'results'}
+                      </span>
+                    )}
+                    {hasFilters && (
+                      <Button size="sm" variant="ghost" onClick={clearFilters}>
+                        Clear filters
+                      </Button>
+                    )}
+                  </div>
+                  {loadError && (
+                    <div className="load-error">
+                      <p role="alert">{loadError}</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isRefreshing || isBusy}
+                        onClick={() => {
+                          if (!operationPending.current) void refresh();
+                        }}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  )}
+
+                  {isLoading ? (
+                    <div className="empty-state">
+                      <p>Loading clips…</p>
+                    </div>
+                  ) : loadError && clips.length === 0 ? (
+                    <div className="empty-state">
+                      <h2>Library unavailable</h2>
+                      <p>Retry loading your local clips.</p>
+                    </div>
+                  ) : visibleClips.length === 0 ? (
+                    <div className="empty-state">
+                      <div className="empty-state-mark" aria-hidden="true">
+                        {activeView === 'pinned' ? '◇' : '□'}
                       </div>
-                      <div>
-                        <dt>Storage</dt>
-                        <dd>Local only</dd>
+                      <h2>
+                        {hasFilters
+                          ? 'No matching clips'
+                          : activeView === 'pinned'
+                            ? 'No pinned clips'
+                            : 'No clips yet'}
+                      </h2>
+                      <p>
+                        {hasFilters
+                          ? 'Try a different search.'
+                          : activeView === 'pinned'
+                            ? 'Clips you pin will appear here.'
+                            : 'Create a clip here or save one from your browser.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <Card className="library-grid">
+                      <ClipList
+                        clips={visibleClips}
+                        selectedId={selectedClip?.id ?? null}
+                        onSelect={setSelectedId}
+                      />
+                      {selectedClip && (
+                        <ClipDetail
+                          clip={selectedClip}
+                          disabled={isBusy || isRefreshing}
+                          onCopy={() => void copyClip(selectedClip)}
+                          onDelete={() => setDeleteTarget(selectedClip)}
+                          onEdit={() =>
+                            setFormMode({ type: 'edit', clip: selectedClip })
+                          }
+                          onOpenSource={() => void openSource(selectedClip)}
+                          onSetPinned={(isPinned) =>
+                            void setPinned(selectedClip, isPinned)
+                          }
+                        />
+                      )}
+                    </Card>
+                  )}
+                </section>
+              )}
+
+              {activeView === 'settings' && (
+                <section
+                  className="settings-view"
+                  aria-labelledby="settings-heading"
+                >
+                  <header className="section-header">
+                    <h1 id="settings-heading">Settings &amp; About</h1>
+                    <p>Basic information about this local-first application.</p>
+                  </header>
+
+                  <Card
+                    className="privacy-note"
+                    aria-labelledby="privacy-heading"
+                  >
+                    <CardHeader>
+                      <div className="privacy-heading-row">
+                        <span className="privacy-mark" aria-hidden="true">
+                          <ShieldCheck />
+                        </span>
+                        <CardTitle>
+                          <h2 id="privacy-heading">Private by default</h2>
+                        </CardTitle>
                       </div>
-                    </dl>
-                  </CardContent>
-                </Card>
-              </section>
-            )}
+                    </CardHeader>
+                    <CardContent>
+                      <p>
+                        Your clips are stored locally on this computer. No
+                        account or cloud connection is required.
+                      </p>
+                      <Separator />
+                      <dl className="about-list">
+                        <div>
+                          <dt>Application</dt>
+                          <dd>{APP_NAME}</dd>
+                        </div>
+                        <div>
+                          <dt>Storage</dt>
+                          <dd>Local only</dd>
+                        </div>
+                      </dl>
+                    </CardContent>
+                  </Card>
+                </section>
+              )}
+            </div>
           </SidebarInset>
         </SidebarProvider>
+        {status && (
+          <ClipFeedback
+            key={status.id}
+            message={status.message}
+            onDismiss={dismissStatus}
+          />
+        )}
 
         {formMode && activeView !== 'settings' && (
           <ClipFormDialog

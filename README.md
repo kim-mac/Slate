@@ -60,10 +60,34 @@ The Native Messaging host is a short-lived local process. Chrome or Edge launche
 
    Use `-Browser Edge` for Edge or `-Browser Both` to register both per-user HKCU locations. Multiple exact IDs can be supplied as a comma-separated PowerShell array. Registration does not require administrator privileges.
 
-4. Reload the unpacked extension after rebuilding it. Select text on an HTTP/HTTPS page and choose `Save to AI Clip Memory`. Opening or restarting the desktop app will show the clip stored in the existing local database.
+4. Reload the unpacked extension after rebuilding it. Select text on an HTTP/HTTPS page and choose `Save to AI Clip Memory`. Press **Refresh** in the desktop library to see new captures without restarting the app.
 
 5. Remove the development registration when finished:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts/windows/Unregister-NativeMessagingHost.ps1 -Browser Both
    ```
+
+## Desktop retrieval (Milestone 6)
+
+- All Clips opens by default. All Clips and Pinned are ordered newest-first,
+  with ID as a deterministic tie-breaker; sidebar counts ignore search/filters.
+- The sidebar starts expanded and collapses to icons using its header toggle,
+  edge rail, or Ctrl/Cmd+B outside editable fields/dialogs. Icon tooltips retain
+  navigation labels and counts. Search or Ctrl/Cmd+F expands and focuses search.
+  Sidebar state is session-only; it is not written to cookies or local storage.
+- Search is local, literal, and case-insensitive. Each whitespace-separated
+  term must occur in content, title, source app, URL, page title, or content type.
+  Existing complete substring matches are preserved. The type filter combines
+  with search and Pinned; Clear filters resets search and type, not navigation.
+- Untitled rows display the page title, then the first nonblank content line,
+  then “Untitled clip.” These are display fallbacks, not stored title changes.
+- Ctrl/Cmd+F focuses search. Arrow Down from search focuses the selected result;
+  Up/Down and Home/End navigate focused results. Ctrl/Cmd+Shift+C copies the
+  selected clip when focus is in the library, outside editable fields/dialogs
+  and without a text selection. These are app shortcuts, not global shortcuts.
+- Refresh uses the existing local list command. Selection and filters survive
+  when possible; failed refreshes keep loaded data visible. Retry handles load
+  failures. There is no polling, automatic deduplication, or background refresh.
+- Copy/save/delete/pin confirmations disappear after four seconds or dismissal.
+  Errors remain available for retry; clip contents are never included in feedback.

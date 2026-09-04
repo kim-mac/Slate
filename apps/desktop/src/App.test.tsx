@@ -59,6 +59,314 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  test('collapses to icons and preserves filters, counts and selected clips', async () => {
+    render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    const sidebar = screen
+      .getByRole('button', { name: 'All Clips' })
+      .closest('[data-slot="sidebar"]')!;
+    expect(sidebar.getAttribute('data-state')).toBe('expanded');
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'unions' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Toggle Sidebar', hidden: false }),
+    );
+    expect(sidebar.getAttribute('data-state')).toBe('collapsed');
+    expect(screen.queryByRole('searchbox')).toBeNull();
+    expect(
+      screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
+    expect(
+      screen.getByRole('heading', { name: 'Pinned', level: 1 }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Search clips' }));
+    expect(sidebar.getAttribute('data-state')).toBe('expanded');
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe(
+      'unions',
+    );
+    expect(document.activeElement).toBe(screen.getByRole('searchbox'));
+    expect(
+      document.querySelector('[data-slot="sidebar-menu-badge"]')?.textContent,
+    ).toBe('2');
+  });
+
+  test('reveals collapsed search with Ctrl/Cmd+F and keeps icon actions usable', async () => {
+    render(<App client={fakeClient().client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+    const toggle = screen.getByRole('button', { name: 'Toggle Sidebar' });
+    for (const modifier of [{ ctrlKey: true }, { metaKey: true }]) {
+      fireEvent.click(toggle);
+      fireEvent.keyDown(document.body, { key: 'f', ...modifier });
+      expect(document.activeElement).toBe(screen.getByRole('searchbox'));
+    }
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+    expect(screen.getByRole('dialog', { name: 'Create clip' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Settings & About' }));
+    expect(screen.getByText(/Your clips are stored locally/)).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true });
+    expect(
+      screen.getByRole('heading', { name: 'All Clips', level: 1 }),
+    ).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('searchbox'));
+  });
+
+  test('guards sidebar shortcuts and does not persist sidebar state', async () => {
+    const cookieWrite = vi.spyOn(document, 'cookie', 'set');
+    render(<App client={fakeClient().client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+    const sidebar = screen
+      .getByRole('button', { name: 'All Clips' })
+      .closest('[data-slot="sidebar"]')!;
+    fireEvent.keyDown(screen.getByRole('searchbox'), {
+      key: 'b',
+      ctrlKey: true,
+    });
+    expect(sidebar.getAttribute('data-state')).toBe('expanded');
+    fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Cancel' }), {
+      key: 'b',
+      ctrlKey: true,
+    });
+    expect(sidebar.getAttribute('data-state')).toBe('expanded');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    for (const extra of [
+      { repeat: true },
+      { isComposing: true },
+      { shiftKey: true },
+      { altKey: true },
+    ]) {
+      fireEvent.keyDown(document.body, { key: 'b', ctrlKey: true, ...extra });
+      expect(sidebar.getAttribute('data-state')).toBe('expanded');
+    }
+    fireEvent.keyDown(document.body, { key: 'b', ctrlKey: true });
+    expect(sidebar.getAttribute('data-state')).toBe('collapsed');
+    fireEvent.keyDown(document.body, { key: 'b', metaKey: true });
+    expect(sidebar.getAttribute('data-state')).toBe('expanded');
+    expect(cookieWrite).not.toHaveBeenCalled();
+  });
+
+  test('focuses search from the webview body before any control is clicked', async () => {
+    const fake = fakeClient();
+    render(<App client={fake.client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+    fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true });
+    expect(document.activeElement).toBe(screen.getByRole('searchbox'));
+  });
+  test('blocks duplicate copy and refresh while an action is pending', async () => {
+    const fake = fakeClient([firstClip]);
+    let finish!: () => void;
+    fake.copyContent.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    render(<App client={fake.client} />);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    const row = screen.getByRole('button', { name: /Local-first notesA calm/ });
+    fireEvent.keyDown(row, { key: 'c', ctrlKey: true, shiftKey: true });
+    fireEvent.keyDown(row, { key: 'c', ctrlKey: true, shiftKey: true });
+    expect(fake.copyContent).toHaveBeenCalledTimes(1);
+    expect(
+      (screen.getByRole('button', { name: 'Refresh' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    finish();
+    await screen.findByText('Clip copied.');
+  });
+
+  test('keeps action errors visible through navigation until retry succeeds', async () => {
+    const fake = fakeClient([firstClip]);
+    fake.copyContent
+      .mockRejectedValueOnce(new Error('sensitive details'))
+      .mockResolvedValueOnce(undefined);
+    render(<App client={fake.client} />);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Try the action again',
+    );
+    expect(screen.queryByText('sensitive details')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
+    expect(screen.getByRole('alert')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'All Clips' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await screen.findByText('Clip copied.');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  test('falls back to the newest remaining selection after refresh removes it', async () => {
+    const fake = fakeClient([firstClip, pinnedClip]);
+    fake.list
+      .mockResolvedValueOnce([firstClip, pinnedClip])
+      .mockResolvedValueOnce([pinnedClip]);
+    render(<App client={fake.client} />);
+    await screen.findByRole('heading', { name: firstClip.title! });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await screen.findByRole('heading', { name: pinnedClip.title! });
+    expect(
+      screen
+        .getByRole('button', { name: 'All Clips' })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
+  test('opens the type filter below the trigger instead of aligning over it', async () => {
+    render(<App client={fakeClient().client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+    fireEvent.click(
+      screen.getByRole('combobox', { name: 'Content type filter' }),
+    );
+    const popup = screen
+      .getByRole('listbox')
+      .closest('[data-slot="select-content"]')!;
+    expect(popup.getAttribute('data-align-trigger')).toBe('false');
+    expect(popup.getAttribute('data-side')).toBe('bottom');
+    expect(popup.classList.contains('min-w-0')).toBe(true);
+    expect(popup.classList.contains('min-w-36')).toBe(false);
+    fireEvent.keyDown(screen.getByRole('option', { name: 'code' }), {
+      key: 'Enter',
+    });
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(
+      screen.getByRole('combobox', { name: 'Content type filter' }).textContent,
+    ).toContain('code');
+  });
+
+  test('combines multi-term search and type filtering without changing counts', async () => {
+    const fake = fakeClient([firstClip, pinnedClip]);
+    render(<App client={fake.client} />);
+    expect(
+      screen.getByRole('combobox', { name: 'Content type filter' }).textContent,
+    ).toContain('All types');
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'CHATGPT unions' },
+    });
+    expect(
+      screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+    expect(screen.getByText('1 result')).toBeTruthy();
+    const all = screen
+      .getByRole('button', { name: 'All Clips' })
+      .closest<HTMLElement>('[data-slot="sidebar-menu-item"]')!;
+    expect(within(all).getByText('2')).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole('combobox', { name: 'Content type filter' }),
+    );
+    fireEvent.keyDown(screen.getByRole('option', { name: 'text' }), {
+      key: 'Enter',
+    });
+    expect(
+      screen.getByRole('heading', { name: 'No matching clips' }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(screen.getByText('2 results')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
+    expect(
+      screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeNull();
+  });
+
+  test('refresh discovers a new captured row without losing selection or query', async () => {
+    const captured = {
+      ...firstClip,
+      id: 'capture',
+      title: null,
+      sourcePageTitle: 'New browser capture',
+      createdAt: '2026-09-03T12:00:00.000Z',
+    };
+    const fake = fakeClient([firstClip]);
+    fake.list
+      .mockResolvedValueOnce([firstClip])
+      .mockResolvedValueOnce([captured, firstClip]);
+    render(<App client={fake.client} />);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'local' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await screen.findByText('New browser capture');
+    expect(
+      screen.getByRole('heading', { name: firstClip.title! }),
+    ).toBeTruthy();
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe(
+      'local',
+    );
+  });
+
+  test('initial failure offers Retry instead of falsely claiming an empty library', async () => {
+    const fake = fakeClient();
+    fake.list
+      .mockRejectedValueOnce(new Error('private path'))
+      .mockResolvedValueOnce([firstClip]);
+    render(<App client={fake.client} />);
+    await screen.findByRole('button', { name: 'Retry' });
+    expect(screen.queryByRole('heading', { name: 'No clips yet' })).toBeNull();
+    expect(screen.queryByText('private path')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+  });
+
+  test('refresh failure preserves the library and remains retryable', async () => {
+    const fake = fakeClient([firstClip]);
+    fake.list
+      .mockResolvedValueOnce([firstClip])
+      .mockRejectedValueOnce(new Error('private'));
+    render(<App client={fake.client} />);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await screen.findByRole('button', { name: 'Retry' });
+    expect(
+      screen.getByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+  });
+
+  test('supports app search, result focus and copy shortcuts with editable/dialog guards', async () => {
+    const fake = fakeClient([firstClip, pinnedClip]);
+    render(<App client={fake.client} />);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    const search = screen.getByRole('searchbox');
+    const shell = search.closest('.app-shell')!;
+    fireEvent.keyDown(shell, { key: 'f', ctrlKey: true });
+    expect(document.activeElement).toBe(search);
+    fireEvent.keyDown(search, { key: 'c', ctrlKey: true, shiftKey: true });
+    expect(fake.copyContent).not.toHaveBeenCalled();
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    expect(document.activeElement?.classList.contains('clip-list-item')).toBe(
+      true,
+    );
+    fireEvent.keyDown(document.activeElement!, {
+      key: 'c',
+      metaKey: true,
+      shiftKey: true,
+    });
+    await waitFor(() =>
+      expect(fake.copyContent).toHaveBeenCalledWith(firstClip.id),
+    );
+    expect(screen.getByRole('status').textContent).toContain('Clip copied.');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Dismiss notification' }),
+    );
+    expect(screen.queryByText('Clip copied.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+    const dialog = screen.getByRole('dialog');
+    const content = within(dialog).getByLabelText('Content');
+    content.focus();
+    expect(fireEvent.keyDown(content, { key: 'f', ctrlKey: true })).toBe(false);
+    expect(document.activeElement).toBe(content);
+    expect(
+      fireEvent.keyDown(content, { key: 'c', ctrlKey: true, shiftKey: true }),
+    ).toBe(false);
+    expect(fake.copyContent).toHaveBeenCalledTimes(1);
+  });
+
   test('shows the empty library after loading an empty database', async () => {
     const { client } = fakeClient();
     render(<App client={client} />);
@@ -94,7 +402,9 @@ describe('App', () => {
     const { client } = fakeClient([firstClip, pinnedClip]);
     render(<App client={client} />);
 
-    expect(await screen.findByText(firstClip.content)).toBeTruthy();
+    expect(
+      await screen.findByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
     expect(
       screen.getByRole('heading', { name: firstClip.title! }),
     ).toBeTruthy();
@@ -114,14 +424,18 @@ describe('App', () => {
   test('filters the loaded list with case-insensitive substring search', async () => {
     const { client } = fakeClient([firstClip, pinnedClip]);
     render(<App client={client} />);
-    await screen.findByText(firstClip.content);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search clips' }), {
       target: { value: 'TYPESCRIPT' },
     });
 
-    expect(screen.getByText(pinnedClip.content)).toBeTruthy();
-    expect(screen.queryByText(firstClip.content)).toBeNull();
+    expect(
+      screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeNull();
   });
 
   test('creates a manual local clip', async () => {
@@ -205,7 +519,7 @@ describe('App', () => {
     const fake = fakeClient([firstClip]);
     fake.update.mockResolvedValue(updated);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = screen.getByRole('dialog', { name: 'Edit clip' });
@@ -229,7 +543,9 @@ describe('App', () => {
         sourcePageTitle: 'Local-first article',
       } satisfies ClipInput),
     );
-    expect(screen.getByText('Updated content')).toBeTruthy();
+    expect(
+      screen.getByText('Updated content', { selector: '.clip-content' }),
+    ).toBeTruthy();
   });
 
   test('cancels create without calling the client', async () => {
@@ -252,7 +568,7 @@ describe('App', () => {
   test('cancels deletion without calling the client', async () => {
     const fake = fakeClient([firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const alert = screen.getByRole('alertdialog', { name: 'Delete clip?' });
@@ -265,7 +581,7 @@ describe('App', () => {
   test('deletes a clip after alert-dialog confirmation', async () => {
     const fake = fakeClient([firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const alert = screen.getByRole('alertdialog', { name: 'Delete clip?' });
@@ -281,7 +597,7 @@ describe('App', () => {
       .mockResolvedValueOnce({ ...firstClip, isPinned: true })
       .mockResolvedValueOnce(firstClip);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
     await screen.findByRole('button', { name: 'Unpin' });
@@ -299,9 +615,10 @@ describe('App', () => {
   test('copies content and opens the stored source through the client', async () => {
     const fake = fakeClient([firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await screen.findByText('Clip copied.');
     fireEvent.click(screen.getByRole('button', { name: 'Open source' }));
 
     await waitFor(() => {
