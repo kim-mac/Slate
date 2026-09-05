@@ -4,6 +4,10 @@ import manifest from '../public/manifest.json';
 import { CAPTURE_CONTEXT_MENU } from './contextMenu';
 
 describe('extension manifest', () => {
+  test('uses the aligned MVP release version', () => {
+    expect(manifest.version).toBe('0.1.0');
+  });
+
   test('uses Manifest V3 with only the capture and native messaging permissions', () => {
     expect(manifest.manifest_version).toBe(3);
     expect(new Set(manifest.permissions)).toEqual(
