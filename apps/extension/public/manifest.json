@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Clip Memory",
   "description": "Local-first AI clip memory browser extension.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "permissions": ["activeTab", "contextMenus", "nativeMessaging"],
   "content_scripts": [
     {

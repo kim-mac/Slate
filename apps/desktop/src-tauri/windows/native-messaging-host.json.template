@@ -1,0 +1,7 @@
+{
+  "name": "com.aiclipmemory.bridge",
+  "description": "AI Clip Memory local capture bridge",
+  "path": "ai-clip-memory-native-host.exe",
+  "type": "stdio",
+  "allowed_origins": []
+}

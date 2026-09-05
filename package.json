@@ -1,6 +1,6 @@
 {
   "name": "ai-clip-memory",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.19.0",
@@ -19,6 +19,8 @@
     "format:rust": "pnpm --filter @ai-clip-memory/desktop format:rust",
     "format:rust:check": "pnpm --filter @ai-clip-memory/desktop format:rust:check",
     "lint": "eslint .",
+    "package:windows:arm64": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/Build-WindowsInstaller.ps1 -Architecture arm64",
+    "package:windows:x64": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/Build-WindowsInstaller.ps1 -Architecture x64",
     "test": "pnpm --recursive --if-present test && pnpm test:rust",
     "test:desktop": "pnpm --filter @ai-clip-memory/desktop test",
     "test:rust": "pnpm --filter @ai-clip-memory/desktop test:rust",
