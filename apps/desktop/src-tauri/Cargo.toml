@@ -1,6 +1,6 @@
 [package]
 name = "ai-clip-memory-desktop"
-version = "0.0.0"
+version = "0.1.0"
 description = "Local-first AI clip memory desktop application"
 authors = ["AI Clip Memory contributors"]
 edition = "2021"

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "AI Clip Memory",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "identifier": "com.aiclipmemory.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -42,6 +42,22 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "targets": ["nsis"],
+    "category": "Productivity",
+    "shortDescription": "Save and retrieve useful AI conversation clips locally.",
+    "longDescription": "A local-first desktop clip library with a Chromium browser extension and no account, cloud storage, or telemetry.",
+    "icon": ["icons/icon.ico"],
+    "windows": {
+      "allowDowngrades": false,
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
+    }
   }
 }
