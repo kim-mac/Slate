@@ -1,4 +1,6 @@
 use std::path::Path;
+use std::sync::{Arc, Barrier};
+use std::thread;
 
 use ai_clip_memory_desktop_lib::clips::{ClipService, CreateClip, UpdateClip};
 use chrono::DateTime;
@@ -8,6 +10,32 @@ use uuid::Uuid;
 
 fn database_path(temp_directory: &TempDir) -> std::path::PathBuf {
     temp_directory.path().join("clips.sqlite3")
+}
+
+#[test]
+fn concurrent_first_open_applies_migrations_once_without_racing() {
+    for _ in 0..16 {
+        let directory = tempfile::tempdir().expect("a temporary directory should be created");
+        let path = Arc::new(database_path(&directory));
+        let barrier = Arc::new(Barrier::new(3));
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let path = Arc::clone(&path);
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    barrier.wait();
+                    ClipService::open(path.as_ref())
+                })
+            })
+            .collect();
+        barrier.wait();
+        for handle in handles {
+            handle
+                .join()
+                .expect("the opener thread should not panic")
+                .expect("both concurrent first opens should succeed");
+        }
+    }
 }
 
 fn new_clip(content: &str) -> CreateClip {

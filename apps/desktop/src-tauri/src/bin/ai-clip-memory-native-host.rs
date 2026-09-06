@@ -1,10 +1,9 @@
-use std::fs;
 use std::io::{self, Write};
 
-use ai_clip_memory_desktop_lib::app_paths::clip_database_path;
+use ai_clip_memory_desktop_lib::app_paths::APP_IDENTIFIER;
 use ai_clip_memory_desktop_lib::bridge::native_host::{run_once, write_response};
 use ai_clip_memory_desktop_lib::bridge::protocol::{BridgeErrorCode, BridgeResponse};
-use ai_clip_memory_desktop_lib::clips::ClipService;
+use ai_clip_memory_desktop_lib::storage::StorageState;
 
 fn main() {
     let stdin = io::stdin();
@@ -16,17 +15,8 @@ fn main() {
         write_storage_failure(&mut writer);
         return;
     };
-    let database_path = clip_database_path(&data_directory);
-    let Some(application_data_directory) = database_path.parent() else {
-        write_storage_failure(&mut writer);
-        return;
-    };
-    if fs::create_dir_all(application_data_directory).is_err() {
-        write_storage_failure(&mut writer);
-        return;
-    }
-
-    let Ok(service) = ClipService::open(database_path) else {
+    let storage = StorageState::new(data_directory.join(APP_IDENTIFIER));
+    let Ok(service) = storage.service() else {
         write_storage_failure(&mut writer);
         return;
     };

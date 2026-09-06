@@ -16,9 +16,21 @@ export function useClipLibrary(client: Pick<ClipClient, 'list'>) {
     try {
       const loaded = await client.list();
       if (request === generation.current) setClips(recentClips(loaded));
-    } catch {
-      if (request === generation.current)
-        setLoadError('Could not load local clips. Try again.');
+    } catch (error) {
+      if (request === generation.current) {
+        const missingMessage =
+          typeof error === 'object' &&
+          error !== null &&
+          'code' in error &&
+          error.code === 'storage_missing' &&
+          'message' in error &&
+          typeof error.message === 'string'
+            ? error.message
+            : null;
+        setLoadError(
+          missingMessage ?? 'Could not load local clips. Try again.',
+        );
+      }
     } finally {
       if (request === generation.current) {
         setIsLoading(false);

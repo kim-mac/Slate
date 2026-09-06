@@ -28,6 +28,19 @@ test('initial failure is retryable without exposing internal errors', async () =
   expect(result.current.clips).toEqual([clip]);
   expect(result.current.loadError).toBeNull();
 });
+test('shows safe recovery guidance when established storage is missing', async () => {
+  const client = {
+    list: vi.fn().mockRejectedValue({
+      code: 'storage_missing',
+      message:
+        'The established local clip database is missing. Restore it, or explicitly delete app data before reinstalling to start over.',
+    }),
+  };
+  const { result } = renderHook(() => useClipLibrary(client));
+  await waitFor(() => expect(result.current.isLoading).toBe(false));
+  expect(result.current.loadError).toContain('missing');
+  expect(result.current.loadError).toContain('Restore');
+});
 test('retains existing rows after refresh failure', async () => {
   const client = {
     list: vi

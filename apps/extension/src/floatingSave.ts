@@ -1,7 +1,5 @@
-import type {
-  BrowserCapturePayload,
-  CaptureClipResponse,
-} from '@ai-clip-memory/shared';
+import type { BrowserCapturePayload } from '@ai-clip-memory/shared';
+import type { FloatingCaptureResult } from './contentMessaging';
 import { createCapturePayload } from './capture';
 import {
   readSelection,
@@ -11,7 +9,7 @@ import {
 
 export type SendFloatingCapture = (
   payload: BrowserCapturePayload,
-) => Promise<CaptureClipResponse>;
+) => Promise<FloatingCaptureResult>;
 
 export function installFloatingSave(
   doc: Document,
@@ -145,7 +143,7 @@ export function installFloatingSave(
       status.textContent = 'Saving locally';
       position();
       void (async () => {
-        let result: CaptureClipResponse;
+        let result: FloatingCaptureResult;
         try {
           result = await send(payload);
         } catch {
@@ -167,9 +165,11 @@ export function installFloatingSave(
           button.textContent = 'Retry';
           button.setAttribute('aria-label', 'Retry saving selection');
           status.textContent =
-            result.error === 'message_too_large'
-              ? 'Selection too large. Select less text.'
-              : 'Could not save. Check the local bridge, then retry.';
+            result.error === 'extension_context_invalidated'
+              ? 'Extension was reloaded. Reload this page to save selections.'
+              : result.error === 'message_too_large'
+                ? 'Selection too large. Select less text.'
+                : 'Could not save. Check the local bridge, then retry.';
           position();
         }
       })();

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 pub const APP_IDENTIFIER: &str = "com.aiclipmemory.desktop";
 pub const CLIP_DATABASE_FILENAME: &str = "clips.sqlite3";
+pub const STORAGE_MARKER_FILENAME: &str = "storage-initialized-v1";
 
 pub fn clip_database_path(data_directory: &Path) -> PathBuf {
     clip_database_path_from_app_data_dir(&data_directory.join(APP_IDENTIFIER))
@@ -9,6 +10,10 @@ pub fn clip_database_path(data_directory: &Path) -> PathBuf {
 
 pub fn clip_database_path_from_app_data_dir(application_data_directory: &Path) -> PathBuf {
     application_data_directory.join(CLIP_DATABASE_FILENAME)
+}
+
+pub fn storage_marker_path_from_app_data_dir(application_data_directory: &Path) -> PathBuf {
+    application_data_directory.join(STORAGE_MARKER_FILENAME)
 }
 
 #[cfg(test)]

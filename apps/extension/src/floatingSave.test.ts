@@ -208,6 +208,25 @@ describe('explicit save lifecycle', () => {
     expect(send).toHaveBeenCalledTimes(2);
     await vi.runAllTimersAsync();
   });
+  test('requires a page reload when the extension context was invalidated', async () => {
+    const activate = captureActivation();
+    cleanup = installFloatingSave(
+      document,
+      vi.fn().mockResolvedValue({
+        version: 1,
+        ok: false,
+        error: 'extension_context_invalidated',
+      }),
+      '',
+    );
+    selection();
+    activate();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(
+      document.querySelector('[data-ai-clip-save]')?.shadowRoot?.textContent,
+    ).toContain('Reload this page');
+  });
   test('old completion cannot affect a newer selection', async () => {
     let resolve!: (value: CaptureClipResponse) => void;
     const activate = captureActivation();

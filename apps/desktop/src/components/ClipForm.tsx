@@ -5,6 +5,7 @@ import {
   type ClipInput,
 } from '@ai-clip-memory/shared';
 import { useState, type FormEvent } from 'react';
+import { validateClipInputSize } from '@/lib/clipInputLimits';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,18 +46,23 @@ export function ClipForm({
   const [sourcePageTitle, setSourcePageTitle] = useState(
     clip?.sourcePageTitle ?? '',
   );
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (content.trim().length === 0) return;
-    void onSubmit({
+    const input = {
       content,
       contentType,
       title: optionalValue(title),
       sourceApp: optionalValue(sourceApp),
       sourceUrl: optionalValue(sourceUrl),
       sourcePageTitle: optionalValue(sourcePageTitle),
-    });
+    };
+    const sizeError = validateClipInputSize(input);
+    setValidationError(sizeError);
+    if (sizeError) return;
+    void onSubmit(input);
   }
 
   return (
@@ -131,8 +137,20 @@ export function ClipForm({
           />
         </label>
       </div>
+      {validationError && (
+        <p role="alert" className="error-message">
+          {validationError}
+        </p>
+      )}
       <div className="form-actions">
-        <Button variant="outline" type="button" onClick={onCancel}>
+        <Button
+          variant="outline"
+          type="button"
+          disabled={isSaving}
+          onClick={() => {
+            if (!isSaving) onCancel();
+          }}
+        >
           Cancel
         </Button>
         <Button type="submit" disabled={isSaving}>

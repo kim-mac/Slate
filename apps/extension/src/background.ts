@@ -10,6 +10,7 @@ import {
   FLOATING_CAPTURE_MESSAGE,
   handleFloatingCapture,
 } from './captureMessage';
+import { notifyCaptureResult } from './contextMenuFeedback';
 
 type CaptureClickInfo = Pick<
   chrome.contextMenus.OnClickData,
@@ -50,7 +51,14 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  void handleCaptureClick(info, tab);
+  void handleCaptureClick(info, tab).then((result) => {
+    if (result)
+      void notifyCaptureResult(
+        result,
+        (id, options) => chrome.notifications.create(id, options),
+        chrome.runtime.getURL('icons/notification.png'),
+      ).catch(() => undefined);
+  });
 });
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, respond) => {

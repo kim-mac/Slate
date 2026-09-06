@@ -68,6 +68,54 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  test('rechecks launcher availability whenever the main window regains focus', async () => {
+    vi.mocked(getLauncherStatus)
+      .mockResolvedValueOnce({
+        available: true,
+        shortcut: 'Ctrl+Shift+Space',
+        errorCode: null,
+      })
+      .mockResolvedValueOnce({
+        available: false,
+        shortcut: 'Ctrl+Shift+Space',
+        errorCode: 'shortcut_unavailable',
+      });
+    render(<App client={fakeClient().client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+    fireEvent.focus(window);
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Another app',
+    );
+  });
+
+  test('blocks every form dismissal while save is pending and preserves a failed draft', async () => {
+    const fake = fakeClient();
+    let reject!: (error: unknown) => void;
+    fake.create.mockReturnValue(
+      new Promise((_, fail) => {
+        reject = fail;
+      }),
+    );
+    render(<App client={fake.client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+    fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create clip' });
+    const content = within(dialog).getByLabelText('Content');
+    fireEvent.change(content, { target: { value: 'complete private draft' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save clip' }));
+    const cancel = within(dialog).getByRole('button', {
+      name: 'Cancel',
+    }) as HTMLButtonElement;
+    expect(cancel.disabled).toBe(true);
+    fireEvent.click(cancel);
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: 'Create clip' })).toBeTruthy();
+    reject(new Error('storage failed'));
+    expect(await within(dialog).findByRole('alert')).toBeTruthy();
+    expect((content as HTMLTextAreaElement).value).toBe(
+      'complete private draft',
+    );
+  });
   test('distinguishes launcher startup failure from a shortcut conflict', async () => {
     vi.mocked(getLauncherStatus).mockResolvedValueOnce({
       available: false,
