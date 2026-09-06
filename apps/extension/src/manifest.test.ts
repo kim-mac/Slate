@@ -1,9 +1,19 @@
 import { describe, expect, test } from 'vitest';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import manifest from '../public/manifest.json';
 import { CAPTURE_CONTEXT_MENU } from './contextMenu';
 
 describe('extension manifest', () => {
+  test('packages a Chromium-compatible PNG notification icon', () => {
+    const icons = resolve(import.meta.dirname, '../public/icons');
+    const png = readFileSync(resolve(icons, 'notification.png'));
+    expect([...png.subarray(0, 8)]).toEqual([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+    expect(existsSync(resolve(icons, 'notification.svg'))).toBe(false);
+  });
   test('uses the aligned MVP release version', () => {
     expect(manifest.version).toBe('0.1.0');
   });
@@ -11,7 +21,12 @@ describe('extension manifest', () => {
   test('uses Manifest V3 with only the capture and native messaging permissions', () => {
     expect(manifest.manifest_version).toBe(3);
     expect(new Set(manifest.permissions)).toEqual(
-      new Set(['activeTab', 'contextMenus', 'nativeMessaging']),
+      new Set([
+        'activeTab',
+        'contextMenus',
+        'nativeMessaging',
+        'notifications',
+      ]),
     );
   });
 

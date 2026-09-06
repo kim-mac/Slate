@@ -5,20 +5,27 @@ export function LauncherAvailability() {
   const [failure, setFailure] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    void getLauncherStatus()
-      .then((status) => {
-        if (active)
-          setFailure(
-            !status.available && status.errorCode !== 'unsupported_platform'
-              ? status.errorCode
-              : null,
-          );
-      })
-      .catch(() => {
-        /* Browser-only previews have no native shortcut controller. */
-      });
+    let request = 0;
+    const check = () => {
+      const current = ++request;
+      void getLauncherStatus()
+        .then((status) => {
+          if (active && current === request)
+            setFailure(
+              !status.available && status.errorCode !== 'unsupported_platform'
+                ? status.errorCode
+                : null,
+            );
+        })
+        .catch(() => {
+          /* Browser-only previews have no native shortcut controller. */
+        });
+    };
+    check();
+    window.addEventListener('focus', check);
     return () => {
       active = false;
+      window.removeEventListener('focus', check);
     };
   }, []);
   if (!failure) return null;

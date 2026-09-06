@@ -5,11 +5,9 @@ mod commands;
 mod database;
 mod launcher;
 mod platform;
+pub mod storage;
 
-use std::fs;
-
-use app_paths::clip_database_path_from_app_data_dir;
-use clips::ClipService;
+use storage::StorageState;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -19,10 +17,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let application_data_directory = app.path().app_data_dir()?;
-            fs::create_dir_all(&application_data_directory)?;
-            let database_path = clip_database_path_from_app_data_dir(&application_data_directory);
-            let clip_service = ClipService::open(database_path)?;
-            app.manage(clip_service);
+            app.manage(StorageState::new(application_data_directory));
             app.manage(launcher::LauncherController::default());
             platform::initialize_launcher(app.handle());
             Ok(())

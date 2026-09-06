@@ -67,12 +67,17 @@ fn release_versions_are_aligned() {
 }
 
 #[test]
-fn extension_access_remains_narrow_and_unchanged() {
+fn extension_access_remains_narrow_with_capture_feedback() {
     let manifest = read_json(repository_root().join("apps/extension/public/manifest.json"));
 
     assert_eq!(
         manifest["permissions"],
-        serde_json::json!(["activeTab", "contextMenus", "nativeMessaging"])
+        serde_json::json!([
+            "activeTab",
+            "contextMenus",
+            "nativeMessaging",
+            "notifications"
+        ])
     );
     assert!(manifest.get("host_permissions").is_none());
     assert_eq!(

@@ -21,6 +21,13 @@ impl ClipService {
         })
     }
 
+    pub fn open_existing(path: impl AsRef<Path>) -> Result<Self> {
+        let database = Database::open_existing(path)?;
+        Ok(Self {
+            repository: ClipRepository::new(database),
+        })
+    }
+
     pub fn create(&self, input: CreateClip) -> Result<Clip> {
         let timestamp = current_timestamp();
         let clip = Clip {

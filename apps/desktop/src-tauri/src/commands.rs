@@ -6,6 +6,10 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::clips::{Clip, ClipService, CreateClip, UpdateClip};
+use crate::storage::{StorageBootstrapError, StorageState};
+
+const MAX_CONTENT_BYTES: usize = 1024 * 1024;
+const MAX_METADATA_BYTES: usize = 16 * 1024;
 
 #[derive(Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +29,28 @@ fn validate_clip_input(mut input: CreateClip) -> Result<CreateClip, CommandError
         return Err(CommandError::new(
             "invalid_content",
             "Clip content is required.",
+        ));
+    }
+
+    if input.content.len() > MAX_CONTENT_BYTES {
+        return Err(CommandError::new(
+            "content_too_large",
+            "Clip content must be 1 MiB or less in UTF-8.",
+        ));
+    }
+    if [
+        input.title.as_ref(),
+        input.source_app.as_ref(),
+        input.source_url.as_ref(),
+        input.source_page_title.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    .any(|value| value.len() > MAX_METADATA_BYTES)
+    {
+        return Err(CommandError::new(
+            "metadata_too_large",
+            "Each optional metadata field must be 16 KiB or less in UTF-8.",
         ));
     }
 
@@ -74,10 +100,12 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
     })
 }
 
+#[cfg(test)]
 fn list_clips_with_service(service: &ClipService) -> Result<Vec<Clip>, CommandError> {
     service.list().map_err(|_| storage_error())
 }
 
+#[cfg(test)]
 fn create_clip_with_service(
     service: &ClipService,
     input: CreateClip,
@@ -86,6 +114,7 @@ fn create_clip_with_service(
     service.create(input).map_err(|_| storage_error())
 }
 
+#[cfg(test)]
 fn update_clip_with_service(
     service: &ClipService,
     id: &str,
@@ -107,6 +136,7 @@ fn update_clip_with_service(
         .ok_or_else(not_found_error)
 }
 
+#[cfg(test)]
 fn set_clip_pinned_with_service(
     service: &ClipService,
     id: &str,
@@ -123,6 +153,7 @@ fn set_clip_pinned_with_service(
         .ok_or_else(not_found_error)
 }
 
+#[cfg(test)]
 fn delete_clip_with_service(service: &ClipService, id: &str) -> Result<(), CommandError> {
     validate_clip_id(id)?;
     match service.delete(id).map_err(|_| storage_error())? {
@@ -131,10 +162,12 @@ fn delete_clip_with_service(service: &ClipService, id: &str) -> Result<(), Comma
     }
 }
 
+#[cfg(test)]
 fn clip_content_with_service(service: &ClipService, id: &str) -> Result<String, CommandError> {
     Ok(stored_clip(service, id)?.content)
 }
 
+#[cfg(test)]
 fn source_url_with_service(service: &ClipService, id: &str) -> Result<String, CommandError> {
     let source_url = stored_clip(service, id)?
         .source_url
@@ -146,6 +179,7 @@ fn source_url_with_service(service: &ClipService, id: &str) -> Result<String, Co
     Ok(source_url)
 }
 
+#[cfg(test)]
 fn stored_clip(service: &ClipService, id: &str) -> Result<Clip, CommandError> {
     validate_clip_id(id)?;
     service
@@ -156,6 +190,16 @@ fn stored_clip(service: &ClipService, id: &str) -> Result<Clip, CommandError> {
 
 fn storage_error() -> CommandError {
     CommandError::new("storage_unavailable", "Local clip storage is unavailable.")
+}
+
+fn bootstrap_error(error: StorageBootstrapError) -> CommandError {
+    match error {
+        StorageBootstrapError::EstablishedDatabaseMissing => CommandError::new(
+            "storage_missing",
+            "The established local clip database is missing. Restore it, or explicitly delete app data before reinstalling to start over.",
+        ),
+        StorageBootstrapError::Unavailable => storage_error(),
+    }
 }
 
 fn not_found_error() -> CommandError {
@@ -170,48 +214,88 @@ fn invalid_stored_source_error() -> CommandError {
 }
 
 #[tauri::command]
-pub fn list_clips(service: State<'_, ClipService>) -> Result<Vec<Clip>, CommandError> {
-    list_clips_with_service(&service)
+pub fn list_clips(storage: State<'_, StorageState>) -> Result<Vec<Clip>, CommandError> {
+    storage
+        .with_service(ClipService::list)
+        .map_err(bootstrap_error)
 }
 
 #[tauri::command]
 pub fn create_clip(
-    service: State<'_, ClipService>,
+    storage: State<'_, StorageState>,
     input: CreateClip,
 ) -> Result<Clip, CommandError> {
-    create_clip_with_service(&service, input)
+    let input = validate_clip_input(input)?;
+    storage
+        .with_service(|service| service.create(input))
+        .map_err(bootstrap_error)
 }
 
 #[tauri::command]
 pub fn update_clip(
-    service: State<'_, ClipService>,
+    storage: State<'_, StorageState>,
     id: String,
     input: CreateClip,
 ) -> Result<Clip, CommandError> {
-    update_clip_with_service(&service, &id, input)
+    validate_clip_id(&id)?;
+    let input = validate_clip_input(input)?;
+    let update = UpdateClip {
+        content: input.content,
+        content_type: input.content_type,
+        title: input.title,
+        source_app: input.source_app,
+        source_url: input.source_url,
+        source_page_title: input.source_page_title,
+    };
+    storage
+        .with_service(|service| service.update(&id, update))
+        .map_err(bootstrap_error)?
+        .ok_or_else(not_found_error)
 }
 
 #[tauri::command]
 pub fn set_clip_pinned(
-    service: State<'_, ClipService>,
+    storage: State<'_, StorageState>,
     id: String,
     is_pinned: bool,
 ) -> Result<Clip, CommandError> {
-    set_clip_pinned_with_service(&service, &id, is_pinned)
+    validate_clip_id(&id)?;
+    storage
+        .with_service(|service| {
+            if is_pinned {
+                service.pin(&id)
+            } else {
+                service.unpin(&id)
+            }
+        })
+        .map_err(bootstrap_error)?
+        .ok_or_else(not_found_error)
 }
 
 #[tauri::command]
-pub fn delete_clip(service: State<'_, ClipService>, id: String) -> Result<(), CommandError> {
-    delete_clip_with_service(&service, &id)
+pub fn delete_clip(storage: State<'_, StorageState>, id: String) -> Result<(), CommandError> {
+    validate_clip_id(&id)?;
+    match storage
+        .with_service(|service| service.delete(&id))
+        .map_err(bootstrap_error)?
+    {
+        true => Ok(()),
+        false => Err(not_found_error()),
+    }
 }
 
 #[tauri::command]
 pub fn copy_clip_content(
     app: AppHandle,
-    service: State<'_, ClipService>,
+    storage: State<'_, StorageState>,
     id: String,
 ) -> Result<(), CommandError> {
-    let content = clip_content_with_service(&service, &id)?;
+    validate_clip_id(&id)?;
+    let content = storage
+        .with_service(|service| service.get(&id))
+        .map_err(bootstrap_error)?
+        .ok_or_else(not_found_error)?
+        .content;
     app.clipboard()
         .write_text(content)
         .map_err(|_| CommandError::new("clipboard_unavailable", "Could not copy clip content."))
@@ -220,10 +304,20 @@ pub fn copy_clip_content(
 #[tauri::command]
 pub fn open_clip_source(
     app: AppHandle,
-    service: State<'_, ClipService>,
+    storage: State<'_, StorageState>,
     id: String,
 ) -> Result<(), CommandError> {
-    let source_url = source_url_with_service(&service, &id)?;
+    validate_clip_id(&id)?;
+    let source_url = storage
+        .with_service(|service| service.get(&id))
+        .map_err(bootstrap_error)?
+        .ok_or_else(not_found_error)?
+        .source_url
+        .ok_or_else(|| CommandError::new("source_url_missing", "This clip has no source URL."))?;
+    let parsed = Url::parse(&source_url).map_err(|_| invalid_stored_source_error())?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(invalid_stored_source_error());
+    }
     app.opener()
         .open_url(source_url, None::<&str>)
         .map_err(|_| CommandError::new("source_open_failed", "Could not open the clip source."))
@@ -276,6 +370,26 @@ mod tests {
             .expect_err("unsupported content types should be rejected");
 
         assert_eq!(error.code, "invalid_content_type");
+    }
+
+    #[test]
+    fn enforces_utf8_byte_limits_without_truncating() {
+        let boundary = "😀".repeat(MAX_CONTENT_BYTES / 4);
+        assert_eq!(
+            validate_clip_input(input(&boundary, "text"))
+                .expect("the exact content boundary should be accepted")
+                .content,
+            boundary
+        );
+        let error = validate_clip_input(input(&"😀".repeat(MAX_CONTENT_BYTES / 4 + 1), "text"))
+            .expect_err("content over the byte boundary should be rejected");
+        assert_eq!(error.code, "content_too_large");
+
+        let mut oversized_metadata = input("content", "text");
+        oversized_metadata.title = Some("é".repeat(MAX_METADATA_BYTES / 2 + 1));
+        let error = validate_clip_input(oversized_metadata)
+            .expect_err("oversized metadata should be rejected");
+        assert_eq!(error.code, "metadata_too_large");
     }
 
     #[test]
@@ -371,6 +485,34 @@ mod tests {
 
         assert_eq!(error.code, "storage_unavailable");
         assert_eq!(error.message, "Local clip storage is unavailable.");
+    }
+
+    #[test]
+    fn existing_oversized_rows_remain_usable_and_can_be_reduced() {
+        let (_directory, service) = service();
+        let legacy = service
+            .create(input(&"x".repeat(MAX_CONTENT_BYTES + 1), "text"))
+            .expect("a legacy oversized fixture should be stored below the command boundary");
+        assert_eq!(list_clips_with_service(&service).unwrap().len(), 1);
+        assert_eq!(
+            clip_content_with_service(&service, &legacy.id)
+                .unwrap()
+                .len(),
+            MAX_CONTENT_BYTES + 1
+        );
+        assert!(
+            set_clip_pinned_with_service(&service, &legacy.id, true)
+                .unwrap()
+                .is_pinned
+        );
+        assert_eq!(
+            source_url_with_service(&service, &legacy.id).unwrap(),
+            "https://example.com/conversation"
+        );
+        let reduced = update_clip_with_service(&service, &legacy.id, input("reduced", "text"))
+            .expect("reducing a legacy row should be allowed");
+        assert_eq!(reduced.content, "reduced");
+        delete_clip_with_service(&service, &legacy.id).unwrap();
     }
 
     trait WithSourceUrl {

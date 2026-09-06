@@ -3,7 +3,12 @@
   "name": "AI Clip Memory",
   "description": "Local-first AI clip memory browser extension.",
   "version": "0.1.0",
-  "permissions": ["activeTab", "contextMenus", "nativeMessaging"],
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "nativeMessaging",
+    "notifications"
+  ],
   "content_scripts": [
     {
       "matches": [

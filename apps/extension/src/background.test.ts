@@ -18,10 +18,24 @@ interface FakeChromeState {
   createdMenu?: chrome.contextMenus.CreateProperties;
   installListener?: () => void;
   removedMenus: boolean;
+  notifications?: Array<{
+    id: string;
+    options: chrome.notifications.NotificationCreateOptions;
+  }>;
 }
 
 function installFakeChrome(state: FakeChromeState) {
   vi.stubGlobal('chrome', {
+    notifications: {
+      create(
+        id: string,
+        options: chrome.notifications.NotificationCreateOptions,
+      ) {
+        state.notifications ??= [];
+        state.notifications.push({ id, options });
+        return Promise.resolve(id);
+      },
+    },
     contextMenus: {
       create(properties: chrome.contextMenus.CreateProperties) {
         state.createdMenu = properties;
@@ -38,6 +52,16 @@ function installFakeChrome(state: FakeChromeState) {
     },
     runtime: {
       id: 'own-id',
+      getURL(path: string) {
+        return `chrome-extension://own-id/${path}`;
+      },
+      sendNativeMessage() {
+        return Promise.resolve({
+          version: 1,
+          ok: true,
+          clipId: 'f7a6c48d-bfd5-4f13-b54d-e238f7cd7842',
+        });
+      },
       onMessage: {
         addListener(listener: NonNullable<FakeChromeState['messageListener']>) {
           state.messageListener = listener;
@@ -193,6 +217,31 @@ describe('Manifest V3 background service worker', () => {
         sourcePageTitle: 'ChatGPT conversation',
       },
     });
+  });
+
+  test('shows content-free feedback after a context-menu capture', async () => {
+    const state: FakeChromeState = { removedMenus: false };
+    installFakeChrome(state);
+    await import('./background');
+    state.clickListener?.(
+      {
+        menuItemId: CAPTURE_CONTEXT_MENU.id!,
+        pageUrl: 'https://example.com/',
+        selectionText: 'private selected text',
+      } as chrome.contextMenus.OnClickData,
+      { title: 'Private title' } as chrome.tabs.Tab,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(state.notifications).toHaveLength(1);
+    expect(JSON.stringify(state.notifications)).not.toContain('private');
+    expect(state.notifications?.[0]?.options.message).toBe(
+      'Clip saved locally.',
+    );
+    expect(state.notifications?.[0]?.options.iconUrl).toBe(
+      'chrome-extension://own-id/icons/notification.png',
+    );
   });
 
   test('does not contact the bridge for invalid capture input', async () => {
