@@ -1,5 +1,9 @@
 import type { Clip } from '@ai-clip-memory/shared';
-import { clipPreview, displayTitle } from '@/lib/clipRetrieval';
+import {
+  clipPreview,
+  displayTitle,
+  formatContentType,
+} from '@/lib/clipRetrieval';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -73,7 +77,7 @@ export function ClipList({ clips, onSelect, selectedId }: ClipListProps) {
             </span>
             <span className="clip-list-footer">
               <Badge variant="secondary" className="clip-list-meta">
-                {clip.contentType}
+                {formatContentType(clip.contentType)}
               </Badge>
               <span className="clip-list-source">
                 {clip.sourceApp || 'Local clip'}

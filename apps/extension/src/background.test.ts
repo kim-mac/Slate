@@ -18,6 +18,7 @@ interface FakeChromeState {
   createdMenu?: chrome.contextMenus.CreateProperties;
   installListener?: () => void;
   removedMenus: boolean;
+  clearedNotifications?: string[];
   notifications?: Array<{
     id: string;
     options: chrome.notifications.NotificationCreateOptions;
@@ -27,6 +28,11 @@ interface FakeChromeState {
 function installFakeChrome(state: FakeChromeState) {
   vi.stubGlobal('chrome', {
     notifications: {
+      clear(id: string) {
+        state.clearedNotifications ??= [];
+        state.clearedNotifications.push(id);
+        return Promise.resolve(true);
+      },
       create(
         id: string,
         options: chrome.notifications.NotificationCreateOptions,
@@ -231,10 +237,10 @@ describe('Manifest V3 background service worker', () => {
       } as chrome.contextMenus.OnClickData,
       { title: 'Private title' } as chrome.tabs.Tab,
     );
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(state.notifications).toHaveLength(1);
+    await vi.waitFor(() => expect(state.notifications).toHaveLength(1));
+    expect(state.clearedNotifications).toEqual([
+      'ai-clip-memory-capture-result',
+    ]);
     expect(JSON.stringify(state.notifications)).not.toContain('private');
     expect(state.notifications?.[0]?.options.message).toBe(
       'Clip saved locally.',

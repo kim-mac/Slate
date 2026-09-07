@@ -40,8 +40,8 @@ export function ClipFormDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {clip
-              ? 'Replace the editable clip fields.'
-              : 'Save a clip locally on this computer.'}
+              ? 'Update this clip while keeping it stored locally.'
+              : 'Add something useful to your local clip library.'}
           </DialogDescription>
         </DialogHeader>
         {error && (

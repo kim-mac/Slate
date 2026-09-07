@@ -159,6 +159,9 @@ describe('App', () => {
     );
     expect(sidebar.getAttribute('data-state')).toBe('collapsed');
     expect(screen.queryByRole('searchbox')).toBeNull();
+    const privacy = screen.getByLabelText('Local only');
+    expect(privacy.tabIndex).toBe(0);
+    expect(privacy.closest('[data-slot="tooltip-trigger"]')).not.toBeNull();
     expect(
       screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
     ).toBeTruthy();
@@ -190,7 +193,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     expect(screen.getByRole('dialog', { name: 'Create clip' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Settings & About' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Privacy & About' }));
     expect(screen.getByText(/Your clips are stored locally/)).toBeTruthy();
     fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true });
     expect(
@@ -312,13 +315,13 @@ describe('App', () => {
     expect(popup.getAttribute('data-side')).toBe('bottom');
     expect(popup.classList.contains('min-w-0')).toBe(true);
     expect(popup.classList.contains('min-w-36')).toBe(false);
-    fireEvent.keyDown(screen.getByRole('option', { name: 'code' }), {
+    fireEvent.keyDown(screen.getByRole('option', { name: 'Code' }), {
       key: 'Enter',
     });
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(
       screen.getByRole('combobox', { name: 'Content type filter' }).textContent,
-    ).toContain('code');
+    ).toContain('Code');
   });
 
   test('combines multi-term search and type filtering without changing counts', async () => {
@@ -342,7 +345,7 @@ describe('App', () => {
     fireEvent.click(
       screen.getByRole('combobox', { name: 'Content type filter' }),
     );
-    fireEvent.keyDown(screen.getByRole('option', { name: 'text' }), {
+    fireEvent.keyDown(screen.getByRole('option', { name: 'Text' }), {
       key: 'Enter',
     });
     expect(
@@ -392,11 +395,51 @@ describe('App', () => {
       .mockRejectedValueOnce(new Error('private path'))
       .mockResolvedValueOnce([firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByRole('button', { name: 'Retry' });
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(retry.closest('.empty-state')).not.toBeNull();
+    expect(document.querySelector('.load-error')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'No clips yet' })).toBeNull();
     expect(screen.queryByText('private path')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await screen.findByText(firstClip.content, { selector: '.clip-content' });
+  });
+
+  test('uses filter-specific guidance for empty results', async () => {
+    render(<App client={fakeClient([firstClip]).client} />);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'missing' },
+    });
+    expect(
+      screen.getByRole('heading', { name: 'No matching clips' }),
+    ).toBeTruthy();
+    expect(screen.getByText('Try a different search.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    fireEvent.click(
+      screen.getByRole('combobox', { name: 'Content type filter' }),
+    );
+    fireEvent.keyDown(screen.getByRole('option', { name: 'Code' }), {
+      key: 'Enter',
+    });
+    expect(
+      screen.getByRole('heading', { name: 'No clips of this type' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Choose another content type or clear the filter.'),
+    ).toBeTruthy();
+
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'missing' },
+    });
+    expect(
+      screen.getByRole('heading', { name: 'No matching clips' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Try a different search or content type.'),
+    ).toBeTruthy();
   });
 
   test('refresh failure preserves the library and remains retryable', async () => {
@@ -541,13 +584,17 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     const dialog = screen.getByRole('dialog', { name: 'Create clip' });
+    expect(dialog.textContent).toContain(
+      'Add something useful to your local clip library.',
+    );
+    expect(dialog.textContent).not.toContain('editable clip fields');
     fireEvent.change(within(dialog).getByLabelText('Content'), {
       target: { value: created.content },
     });
     fireEvent.click(
       within(dialog).getByRole('combobox', { name: 'Content type' }),
     );
-    fireEvent.click(screen.getByRole('option', { name: 'prompt' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Prompt' }));
     fireEvent.change(within(dialog).getByLabelText('Title'), {
       target: { value: created.title },
     });
@@ -592,6 +639,14 @@ describe('App', () => {
     expect(within(dialog).getByRole('alert').textContent).toContain(
       'Content is required.',
     );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+    expect(
+      within(screen.getByRole('dialog', { name: 'Create clip' })).queryByRole(
+        'alert',
+      ),
+    ).toBeNull();
   });
 
   test('edits a clip using full-replacement input', async () => {
@@ -608,6 +663,9 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = screen.getByRole('dialog', { name: 'Edit clip' });
+    expect(dialog.textContent).toContain(
+      'Update this clip while keeping it stored locally.',
+    );
     fireEvent.change(within(dialog).getByLabelText('Content'), {
       target: { value: updated.content },
     });
@@ -657,6 +715,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const alert = screen.getByRole('alertdialog', { name: 'Delete clip?' });
+    expect(alert.textContent).toContain('Local-first notes');
     fireEvent.click(within(alert).getByRole('button', { name: 'Cancel' }));
 
     expect(screen.queryByRole('alertdialog')).toBeNull();
@@ -716,12 +775,13 @@ describe('App', () => {
     const { client } = fakeClient();
     render(<App client={client} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Settings & About' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Privacy & About' }));
 
     expect(
       screen.getByText(
         'Your clips are stored locally on this computer. No account or cloud connection is required.',
       ),
     ).toBeTruthy();
+    expect(screen.getByText('Ctrl+Shift+Space')).toBeTruthy();
   });
 });

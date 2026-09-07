@@ -57,6 +57,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
         result,
         (id, options) => chrome.notifications.create(id, options),
         chrome.runtime.getURL('icons/notification.png'),
+        (id) => chrome.notifications.clear(id),
       ).catch(() => undefined);
   });
 });

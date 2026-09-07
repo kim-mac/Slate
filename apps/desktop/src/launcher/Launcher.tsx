@@ -6,6 +6,7 @@ import { Input } from '../components/ui/input';
 import {
   clipPreview,
   displayTitle,
+  formatContentType,
   matchesSearch,
   recentClips,
 } from '../lib/clipRetrieval';
@@ -51,15 +52,20 @@ export function Launcher({
   if (connectionError)
     return (
       <main className="launcher-shell">
-        <div role="alert">Quick search could not connect. Try again.</div>
-        <Button
-          onClick={() => {
-            setConnectionError(false);
-            setConnectionAttempt((n) => n + 1);
-          }}
-        >
-          Retry connection
-        </Button>
+        <div className="launcher-state" role="alert">
+          <strong>Quick search could not connect.</strong>
+          <span>Try connecting again.</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setConnectionError(false);
+              setConnectionAttempt((n) => n + 1);
+            }}
+          >
+            Retry connection
+          </Button>
+        </div>
       </main>
     );
   if (!state.visible) return null;
@@ -223,32 +229,26 @@ function LauncherSession({
         }}
         autoComplete="off"
         spellCheck={false}
+        placeholder="Search clips…"
       />
-      {error && (
+      {error && error !== 'load' && (
         <div className="launcher-error" role="alert">
           <span>
-            {error === 'load'
-              ? 'Clips could not be loaded.'
-              : error === 'copy'
-                ? 'Clip could not be copied.'
-                : 'Quick search could not close.'}
+            {error === 'copy'
+              ? 'Clip could not be copied.'
+              : 'Quick search could not close.'}
           </span>
           <Button
             variant="outline"
             size="sm"
             disabled={busy || (error === 'copy' && !selected)}
             onClick={() => {
-              if (error === 'load') void load();
-              else if (error === 'copy') {
+              if (error === 'copy') {
                 if (selected) void copy(selected.id);
               } else void hide();
             }}
           >
-            {error === 'load'
-              ? 'Retry loading'
-              : error === 'copy'
-                ? 'Retry copy'
-                : 'Retry closing'}
+            {error === 'copy' ? 'Retry copy' : 'Retry closing'}
           </Button>
         </div>
       )}
@@ -259,18 +259,34 @@ function LauncherSession({
         aria-label="Clips"
         aria-busy={loading || busy}
       >
-        {loading ? (
-          <p className="launcher-empty" role="status">
-            Loading clips…
-          </p>
+        {error === 'load' ? (
+          <div className="launcher-state" role="alert">
+            <strong>Clips could not be loaded.</strong>
+            <span>Try loading your local clips again.</span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => void load()}
+            >
+              Retry loading
+            </Button>
+          </div>
+        ) : loading ? (
+          <div className="launcher-state" role="status">
+            <strong>Loading clips…</strong>
+          </div>
         ) : results.length === 0 ? (
-          <p className="launcher-empty">
-            {clips.length
-              ? 'No matching clips'
-              : error === 'load'
-                ? 'Use Retry loading to try again.'
-                : 'No clips yet'}
-          </p>
+          <div className="launcher-state">
+            <strong>
+              {clips.length ? 'No matching clips' : 'No clips yet'}
+            </strong>
+            <span>
+              {clips.length
+                ? 'Try a different search.'
+                : 'Create or capture a clip to find it here.'}
+            </span>
+          </div>
         ) : (
           results.map((clip) => (
             <div
@@ -291,7 +307,8 @@ function LauncherSession({
                 {clipPreview(clip.content)}
               </div>
               <div className="launcher-meta">
-                {clip.sourceApp || 'Local clip'} · {clip.contentType}
+                {clip.sourceApp || 'Local clip'} ·{' '}
+                {formatContentType(clip.contentType)}
               </div>
             </div>
           ))

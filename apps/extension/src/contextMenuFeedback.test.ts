@@ -29,4 +29,44 @@ describe('context-menu capture feedback', () => {
     );
     expect(create.mock.calls[1]![1].message).toContain('too large');
   });
+
+  test('clears the owned notification before recreating it', async () => {
+    const order: string[] = [];
+    const clear = vi.fn(async (id: string) => {
+      order.push(`clear:${id}`);
+      return true;
+    });
+    const create = vi.fn(async (id: string) => {
+      order.push(`create:${id}`);
+      return id;
+    });
+    await notifyCaptureResult(
+      { version: 1, ok: true, clipId: 'private-id' },
+      create,
+      'icons/notification.png',
+      clear,
+    );
+    expect(order).toEqual([
+      'clear:ai-clip-memory-capture-result',
+      'create:ai-clip-memory-capture-result',
+    ]);
+  });
+
+  test.each(['false result', 'rejection'])(
+    'still creates feedback after a clear %s',
+    async (mode) => {
+      const create = vi.fn().mockResolvedValue('capture-result');
+      const clear =
+        mode === 'rejection'
+          ? vi.fn().mockRejectedValue(new Error('unavailable'))
+          : vi.fn().mockResolvedValue(false);
+      await notifyCaptureResult(
+        { version: 1, ok: false, error: 'storage_unavailable' },
+        create,
+        'icons/notification.png',
+        clear,
+      );
+      expect(create).toHaveBeenCalledTimes(1);
+    },
+  );
 });
