@@ -58,10 +58,23 @@
   font-size: 11px;
   color: var(--muted-foreground);
 }
-.launcher-empty {
+.launcher-state {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+  min-height: 100%;
   padding: 24px 10px;
   color: var(--muted-foreground);
   font-size: 14px;
+}
+.launcher-state strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.launcher-state > button {
+  margin-top: 4px;
 }
 .launcher-error {
   display: flex;
@@ -69,4 +82,7 @@
   justify-content: space-between;
   gap: 8px;
   font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
 }

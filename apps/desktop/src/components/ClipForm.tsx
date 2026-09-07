@@ -6,6 +6,7 @@ import {
 } from '@ai-clip-memory/shared';
 import { useState, type FormEvent } from 'react';
 import { validateClipInputSize } from '@/lib/clipInputLimits';
+import { formatContentType } from '@/lib/clipRetrieval';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -96,7 +97,7 @@ export function ClipForm({
                 key={type}
                 onClick={() => setContentType(type)}
               >
-                {type}
+                {formatContentType(type)}
               </SelectItem>
             ))}
           </SelectContent>

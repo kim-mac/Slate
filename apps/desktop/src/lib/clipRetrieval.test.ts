@@ -3,8 +3,10 @@ import { expect, test } from 'vitest';
 import {
   clipPreview,
   displayTitle,
+  formatContentType,
   matchesSearch,
   recentClips,
+  truncatePresentation,
 } from './clipRetrieval';
 
 const clip: Clip = {
@@ -52,6 +54,19 @@ test('adds ellipsis only to genuinely truncated previews', () => {
   expect(clipPreview('short')).toBe('short');
   expect(clipPreview('x'.repeat(90))).toBe('x'.repeat(90));
   expect(clipPreview('x'.repeat(91))).toBe('x'.repeat(90) + '…');
+});
+test('truncates presentation text by grapheme when Intl.Segmenter is available', () => {
+  if (typeof Intl.Segmenter !== 'function') return;
+
+  expect(truncatePresentation('👨‍👩‍👧‍👦 family', 1)).toBe('👨‍👩‍👧‍👦…');
+  expect(truncatePresentation('e\u0301clair', 1)).toBe('e\u0301…');
+  expect(truncatePresentation('short', 5)).toBe('short');
+});
+test('presents stored content types with consistent casing', () => {
+  expect(formatContentType('text')).toBe('Text');
+  expect(formatContentType('code')).toBe('Code');
+  expect(formatContentType('prompt')).toBe('Prompt');
+  expect(formatContentType('link')).toBe('Link');
 });
 test('sorts newest first with stable ID ties without mutating input', () => {
   const older = {

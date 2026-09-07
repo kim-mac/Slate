@@ -1,6 +1,6 @@
 import type { Clip } from '@ai-clip-memory/shared';
 import { Copy, ExternalLink, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
-import { displayTitle } from '@/lib/clipRetrieval';
+import { displayTitle, formatContentType } from '@/lib/clipRetrieval';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,7 +38,9 @@ export function ClipDetail({
         <article>
           <CardHeader className="clip-detail-header">
             <div className="clip-heading">
-              <Badge variant="secondary">{clip.contentType}</Badge>
+              <Badge variant="secondary">
+                {formatContentType(clip.contentType)}
+              </Badge>
               <CardTitle>
                 <h2>{displayTitle(clip)}</h2>
               </CardTitle>
@@ -144,7 +146,7 @@ function ActionButton({
         {label}
       </TooltipTrigger>
       <TooltipContent>
-        {label === 'Copy' ? 'Copy (Ctrl/Cmd+Shift+C)' : label}
+        {label === 'Copy' ? 'Copy (Ctrl+Shift+C)' : label}
       </TooltipContent>
     </Tooltip>
   );

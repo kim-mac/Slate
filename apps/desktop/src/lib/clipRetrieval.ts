@@ -1,4 +1,25 @@
-import type { Clip } from '@ai-clip-memory/shared';
+import type { Clip, ClipContentType } from '@ai-clip-memory/shared';
+
+export function truncatePresentation(text: string, maxLength: number): string {
+  if (maxLength <= 0) return text.length > 0 ? '…' : '';
+
+  const segments =
+    typeof Intl.Segmenter === 'function'
+      ? Array.from(
+          new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(
+            text,
+          ),
+          ({ segment }) => segment,
+        )
+      : Array.from(text);
+  return segments.length > maxLength
+    ? segments.slice(0, maxLength).join('') + '…'
+    : text;
+}
+
+export function formatContentType(type: ClipContentType): string {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
 
 export function matchesSearch(clip: Clip, searchText: string): boolean {
   const query = searchText.trim().toLocaleLowerCase();
@@ -34,7 +55,7 @@ export function displayTitle(clip: Clip): string {
 }
 
 export function clipPreview(content: string): string {
-  return content.length > 90 ? content.slice(0, 90) + '…' : content;
+  return truncatePresentation(content, 90);
 }
 
 export function recentClips(clips: Clip[]): Clip[] {

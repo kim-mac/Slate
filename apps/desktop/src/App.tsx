@@ -9,7 +9,13 @@ import { ShieldCheck } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useClipLibrary } from './hooks/useClipLibrary';
-import { matchesSearch, recentClips } from './lib/clipRetrieval';
+import {
+  displayTitle,
+  formatContentType,
+  matchesSearch,
+  recentClips,
+  truncatePresentation,
+} from './lib/clipRetrieval';
 import { ClipFeedback } from './components/ClipFeedback';
 import { LauncherAvailability } from './components/LauncherAvailability';
 import { Button } from './components/ui/button';
@@ -78,7 +84,8 @@ export function App({ client = tauriClipClient }: AppProps) {
     invalidate,
   } = useClipLibrary(client);
   const [deleteTarget, setDeleteTarget] = useState<Clip | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
@@ -103,7 +110,6 @@ export function App({ client = tauriClipClient }: AppProps) {
     operationPending.current = true;
     invalidate();
     setIsBusy(true);
-    setError(null);
     setStatus(null);
     return true;
   }
@@ -134,7 +140,10 @@ export function App({ client = tauriClipClient }: AppProps) {
         : (visibleClips[0]?.id ?? null),
     );
   }, [visibleClips]);
-  const hasFilters = !!searchText.trim() || contentType !== 'all';
+  const hasSearch = !!searchText.trim();
+  const hasTypeFilter = contentType !== 'all';
+  const hasFilters = hasSearch || hasTypeFilter;
+  const initialLoadFailure = !!loadError && clips.length === 0 && !isLoading;
   function clearFilters() {
     setSearchText('');
     setContentType('all');
@@ -147,7 +156,7 @@ export function App({ client = tauriClipClient }: AppProps) {
 
   async function saveClip(input: ClipInput) {
     if (!beginOperation()) return;
-    setError(null);
+    setFormError(null);
     setIsSaving(true);
     try {
       if (formMode?.type === 'edit') {
@@ -163,9 +172,10 @@ export function App({ client = tauriClipClient }: AppProps) {
         setSelectedId(created.id);
       }
       setFormMode(null);
+      setFormError(null);
       notify('Clip saved.');
     } catch (saveError) {
-      setError(safeErrorMessage(saveError));
+      setFormError(safeErrorMessage(saveError));
     } finally {
       setIsSaving(false);
       finishOperation();
@@ -174,7 +184,7 @@ export function App({ client = tauriClipClient }: AppProps) {
 
   async function setPinned(clip: Clip, isPinned: boolean) {
     if (!beginOperation()) return;
-    setError(null);
+    setActionError(null);
     try {
       const updated = await client.setPinned(clip.id, isPinned);
       setClips((current) =>
@@ -182,7 +192,7 @@ export function App({ client = tauriClipClient }: AppProps) {
       );
       notify(isPinned ? 'Clip pinned.' : 'Clip unpinned.');
     } catch (pinError) {
-      setError(safeErrorMessage(pinError));
+      setActionError(safeErrorMessage(pinError));
     } finally {
       finishOperation();
     }
@@ -191,14 +201,14 @@ export function App({ client = tauriClipClient }: AppProps) {
   async function deleteClip(clip: Clip) {
     if (!beginOperation()) return;
     setDeleteTarget(null);
-    setError(null);
+    setActionError(null);
     try {
       await client.delete(clip.id);
       setClips((current) => current.filter((item) => item.id !== clip.id));
       setSelectedId(null);
       notify('Clip deleted.');
     } catch (deleteError) {
-      setError(safeErrorMessage(deleteError));
+      setActionError(safeErrorMessage(deleteError));
     } finally {
       finishOperation();
     }
@@ -206,12 +216,12 @@ export function App({ client = tauriClipClient }: AppProps) {
 
   async function copyClip(clip: Clip) {
     if (!beginOperation()) return;
-    setError(null);
+    setActionError(null);
     try {
       await client.copyContent(clip.id);
       notify('Clip copied.');
     } catch (copyError) {
-      setError(safeErrorMessage(copyError));
+      setActionError(safeErrorMessage(copyError));
     } finally {
       finishOperation();
     }
@@ -219,11 +229,11 @@ export function App({ client = tauriClipClient }: AppProps) {
 
   async function openSource(clip: Clip) {
     if (!beginOperation()) return;
-    setError(null);
+    setActionError(null);
     try {
       await client.openSource(clip.id);
     } catch (openError) {
-      setError(safeErrorMessage(openError));
+      setActionError(safeErrorMessage(openError));
     } finally {
       finishOperation();
     }
@@ -310,7 +320,7 @@ export function App({ client = tauriClipClient }: AppProps) {
             onNewClip={() => {
               setActiveView('all');
               setFormMode({ type: 'create' });
-              setError(null);
+              setFormError(null);
             }}
             onSearchTextChange={setSearchText}
             onSelectView={(view) => {
@@ -331,14 +341,14 @@ export function App({ client = tauriClipClient }: AppProps) {
                 className="data-vertical:h-4 data-vertical:self-auto"
               />
               <span>
-                {activeView === 'settings' ? 'Settings & About' : 'Library'}
+                {activeView === 'settings' ? 'Privacy & About' : 'Library'}
               </span>
             </header>
             <LauncherAvailability />
             <div className="content">
-              {error && !formMode && (
+              {actionError && !formMode && (
                 <p role="alert" className="error-message">
-                  {error} Try the action again, or refresh the library.
+                  {actionError} Try the action again, or refresh the library.
                 </p>
               )}
 
@@ -385,7 +395,9 @@ export function App({ client = tauriClipClient }: AppProps) {
                     >
                       <SelectTrigger aria-label="Content type filter">
                         <SelectValue>
-                          {contentType === 'all' ? 'All types' : contentType}
+                          {contentType === 'all'
+                            ? 'All types'
+                            : formatContentType(contentType)}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent
@@ -396,7 +408,7 @@ export function App({ client = tauriClipClient }: AppProps) {
                         <SelectItem value="all">All types</SelectItem>
                         {CLIP_CONTENT_TYPES.map((type) => (
                           <SelectItem key={type} value={type}>
-                            {type}
+                            {formatContentType(type)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -413,7 +425,7 @@ export function App({ client = tauriClipClient }: AppProps) {
                       </Button>
                     )}
                   </div>
-                  {loadError && (
+                  {loadError && clips.length > 0 && (
                     <div className="load-error">
                       <p role="alert">{loadError}</p>
                       <Button
@@ -433,10 +445,20 @@ export function App({ client = tauriClipClient }: AppProps) {
                     <div className="empty-state">
                       <p>Loading clips…</p>
                     </div>
-                  ) : loadError && clips.length === 0 ? (
+                  ) : initialLoadFailure ? (
                     <div className="empty-state">
                       <h2>Library unavailable</h2>
-                      <p>Retry loading your local clips.</p>
+                      <p role="alert">{loadError}</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isRefreshing || isBusy}
+                        onClick={() => {
+                          if (!operationPending.current) void refresh();
+                        }}
+                      >
+                        Retry
+                      </Button>
                     </div>
                   ) : visibleClips.length === 0 ? (
                     <div className="empty-state">
@@ -444,18 +466,24 @@ export function App({ client = tauriClipClient }: AppProps) {
                         {activeView === 'pinned' ? '◇' : '□'}
                       </div>
                       <h2>
-                        {hasFilters
+                        {hasSearch
                           ? 'No matching clips'
-                          : activeView === 'pinned'
-                            ? 'No pinned clips'
-                            : 'No clips yet'}
+                          : hasTypeFilter
+                            ? 'No clips of this type'
+                            : activeView === 'pinned'
+                              ? 'No pinned clips'
+                              : 'No clips yet'}
                       </h2>
                       <p>
-                        {hasFilters
-                          ? 'Try a different search.'
-                          : activeView === 'pinned'
-                            ? 'Clips you pin will appear here.'
-                            : 'Create a clip here or save one from your browser.'}
+                        {hasSearch && hasTypeFilter
+                          ? 'Try a different search or content type.'
+                          : hasSearch
+                            ? 'Try a different search.'
+                            : hasTypeFilter
+                              ? 'Choose another content type or clear the filter.'
+                              : activeView === 'pinned'
+                                ? 'Clips you pin will appear here.'
+                                : 'Create a clip here or save one from your browser.'}
                       </p>
                     </div>
                   ) : (
@@ -471,9 +499,10 @@ export function App({ client = tauriClipClient }: AppProps) {
                           disabled={isBusy || isRefreshing}
                           onCopy={() => void copyClip(selectedClip)}
                           onDelete={() => setDeleteTarget(selectedClip)}
-                          onEdit={() =>
-                            setFormMode({ type: 'edit', clip: selectedClip })
-                          }
+                          onEdit={() => {
+                            setFormError(null);
+                            setFormMode({ type: 'edit', clip: selectedClip });
+                          }}
                           onOpenSource={() => void openSource(selectedClip)}
                           onSetPinned={(isPinned) =>
                             void setPinned(selectedClip, isPinned)
@@ -491,8 +520,8 @@ export function App({ client = tauriClipClient }: AppProps) {
                   aria-labelledby="settings-heading"
                 >
                   <header className="section-header">
-                    <h1 id="settings-heading">Settings &amp; About</h1>
-                    <p>Basic information about this local-first application.</p>
+                    <h1 id="settings-heading">Privacy &amp; About</h1>
+                    <p>Privacy and application information for local use.</p>
                   </header>
 
                   <Card
@@ -524,6 +553,10 @@ export function App({ client = tauriClipClient }: AppProps) {
                           <dt>Storage</dt>
                           <dd>Local only</dd>
                         </div>
+                        <div>
+                          <dt>Quick search</dt>
+                          <dd>Ctrl+Shift+Space</dd>
+                        </div>
                       </dl>
                     </CardContent>
                   </Card>
@@ -544,11 +577,14 @@ export function App({ client = tauriClipClient }: AppProps) {
           <ClipFormDialog
             key={formMode.type === 'edit' ? formMode.clip.id : 'create'}
             {...(formMode.type === 'edit' ? { clip: formMode.clip } : {})}
-            error={error}
+            error={formError}
             isSaving={isSaving}
             open
             onOpenChange={(open) => {
-              if (!open) setFormMode(null);
+              if (!open) {
+                setFormMode(null);
+                setFormError(null);
+              }
             }}
             onSubmit={saveClip}
           />
@@ -564,7 +600,9 @@ export function App({ client = tauriClipClient }: AppProps) {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete clip?</AlertDialogTitle>
               <AlertDialogDescription>
-                This removes the clip from local storage and cannot be undone.
+                {deleteTarget
+                  ? `Delete “${truncatePresentation(displayTitle(deleteTarget), 60)}”? This removes the clip from local storage and cannot be undone.`
+                  : 'This removes the clip from local storage and cannot be undone.'}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

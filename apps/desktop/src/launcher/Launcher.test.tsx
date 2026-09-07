@@ -58,6 +58,7 @@ afterEach(cleanup);
 test('restores search focus when the native webview receives focus after rendering', async () => {
   setup();
   const search = await screen.findByRole('searchbox');
+  expect(search.getAttribute('placeholder')).toBe('Search clips…');
   (search as HTMLInputElement).blur();
   expect(document.activeElement).not.toBe(search);
   fireEvent.focus(window);
@@ -204,16 +205,28 @@ test('load errors are safe and retryable, with empty and no-match states', async
   await screen.findByRole('option', { name: /Recent note/ });
   client.list.mockRejectedValueOnce(new Error('private path'));
   emit({ session: 2, visible: true });
-  expect((await screen.findByRole('alert')).textContent).not.toContain(
-    'private',
-  );
+  const loadAlert = await screen.findByRole('alert');
+  expect(loadAlert.textContent).not.toContain('private');
+  expect(loadAlert.closest('.launcher-state')).not.toBeNull();
   client.list.mockResolvedValueOnce([]);
   fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
-  await screen.findByText('No clips yet');
+  expect(
+    (await screen.findByText('No clips yet')).closest('.launcher-state'),
+  ).not.toBeNull();
   emit({ session: 3, visible: true });
   await screen.findByRole('option', { name: /Recent note/ });
   fireEvent.change(screen.getByRole('searchbox'), {
     target: { value: 'missing' },
   });
-  expect(screen.getByText('No matching clips')).toBeTruthy();
+  expect(
+    screen.getByText('No matching clips').closest('.launcher-state'),
+  ).not.toBeNull();
+});
+
+test('presents content-type labels and Windows shortcuts consistently', async () => {
+  setup();
+  const recent = await screen.findByRole('option', { name: /Recent note/ });
+  expect(recent.textContent).toContain('Text');
+  expect(recent.textContent).not.toContain('· text');
+  expect(screen.getByText('↑↓ Select · Enter Copy · Esc Close')).toBeTruthy();
 });

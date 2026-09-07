@@ -10,6 +10,11 @@ import type { RefObject } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 import {
   Sidebar,
@@ -64,7 +69,7 @@ export function AppSidebar({
         {collapsed ? (
           <SidebarMenuButton
             aria-label="Search clips"
-            tooltip="Search clips (Ctrl/Cmd+F)"
+            tooltip="Search clips (Ctrl+F)"
             onClick={onFocusSearch}
           >
             <Search aria-hidden="true" />
@@ -79,7 +84,7 @@ export function AppSidebar({
               <Input
                 id="clip-search"
                 ref={searchRef}
-                title="Search clips (Ctrl/Cmd+F)"
+                title="Search clips (Ctrl+F)"
                 onKeyDown={(event) => {
                   if (
                     event.key === 'ArrowDown' &&
@@ -156,12 +161,23 @@ export function AppSidebar({
       </SidebarContent>
       <SidebarFooter>
         {collapsed ? (
-          <span
-            className="sidebar-privacy-icon"
-            title="Local only — no account or cloud required"
-          >
-            <ShieldCheck role="img" aria-label="Local only" />
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  className="sidebar-privacy-icon"
+                  role="img"
+                  aria-label="Local only"
+                  tabIndex={0}
+                />
+              }
+            >
+              <ShieldCheck aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              Local only — no account or cloud required
+            </TooltipContent>
+          </Tooltip>
         ) : (
           <Badge variant="outline" className="sidebar-local-status">
             Local only
@@ -171,14 +187,14 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton
               type="button"
-              aria-label="Settings & About"
-              tooltip="Settings & About · Local only"
+              aria-label="Privacy & About"
+              tooltip="Privacy & About · Local only"
               aria-pressed={activeView === 'settings'}
               isActive={activeView === 'settings'}
               onClick={() => onSelectView('settings')}
             >
               <Settings aria-hidden="true" />
-              {!collapsed && <span>Settings &amp; About</span>}
+              {!collapsed && <span>Privacy &amp; About</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
