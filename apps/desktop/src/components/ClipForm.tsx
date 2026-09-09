@@ -90,7 +90,7 @@ export function ClipForm({
           <SelectTrigger id="clip-content-type" className="w-full">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent alignItemWithTrigger={false} align="start">
             {CLIP_CONTENT_TYPES.map((type) => (
               <SelectItem
                 value={type}

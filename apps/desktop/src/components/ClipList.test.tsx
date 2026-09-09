@@ -55,3 +55,20 @@ test('does not capture modified arrows or composition events', () => {
   fireEvent.keyDown(first, { key: 'ArrowDown', isComposing: true });
   expect(select).not.toHaveBeenCalled();
 });
+
+test('renders a compact nested list without full metadata', () => {
+  render(
+    <ClipList
+      ariaLabel="All Clips"
+      clips={clips}
+      compact
+      selectedId="a"
+      onSelect={vi.fn()}
+    />,
+  );
+
+  expect(screen.getByLabelText('All Clips')).toBeTruthy();
+  expect(screen.getByText('Page a')).toBeTruthy();
+  expect(screen.queryByText('ChatGPT')).toBeNull();
+  expect(document.querySelector('.clip-list-compact')).not.toBeNull();
+});
