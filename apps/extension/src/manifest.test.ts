@@ -1,9 +1,23 @@
 import { describe, expect, test } from 'vitest';
+import { createHash, createPublicKey } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import manifest from '../public/manifest.json';
 import { CAPTURE_CONTEXT_MENU } from './contextMenu';
+
+const EXPECTED_CHROME_EXTENSION_ID = 'jjfaegknedfakmidhhdlmbebnjafcjfi';
+
+function extensionIdFromManifestKey(key: string): string {
+  const digest = createHash('sha256')
+    .update(Buffer.from(key, 'base64'))
+    .digest();
+  const alphabet = 'abcdefghijklmnop';
+
+  return [...digest.subarray(0, 16)]
+    .flatMap((byte) => [alphabet[byte >> 4], alphabet[byte & 0x0f]])
+    .join('');
+}
 
 describe('extension manifest', () => {
   test('packages a Chromium-compatible PNG notification icon', () => {
@@ -16,6 +30,20 @@ describe('extension manifest', () => {
   });
   test('uses the aligned MVP release version', () => {
     expect(manifest.version).toBe('0.1.0');
+  });
+
+  test('has a deterministic unpacked Chrome extension identity', () => {
+    expect(typeof manifest.key).toBe('string');
+    expect(
+      createPublicKey({
+        key: Buffer.from(manifest.key, 'base64'),
+        format: 'der',
+        type: 'spki',
+      }).asymmetricKeyType,
+    ).toBe('rsa');
+    expect(extensionIdFromManifestKey(manifest.key)).toBe(
+      EXPECTED_CHROME_EXTENSION_ID,
+    );
   });
 
   test('uses Manifest V3 with only the capture and native messaging permissions', () => {

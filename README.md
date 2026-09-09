@@ -31,10 +31,13 @@ Messaging host, and the exact Chrome and Edge registrations needed by the
 matching extension build. Users do not need Node.js, pnpm, Rust, Cargo, Visual
 Studio Build Tools, or a source checkout.
 
-The browser extension is installed separately. Phase 1 private-test installers
-must be paired with the unpacked extension IDs supplied when those installers
-were built. Public Chrome Web Store and Edge Add-ons packages are a later release
-phase.
+The browser extension is installed separately. Production extension builds carry
+a public manifest key so unpacked Chrome installs keep the deterministic ID
+`jjfaegknedfakmidhhdlmbebnjafcjfi`, regardless of the directory from which they
+are loaded. Windows packages derive that Chrome ID from the same manifest key and
+also allow the intended Edge release ID configured in
+`apps/extension/release-identity.json`. Public Chrome Web Store and Edge Add-ons
+packages are a later release phase.
 
 The installer uses Microsoft's WebView2 download bootstrapper when WebView2 is
 missing. Installation may therefore require internet access on a machine that
@@ -141,17 +144,14 @@ the installer.
 
 ## Build private Windows installers
 
-Supply the exact extension IDs that the installer must allow. The build fails
-before Tauri runs when an ID is missing or malformed.
+The packaging script derives the stable Chrome origin from the extension
+manifest key and reads the intended Edge origin from the extension release
+identity configuration. It rejects malformed configuration before Tauri runs;
+extension IDs cannot be overridden at the command line.
 
 ```powershell
-pnpm run package:windows:x64 -- `
-  -ChromeExtensionId <exact-chrome-id> `
-  -EdgeExtensionId <exact-edge-id>
-
-pnpm run package:windows:arm64 -- `
-  -ChromeExtensionId <exact-chrome-id> `
-  -EdgeExtensionId <exact-edge-id>
+pnpm run package:windows:x64
+pnpm run package:windows:arm64
 ```
 
 The relevant Rust target and Visual Studio C++ target tools must already be
