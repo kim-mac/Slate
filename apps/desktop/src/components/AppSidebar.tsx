@@ -1,21 +1,21 @@
+import type { Clip } from '@ai-clip-memory/shared';
 import {
   Archive,
+  ChevronRight,
   Pin,
-  Plus,
-  Search,
   Settings,
   ShieldCheck,
 } from 'lucide-react';
 import type { RefObject } from 'react';
 
+import { ClipList } from '@/components/ClipList';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-
 import {
   Sidebar,
   SidebarContent,
@@ -23,7 +23,6 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
@@ -33,127 +32,134 @@ import {
 } from '@/components/ui/sidebar';
 
 export type AppView = 'all' | 'pinned' | 'settings';
+type LibraryView = Exclude<AppView, 'settings'>;
 
 interface AppSidebarProps {
   activeView: AppView;
   allCount: number;
-  onNewClip: () => void;
-  onSearchTextChange: (value: string) => void;
+  clips: Clip[];
+  clipListRef: RefObject<HTMLDivElement | null>;
+  expandedSection: LibraryView | null;
+  hasFilters: boolean;
+  isLoading: boolean;
+  onClearFilters: () => void;
+  onSelectClip: (id: string) => void;
+  onToggleSection: (view: LibraryView) => void;
   pinnedCount: number;
-  searchText: string;
-  searchRef: RefObject<HTMLInputElement | null>;
-  disabled: boolean;
-  onSearchResults: () => void;
-  onFocusSearch: () => void;
+  selectedId: string | null;
   onSelectView: (view: AppView) => void;
 }
 
 export function AppSidebar({
   activeView,
   allCount,
-  onNewClip,
-  onSearchTextChange,
+  clips,
+  clipListRef,
+  expandedSection,
+  hasFilters,
+  isLoading,
+  onClearFilters,
+  onSelectClip,
+  onToggleSection,
   pinnedCount,
-  searchText,
-  searchRef,
-  disabled,
-  onSearchResults,
-  onFocusSearch,
+  selectedId,
   onSelectView,
 }: AppSidebarProps) {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
+  const sections = [
+    {
+      view: 'all' as const,
+      label: 'All Clips',
+      count: allCount,
+      Icon: Archive,
+    },
+    { view: 'pinned' as const, label: 'Pinned', count: pinnedCount, Icon: Pin },
+  ];
+
   return (
     <Sidebar collapsible="icon" className="app-sidebar">
-      <SidebarHeader className="app-sidebar-header">
-        {collapsed ? (
-          <SidebarMenuButton
-            aria-label="Search clips"
-            tooltip="Search clips (Ctrl+F)"
-            onClick={onFocusSearch}
-          >
-            <Search aria-hidden="true" />
-          </SidebarMenuButton>
-        ) : (
-          <>
-            <label className="sr-only" htmlFor="clip-search">
-              Search clips
-            </label>
-            <div className="search-field sidebar-search">
-              <Search aria-hidden="true" />
-              <Input
-                id="clip-search"
-                ref={searchRef}
-                title="Search clips (Ctrl+F)"
-                onKeyDown={(event) => {
-                  if (
-                    event.key === 'ArrowDown' &&
-                    !event.ctrlKey &&
-                    !event.metaKey &&
-                    !event.altKey &&
-                    !event.shiftKey &&
-                    !event.nativeEvent.isComposing
-                  ) {
-                    event.preventDefault();
-                    onSearchResults();
-                  }
-                }}
-                type="search"
-                placeholder="Search clips..."
-                value={searchText}
-                onChange={(event) =>
-                  onSearchTextChange(event.currentTarget.value)
-                }
-              />
-            </div>
-          </>
-        )}
-        <SidebarMenuButton
-          type="button"
-          className="sidebar-new-clip bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-          aria-label="New clip"
-          tooltip="New clip"
-          onClick={onNewClip}
-          disabled={disabled}
-        >
-          <Plus aria-hidden="true" />
-          {!collapsed && <span>New clip</span>}
-        </SidebarMenuButton>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
+      <SidebarContent className="app-sidebar-content">
+        <SidebarGroup className="sidebar-library-group">
           <SidebarGroupLabel>Library</SidebarGroupLabel>
           <SidebarGroupContent>
             <nav aria-label="Clip library">
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    type="button"
-                    aria-label="All Clips"
-                    tooltip={`All Clips (${allCount})`}
-                    aria-pressed={activeView === 'all'}
-                    isActive={activeView === 'all'}
-                    onClick={() => onSelectView('all')}
-                  >
-                    <Archive aria-hidden="true" />
-                    {!collapsed && <span>All Clips</span>}
-                  </SidebarMenuButton>
-                  <SidebarMenuBadge>{allCount}</SidebarMenuBadge>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    type="button"
-                    aria-label="Pinned"
-                    tooltip={`Pinned (${pinnedCount})`}
-                    aria-pressed={activeView === 'pinned'}
-                    isActive={activeView === 'pinned'}
-                    onClick={() => onSelectView('pinned')}
-                  >
-                    <Pin aria-hidden="true" />
-                    {!collapsed && <span>Pinned</span>}
-                  </SidebarMenuButton>
-                  <SidebarMenuBadge>{pinnedCount}</SidebarMenuBadge>
-                </SidebarMenuItem>
+              <SidebarMenu className="sidebar-navigation-menu">
+                {sections.map(({ view, label, count, Icon }) => {
+                  const expanded = !collapsed && expandedSection === view;
+                  return (
+                    <SidebarMenuItem
+                      className="sidebar-section-item"
+                      key={view}
+                    >
+                      <SidebarMenuButton
+                        type="button"
+                        aria-label={label}
+                        aria-expanded={expanded}
+                        tooltip={`${label} (${count})`}
+                        aria-pressed={activeView === view}
+                        isActive={activeView === view}
+                        onClick={() =>
+                          collapsed ? onSelectView(view) : onToggleSection(view)
+                        }
+                        className="sidebar-section-trigger"
+                      >
+                        {collapsed ? (
+                          <Icon aria-hidden="true" />
+                        ) : (
+                          <ChevronRight
+                            aria-hidden="true"
+                            className="sidebar-section-chevron"
+                          />
+                        )}
+                        {!collapsed && <span>{label}</span>}
+                      </SidebarMenuButton>
+                      <SidebarMenuBadge>{count}</SidebarMenuBadge>
+
+                      {expanded && (
+                        <div
+                          className="sidebar-section-results"
+                          role="region"
+                          aria-label={`${label} results`}
+                          ref={clipListRef}
+                        >
+                          {hasFilters && (
+                            <div className="sidebar-section-tools">
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                onClick={onClearFilters}
+                              >
+                                Clear filters
+                              </Button>
+                            </div>
+                          )}
+                          {isLoading ? (
+                            <p className="sidebar-results-message">
+                              Loading clips…
+                            </p>
+                          ) : clips.length > 0 ? (
+                            <ClipList
+                              ariaLabel={`${label} clip list`}
+                              clips={clips}
+                              compact
+                              selectedId={selectedId}
+                              onSelect={onSelectClip}
+                            />
+                          ) : (
+                            <p className="sidebar-results-message">
+                              {hasFilters
+                                ? 'No matching clips.'
+                                : view === 'pinned'
+                                  ? 'No pinned clips.'
+                                  : 'No clips yet.'}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </nav>
           </SidebarGroupContent>

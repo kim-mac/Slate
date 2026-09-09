@@ -5,7 +5,7 @@ import {
   type Clip,
   type ClipInput,
 } from '@ai-clip-memory/shared';
-import { ShieldCheck } from 'lucide-react';
+import { Plus, Search, ShieldCheck } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useClipLibrary } from './hooks/useClipLibrary';
@@ -19,6 +19,7 @@ import {
 import { ClipFeedback } from './components/ClipFeedback';
 import { LauncherAvailability } from './components/LauncherAvailability';
 import { Button } from './components/ui/button';
+import { Input } from './components/ui/input';
 import {
   Select,
   SelectContent,
@@ -31,7 +32,6 @@ import { tauriClipClient, type ClipClient } from './clipClient';
 import { AppSidebar, type AppView } from './components/AppSidebar';
 import { ClipDetail } from './components/ClipDetail';
 import { ClipFormDialog } from './components/ClipFormDialog';
-import { ClipList } from './components/ClipList';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,6 +74,10 @@ function safeErrorMessage(error: unknown): string {
 export function App({ client = tauriClipClient }: AppProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<AppView>('all');
+  const [expandedSection, setExpandedSection] = useState<Exclude<
+    AppView,
+    'settings'
+  > | null>('all');
   const {
     clips,
     setClips,
@@ -95,6 +99,7 @@ export function App({ client = tauriClipClient }: AppProps) {
   );
   const searchRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLElement>(null);
+  const clipListRef = useRef<HTMLDivElement>(null);
   const [searchText, setSearchText] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [status, setStatus] = useState<{ message: string; id: number } | null>(
@@ -118,15 +123,26 @@ export function App({ client = tauriClipClient }: AppProps) {
     setIsBusy(false);
   }
 
-  const visibleClips = useMemo(
+  const matchingClips = useMemo(
     () =>
       recentClips(clips).filter(
         (clip) =>
-          (activeView !== 'pinned' || clip.isPinned) &&
           (contentType === 'all' || clip.contentType === contentType) &&
           matchesSearch(clip, searchText),
       ),
-    [activeView, clips, searchText, contentType],
+    [clips, searchText, contentType],
+  );
+  const visibleClips = useMemo(
+    () =>
+      matchingClips.filter((clip) => activeView !== 'pinned' || clip.isPinned),
+    [activeView, matchingClips],
+  );
+  const sidebarClips = useMemo(
+    () =>
+      matchingClips.filter(
+        (clip) => expandedSection !== 'pinned' || clip.isPinned,
+      ),
+    [expandedSection, matchingClips],
   );
   const selectedClip =
     visibleClips.find((clip) => clip.id === selectedId) ??
@@ -151,6 +167,13 @@ export function App({ client = tauriClipClient }: AppProps) {
 
   function showLibrary(view: Exclude<AppView, 'settings'>) {
     setActiveView(view);
+    setExpandedSection(view);
+    setFormMode(null);
+  }
+
+  function toggleLibrarySection(view: Exclude<AppView, 'settings'>) {
+    setActiveView(view);
+    setExpandedSection((current) => (current === view ? null : view));
     setFormMode(null);
   }
 
@@ -169,6 +192,7 @@ export function App({ client = tauriClipClient }: AppProps) {
         const created = await client.create(input);
         setClips((current) => [created, ...current]);
         setActiveView('all');
+        setExpandedSection('all');
         setSelectedId(created.id);
       }
       setFormMode(null);
@@ -241,8 +265,10 @@ export function App({ client = tauriClipClient }: AppProps) {
 
   function focusSearch() {
     flushSync(() => {
-      setSidebarOpen(true);
-      if (activeView === 'settings') setActiveView('all');
+      if (activeView === 'settings') {
+        setActiveView('all');
+        setExpandedSection('all');
+      }
     });
     searchRef.current?.focus();
     searchRef.current?.select();
@@ -278,7 +304,8 @@ export function App({ client = tauriClipClient }: AppProps) {
         const target = event.target;
         if (
           !(target instanceof HTMLElement) ||
-          !libraryRef.current?.contains(target) ||
+          (!libraryRef.current?.contains(target) &&
+            !clipListRef.current?.contains(target)) ||
           target.closest(
             'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="combobox"], [role="dialog"], [role="alertdialog"]',
           )
@@ -304,25 +331,19 @@ export function App({ client = tauriClipClient }: AppProps) {
           <AppSidebar
             activeView={activeView}
             allCount={clips.length}
-            searchText={searchText}
+            clips={sidebarClips}
+            clipListRef={clipListRef}
+            expandedSection={expandedSection}
+            hasFilters={hasFilters}
+            isLoading={isLoading}
+            onClearFilters={clearFilters}
+            onSelectClip={(id) => {
+              if (expandedSection) setActiveView(expandedSection);
+              setSelectedId(id);
+            }}
+            onToggleSection={toggleLibrarySection}
             pinnedCount={pinnedCount}
-            searchRef={searchRef}
-            onFocusSearch={focusSearch}
-            disabled={isLoading || isRefreshing || isBusy}
-            onSearchResults={() => {
-              if (activeView === 'settings') return;
-              libraryRef.current
-                ?.querySelector<HTMLButtonElement>(
-                  '.clip-list-item[aria-pressed="true"]',
-                )
-                ?.focus({ preventScroll: true });
-            }}
-            onNewClip={() => {
-              setActiveView('all');
-              setFormMode({ type: 'create' });
-              setFormError(null);
-            }}
-            onSearchTextChange={setSearchText}
+            selectedId={selectedClip?.id ?? null}
             onSelectView={(view) => {
               if (view === 'settings') {
                 setActiveView('settings');
@@ -340,9 +361,104 @@ export function App({ client = tauriClipClient }: AppProps) {
                 orientation="vertical"
                 className="data-vertical:h-4 data-vertical:self-auto"
               />
-              <span>
-                {activeView === 'settings' ? 'Privacy & About' : 'Library'}
-              </span>
+              {activeView === 'settings' ? (
+                <span>Privacy & About</span>
+              ) : (
+                <>
+                  <Select
+                    value={contentType}
+                    onValueChange={(value) => {
+                      if (
+                        value === 'all' ||
+                        CLIP_CONTENT_TYPES.includes(value as ClipContentType)
+                      )
+                        setContentType(value as ClipContentType | 'all');
+                    }}
+                  >
+                    <SelectTrigger size="sm" aria-label="Content type filter">
+                      <SelectValue>
+                        {contentType === 'all'
+                          ? 'All types'
+                          : formatContentType(contentType)}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent
+                      align="start"
+                      alignItemWithTrigger={false}
+                      className="min-w-0"
+                    >
+                      <SelectItem value="all">All types</SelectItem>
+                      {CLIP_CONTENT_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {formatContentType(type)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="desktop-header-center">
+                    <label className="sr-only" htmlFor="clip-search">
+                      Search clips
+                    </label>
+                    <div className="search-field desktop-header-search">
+                      <Search aria-hidden="true" />
+                      <Input
+                        id="clip-search"
+                        ref={searchRef}
+                        className="h-7"
+                        title="Search clips (Ctrl+F)"
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === 'ArrowDown' &&
+                            !event.ctrlKey &&
+                            !event.metaKey &&
+                            !event.altKey &&
+                            !event.shiftKey &&
+                            !event.nativeEvent.isComposing
+                          ) {
+                            event.preventDefault();
+                            clipListRef.current
+                              ?.querySelector<HTMLButtonElement>(
+                                '.clip-list-item[aria-pressed="true"]',
+                              )
+                              ?.focus({ preventScroll: true });
+                          }
+                        }}
+                        type="search"
+                        placeholder="Search clips..."
+                        value={searchText}
+                        onChange={(event) =>
+                          setSearchText(event.currentTarget.value)
+                        }
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setActiveView('all');
+                        setExpandedSection('all');
+                        setFormMode({ type: 'create' });
+                        setFormError(null);
+                      }}
+                      disabled={isLoading || isRefreshing || isBusy}
+                    >
+                      <Plus aria-hidden="true" />
+                      New clip
+                    </Button>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (!operationPending.current) void refresh();
+                    }}
+                    disabled={
+                      isRefreshing || isBusy || !!formMode || !!deleteTarget
+                    }
+                  >
+                    {isRefreshing ? 'Refreshing…' : 'Refresh'}
+                  </Button>
+                </>
+              )}
             </header>
             <LauncherAvailability />
             <div className="content">
@@ -356,75 +472,8 @@ export function App({ client = tauriClipClient }: AppProps) {
                 <section
                   className="library-view"
                   ref={libraryRef}
-                  aria-labelledby="library-heading"
+                  aria-label={activeView === 'pinned' ? 'Pinned' : 'All Clips'}
                 >
-                  <header className="section-header library-header">
-                    <div>
-                      <h1 id="library-heading">
-                        {activeView === 'pinned' ? 'Pinned' : 'All Clips'}
-                      </h1>
-                      <p>
-                        {activeView === 'pinned'
-                          ? 'Keep frequently used clips within easy reach.'
-                          : 'Your saved clips, newest first.'}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (!operationPending.current) void refresh();
-                      }}
-                      disabled={
-                        isRefreshing || isBusy || !!formMode || !!deleteTarget
-                      }
-                    >
-                      {isRefreshing ? 'Refreshing…' : 'Refresh'}
-                    </Button>
-                  </header>
-                  <div className="retrieval-toolbar">
-                    <Select
-                      value={contentType}
-                      onValueChange={(value) => {
-                        if (
-                          value === 'all' ||
-                          CLIP_CONTENT_TYPES.includes(value as ClipContentType)
-                        )
-                          setContentType(value as ClipContentType | 'all');
-                      }}
-                    >
-                      <SelectTrigger aria-label="Content type filter">
-                        <SelectValue>
-                          {contentType === 'all'
-                            ? 'All types'
-                            : formatContentType(contentType)}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent
-                        align="start"
-                        alignItemWithTrigger={false}
-                        className="min-w-0"
-                      >
-                        <SelectItem value="all">All types</SelectItem>
-                        {CLIP_CONTENT_TYPES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {formatContentType(type)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {!isLoading && (
-                      <span className="result-count" aria-live="polite">
-                        {visibleClips.length}{' '}
-                        {visibleClips.length === 1 ? 'result' : 'results'}
-                      </span>
-                    )}
-                    {hasFilters && (
-                      <Button size="sm" variant="ghost" onClick={clearFilters}>
-                        Clear filters
-                      </Button>
-                    )}
-                  </div>
                   {loadError && clips.length > 0 && (
                     <div className="load-error">
                       <p role="alert">{loadError}</p>
@@ -486,30 +535,25 @@ export function App({ client = tauriClipClient }: AppProps) {
                                 : 'Create a clip here or save one from your browser.'}
                       </p>
                     </div>
+                  ) : selectedClip ? (
+                    <ClipDetail
+                      clip={selectedClip}
+                      disabled={isBusy || isRefreshing}
+                      onCopy={() => void copyClip(selectedClip)}
+                      onDelete={() => setDeleteTarget(selectedClip)}
+                      onEdit={() => {
+                        setFormError(null);
+                        setFormMode({ type: 'edit', clip: selectedClip });
+                      }}
+                      onOpenSource={() => void openSource(selectedClip)}
+                      onSetPinned={(isPinned) =>
+                        void setPinned(selectedClip, isPinned)
+                      }
+                    />
                   ) : (
-                    <Card className="library-grid">
-                      <ClipList
-                        clips={visibleClips}
-                        selectedId={selectedClip?.id ?? null}
-                        onSelect={setSelectedId}
-                      />
-                      {selectedClip && (
-                        <ClipDetail
-                          clip={selectedClip}
-                          disabled={isBusy || isRefreshing}
-                          onCopy={() => void copyClip(selectedClip)}
-                          onDelete={() => setDeleteTarget(selectedClip)}
-                          onEdit={() => {
-                            setFormError(null);
-                            setFormMode({ type: 'edit', clip: selectedClip });
-                          }}
-                          onOpenSource={() => void openSource(selectedClip)}
-                          onSetPinned={(isPinned) =>
-                            void setPinned(selectedClip, isPinned)
-                          }
-                        />
-                      )}
-                    </Card>
+                    <div className="empty-state">
+                      <h2>Select a clip to view it</h2>
+                    </div>
                   )}
                 </section>
               )}

@@ -10,14 +10,25 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ClipListProps {
+  ariaLabel?: string;
   clips: Clip[];
+  compact?: boolean;
   onSelect: (id: string) => void;
   selectedId: string | null;
 }
 
-export function ClipList({ clips, onSelect, selectedId }: ClipListProps) {
+export function ClipList({
+  ariaLabel = 'Clips',
+  clips,
+  compact = false,
+  onSelect,
+  selectedId,
+}: ClipListProps) {
   return (
-    <ScrollArea className="clip-list" aria-label="Clips">
+    <ScrollArea
+      className={`clip-list${compact ? ' clip-list-compact' : ''}`}
+      aria-label={ariaLabel}
+    >
       <div className="clip-list-items">
         {clips.map((clip, index) => (
           <Button
@@ -70,22 +81,24 @@ export function ClipList({ clips, onSelect, selectedId }: ClipListProps) {
           >
             <span className="clip-list-title">
               <span>{displayTitle(clip)}</span>
-              {clip.isPinned && <PinBadge />}
+              {clip.isPinned && !compact && <PinBadge />}
             </span>
             <span className="clip-list-preview">
               {clipPreview(clip.content)}
             </span>
-            <span className="clip-list-footer">
-              <Badge variant="secondary" className="clip-list-meta">
-                {formatContentType(clip.contentType)}
-              </Badge>
-              <span className="clip-list-source">
-                {clip.sourceApp || 'Local clip'}
+            {!compact && (
+              <span className="clip-list-footer">
+                <Badge variant="secondary" className="clip-list-meta">
+                  {formatContentType(clip.contentType)}
+                </Badge>
+                <span className="clip-list-source">
+                  {clip.sourceApp || 'Local clip'}
+                </span>
+                <time className="clip-list-date" dateTime={clip.createdAt}>
+                  {new Date(clip.createdAt).toLocaleDateString()}
+                </time>
               </span>
-              <time className="clip-list-date" dateTime={clip.createdAt}>
-                {new Date(clip.createdAt).toLocaleDateString()}
-              </time>
-            </span>
+            )}
           </Button>
         ))}
       </div>
