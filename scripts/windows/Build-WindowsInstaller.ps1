@@ -1,8 +1,5 @@
 [CmdletBinding()]
 param(
-    [string]$ChromeExtensionId,
-    [string]$EdgeExtensionId,
-
     [ValidateSet('x64', 'arm64')]
     [string]$Architecture,
 
@@ -31,8 +28,37 @@ function Assert-ExtensionId {
     }
 }
 
-Assert-ExtensionId -Name 'ChromeExtensionId' -Value $ChromeExtensionId
-Assert-ExtensionId -Name 'EdgeExtensionId' -Value $EdgeExtensionId
+function ConvertTo-ChromiumExtensionId {
+    param([string]$PublicKey)
+
+    if ([string]::IsNullOrWhiteSpace($PublicKey)) {
+        throw 'The production extension manifest must contain a public key.'
+    }
+
+    try {
+        $publicKeyBytes = [System.Convert]::FromBase64String($PublicKey)
+    }
+    catch {
+        throw 'The production extension manifest key must be valid base64.'
+    }
+
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $digest = $sha256.ComputeHash($publicKeyBytes)
+    }
+    finally {
+        $sha256.Dispose()
+    }
+
+    $alphabet = 'abcdefghijklmnop'
+    $extensionId = [System.Text.StringBuilder]::new(32)
+    foreach ($value in $digest[0..15]) {
+        [void]$extensionId.Append($alphabet[[int]($value -shr 4)])
+        [void]$extensionId.Append($alphabet[[int]($value -band 0x0f)])
+    }
+
+    return $extensionId.ToString()
+}
 
 if ([string]::IsNullOrWhiteSpace($Architecture)) {
     throw 'Architecture is required and must be x64 or arm64.'
@@ -57,6 +83,18 @@ $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).
 $tauriDirectory = Join-Path $repositoryRoot 'apps\desktop\src-tauri'
 $templatePath = Join-Path $tauriDirectory 'windows\native-messaging-host.json.template'
 $defaultOutputDirectory = Join-Path $tauriDirectory 'windows\generated'
+$extensionManifestPath = Join-Path $repositoryRoot 'apps\extension\public\manifest.json'
+$releaseIdentityPath = Join-Path $repositoryRoot 'apps\extension\release-identity.json'
+
+$extensionManifest = Get-Content -Raw -LiteralPath $extensionManifestPath | ConvertFrom-Json
+$releaseIdentity = Get-Content -Raw -LiteralPath $releaseIdentityPath | ConvertFrom-Json
+$chromeExtensionId = ConvertTo-ChromiumExtensionId -PublicKey $extensionManifest.key
+$edgeExtensionId = $releaseIdentity.edgeExtensionId
+Assert-ExtensionId -Name 'Derived Chrome extension ID' -Value $chromeExtensionId
+Assert-ExtensionId -Name 'Configured Edge extension ID' -Value $edgeExtensionId
+if ($chromeExtensionId -ceq $edgeExtensionId) {
+    throw 'Chrome and Edge release extension IDs must be distinct.'
+}
 
 if (-not [string]::IsNullOrWhiteSpace($OutputDirectory) -and -not $ManifestOnly) {
     throw 'OutputDirectory may only be overridden with ManifestOnly.'
@@ -66,9 +104,9 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 }
 
 $allowedOrigins = @(
-    "chrome-extension://$ChromeExtensionId/"
-    "chrome-extension://$EdgeExtensionId/"
-) | Sort-Object -Unique
+    "chrome-extension://$chromeExtensionId/"
+    "chrome-extension://$edgeExtensionId/"
+)
 
 $manifest = Get-Content -Raw -LiteralPath $templatePath | ConvertFrom-Json
 $manifest.allowed_origins = @($allowedOrigins)

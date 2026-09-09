@@ -7,8 +7,8 @@ use serde_json::Value;
 const RELEASE_VERSION: &str = "0.1.0";
 const HOST_NAME: &str = "com.aiclipmemory.bridge";
 const HOST_EXECUTABLE: &str = "ai-clip-memory-native-host.exe";
-const CHROME_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const EDGE_ID: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const CHROME_ID: &str = "jjfaegknedfakmidhhdlmbebnjafcjfi";
+const EDGE_ID: &str = "jcfcmapapjlgpbkcgcaeggeblgpidkoo";
 
 fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -64,6 +64,18 @@ fn release_versions_are_aligned() {
     let cargo_manifest = read(root.join("apps/desktop/src-tauri/Cargo.toml"));
     assert_eq!(package_version(&cargo_manifest), RELEASE_VERSION);
     assert_eq!(env!("CARGO_PKG_VERSION"), RELEASE_VERSION);
+}
+
+#[test]
+fn windows_gui_subsystem_is_scoped_to_the_desktop_entry_point() {
+    let root = repository_root();
+    let desktop_entry = read(root.join("apps/desktop/src-tauri/src/main.rs"));
+    let native_host_entry =
+        read(root.join("apps/desktop/src-tauri/src/bin/ai-clip-memory-native-host.rs"));
+
+    assert!(desktop_entry
+        .starts_with("#![cfg_attr(not(debug_assertions), windows_subsystem = \"windows\")]"));
+    assert!(!native_host_entry.contains("windows_subsystem"));
 }
 
 #[test]
@@ -171,20 +183,17 @@ fn run_manifest_generation(arguments: &[&str]) -> Output {
 
 #[cfg(windows)]
 #[test]
-fn release_script_rejects_missing_or_malformed_ids_before_building() {
-    let missing = run_manifest_generation(&["-ManifestOnly"]);
-    assert!(!missing.status.success());
-
-    let malformed = run_manifest_generation(&[
+fn release_script_rejects_arbitrary_extension_identity_overrides() {
+    let override_attempt = run_manifest_generation(&[
         "-ChromeExtensionId",
-        "*",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "-EdgeExtensionId",
-        EDGE_ID,
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "-Architecture",
         "arm64",
         "-ManifestOnly",
     ]);
-    assert!(!malformed.status.success());
+    assert!(!override_attempt.status.success());
 }
 
 #[cfg(windows)]
@@ -193,10 +202,6 @@ fn release_script_generates_both_exact_origins_without_placeholders() {
     let output_directory = tempfile::tempdir().expect("a temporary output directory should exist");
     let output_path = output_directory.path().to_string_lossy().into_owned();
     let output = run_manifest_generation(&[
-        "-ChromeExtensionId",
-        CHROME_ID,
-        "-EdgeExtensionId",
-        EDGE_ID,
         "-Architecture",
         "arm64",
         "-OutputDirectory",
@@ -224,27 +229,11 @@ fn release_script_generates_both_exact_origins_without_placeholders() {
 
 #[cfg(windows)]
 #[test]
-fn release_script_deduplicates_identical_origins() {
-    let output_directory = tempfile::tempdir().expect("a temporary output directory should exist");
-    let output_path = output_directory.path().to_string_lossy().into_owned();
-    let output = run_manifest_generation(&[
-        "-ChromeExtensionId",
-        CHROME_ID,
-        "-EdgeExtensionId",
-        CHROME_ID,
-        "-Architecture",
-        "x64",
-        "-OutputDirectory",
-        &output_path,
-        "-ManifestOnly",
-    ]);
-    assert!(output.status.success());
+fn release_identity_keeps_the_intended_edge_origin() {
+    let identity = read_json(repository_root().join("apps/extension/release-identity.json"));
 
-    let manifest = read_json(output_directory.path().join(format!("{HOST_NAME}.json")));
-    assert_eq!(
-        manifest["allowed_origins"],
-        serde_json::json!([format!("chrome-extension://{CHROME_ID}/")])
-    );
+    assert_eq!(identity["edgeExtensionId"], EDGE_ID);
+    assert_eq!(identity.as_object().map(serde_json::Map::len), Some(1));
 }
 
 #[test]

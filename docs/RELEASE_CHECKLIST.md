@@ -27,6 +27,12 @@ The x64 desktop release and NSIS installer were successfully packaged for
 Native Messaging, launcher, restart, and uninstall behavior have not yet been
 verified. Neither architecture has completed the clean-machine gates below.
 
+The Phase 1 IDs above were path-derived unpacked-extension IDs. Current dogfood
+builds instead use the public key in the production extension manifest to keep
+Chrome ID `jjfaegknedfakmidhhdlmbebnjafcjfi` deterministic across build and load
+directories. Installer packaging derives that origin from the same key and keeps
+the intended Edge release ID in `apps/extension/release-identity.json`.
+
 ## Version and source state
 
 - [ ] Root, desktop, extension, shared package, Cargo, Tauri, and extension
@@ -50,7 +56,8 @@ verified. Neither architecture has completed the clean-machine gates below.
 
 ## Windows package generation
 
-- [x] Build script receives the exact Chrome and Edge IDs.
+- [x] Build script derives the Chrome ID from the packaged manifest key and reads
+      the intended Edge ID from release configuration.
 - [x] Generated `allowed_origins` contains both exact origins and no wildcard,
       placeholder, or development ID intended only for another package.
 - [x] x64 installer is built for `x86_64-pc-windows-msvc`.
