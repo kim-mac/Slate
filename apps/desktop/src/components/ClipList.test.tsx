@@ -1,5 +1,9 @@
+/// <reference types="node" />
+
 import type { Clip } from '@ai-clip-memory/shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import { useState } from 'react';
 import { ClipList } from './ClipList';
@@ -71,4 +75,37 @@ test('renders a compact nested list without full metadata', () => {
   expect(screen.getByText('Page a')).toBeTruthy();
   expect(screen.queryByText('ChatGPT')).toBeNull();
   expect(document.querySelector('.clip-list-compact')).not.toBeNull();
+});
+
+test('keeps long compact-list content inside the scroll viewport', () => {
+  const longText = 'long-content-'.repeat(80);
+  const longClip: Clip = {
+    ...clips[0]!,
+    title: longText,
+    content: longText,
+  };
+
+  const { container } = render(
+    <ClipList
+      ariaLabel="All Clips"
+      clips={[longClip]}
+      compact
+      selectedId="a"
+      onSelect={vi.fn()}
+    />,
+  );
+
+  expect(container.querySelector('.clip-list-items')).toBeTruthy();
+  expect(container.querySelector('.clip-list-item')).toBeTruthy();
+  expect(container.querySelector('.clip-list-title')).toBeTruthy();
+  expect(container.querySelector('.clip-list-preview')).toBeTruthy();
+
+  const stylesheet = readFileSync(
+    resolve(process.cwd(), 'src/styles.css'),
+    'utf8',
+  );
+  expect(stylesheet).toContain(
+    '.clip-list-items,\n.clip-list-item,\n.clip-list-title,\n.clip-list-preview {',
+  );
+  expect(stylesheet).toContain('max-width: 100%;');
 });

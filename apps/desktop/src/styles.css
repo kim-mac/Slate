@@ -2,6 +2,16 @@
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/geist';
 
+/* Base UI normally injects this rule at runtime. Keep it in the packaged
+   stylesheet so the production CSP can remain style-src 'self'. */
+.base-ui-disable-scrollbar {
+  scrollbar-width: none;
+}
+
+.base-ui-disable-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 :root {
   --background: oklch(0.985 0 0);
   --foreground: oklch(0.16 0 0);
@@ -81,7 +91,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --background: oklch(0.12 0 0);
     --foreground: oklch(0.94 0 0);
     --card: oklch(0.16 0 0);
@@ -114,6 +124,45 @@
     --sidebar-border: oklch(0.28 0 0);
     --sidebar-ring: oklch(0.62 0 0);
   }
+}
+
+:root[data-theme='dark'] {
+  --background: oklch(0.12 0 0);
+  --foreground: oklch(0.94 0 0);
+  --card: oklch(0.16 0 0);
+  --card-foreground: oklch(0.94 0 0);
+  --popover: oklch(0.18 0 0);
+  --popover-foreground: oklch(0.94 0 0);
+  --primary: oklch(0.92 0 0);
+  --primary-foreground: oklch(0.14 0 0);
+  --secondary: oklch(0.23 0 0);
+  --secondary-foreground: oklch(0.92 0 0);
+  --muted: oklch(0.21 0 0);
+  --muted-foreground: oklch(0.67 0 0);
+  --accent: oklch(0.28 0 0);
+  --accent-foreground: oklch(0.96 0 0);
+  --destructive: oklch(0.45 0 0);
+  --border: oklch(0.3 0 0);
+  --input: oklch(0.34 0 0);
+  --ring: oklch(0.62 0 0);
+  --chart-1: oklch(0.9 0 0);
+  --chart-2: oklch(0.75 0 0);
+  --chart-3: oklch(0.6 0 0);
+  --chart-4: oklch(0.45 0 0);
+  --chart-5: oklch(0.3 0 0);
+  --sidebar: oklch(0.145 0 0);
+  --sidebar-foreground: oklch(0.9 0 0);
+  --sidebar-primary: oklch(0.92 0 0);
+  --sidebar-primary-foreground: oklch(0.14 0 0);
+  --sidebar-accent: oklch(0.26 0 0);
+  --sidebar-accent-foreground: oklch(0.96 0 0);
+  --sidebar-border: oklch(0.28 0 0);
+  --sidebar-ring: oklch(0.62 0 0);
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 @layer base {
@@ -269,6 +318,7 @@
 
 .sidebar-section-results .clip-list {
   height: min(36dvh, 18rem);
+  max-width: 100%;
 }
 
 .sidebar-section-tools {
@@ -312,8 +362,11 @@
   font-size: 0.875rem;
 }
 
-.desktop-header [data-slot='select-trigger'] {
-  width: 8rem;
+.desktop-header .toolbar-icon-select {
+  height: 1.75rem;
+  justify-content: center;
+  padding: 0;
+  width: 1.75rem;
 }
 
 .desktop-header-center {
@@ -329,6 +382,13 @@
   flex: 1 1 12rem;
   max-width: 28rem;
   min-width: 5rem;
+}
+
+.desktop-header-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.25rem;
 }
 
 .content {
@@ -462,8 +522,16 @@
 
 .clip-list {
   height: 100%;
+  max-width: 100%;
   min-height: 0;
   min-width: 0;
+}
+
+.clip-list-items,
+.clip-list-item,
+.clip-list-title,
+.clip-list-preview {
+  max-width: 100%;
 }
 
 .clip-list-items {
@@ -505,6 +573,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.clip-list-title > span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .clip-list-preview {
