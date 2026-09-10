@@ -1,9 +1,13 @@
-use crate::launcher::{self, LauncherStatus, LABEL};
+use crate::{
+    desktop_capture,
+    launcher::{self, LauncherStatus, LABEL},
+};
 use tauri::{
     Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
     WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_notification::NotificationExt;
 
 pub fn initialize_launcher(app: &tauri::AppHandle) {
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("launcher.html".into()))
@@ -17,37 +21,68 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
         .visible(false)
         .focused(false)
         .build();
-    let Ok(window) = window else {
-        launcher::set_status(app, LauncherStatus::unavailable("launcher_unavailable"));
-        return;
-    };
-    let handle = app.clone();
-    window.on_window_event(move |event| match event {
-        WindowEvent::Focused(false) => launcher::dismiss_window(&handle, true),
-        WindowEvent::CloseRequested { api, .. } => {
-            api.prevent_close();
-            launcher::dismiss_window(&handle, false);
+    let launcher_window_available = match window {
+        Ok(window) => {
+            let handle = app.clone();
+            window.on_window_event(move |event| match event {
+                WindowEvent::Focused(false) => launcher::dismiss_window(&handle, true),
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    launcher::dismiss_window(&handle, false);
+                }
+                _ => {}
+            });
+            true
         }
-        _ => {}
-    });
+        Err(_) => false,
+    };
 
-    let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space);
+    let launcher_binding = launcher_shortcut();
+    let capture_binding = capture_shortcut();
     let plugin = tauri_plugin_global_shortcut::Builder::new()
         .with_handler(move |app, received, event| {
-            if received == &shortcut {
+            if received == &launcher_binding {
                 launcher::shortcut_event(app, event.state() == ShortcutState::Pressed);
+            } else if received == &capture_binding {
+                desktop_capture::shortcut_event(app, event.state() == ShortcutState::Pressed);
             }
         })
         .build();
-    let registered = app.plugin(plugin).is_ok() && app.global_shortcut().register(shortcut).is_ok();
+    if app.plugin(plugin).is_err() {
+        launcher::set_status(app, LauncherStatus::unavailable("shortcut_unavailable"));
+        return;
+    }
+
+    let launcher_registered =
+        launcher_window_available && app.global_shortcut().register(launcher_shortcut()).is_ok();
+    let capture_registered = app.global_shortcut().register(capture_shortcut()).is_ok();
     launcher::set_status(
         app,
-        if registered {
+        if launcher_registered {
             LauncherStatus::available()
         } else {
             LauncherStatus::unavailable("shortcut_unavailable")
         },
     );
+    if !capture_registered {
+        let _ = app
+            .notification()
+            .builder()
+            .title("Tin")
+            .body("Desktop capture shortcut is unavailable")
+            .show();
+    }
+}
+
+fn launcher_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space)
+}
+
+fn capture_shortcut() -> Shortcut {
+    Shortcut::new(
+        Some(Modifiers::CONTROL | Modifiers::ALT | Modifiers::SHIFT),
+        Code::KeyC,
+    )
 }
 
 pub fn present_launcher(
@@ -86,4 +121,14 @@ pub fn present_launcher(
     window.set_focus().map_err(|_| "launcher_unavailable")?;
     let webview: &tauri::Webview = window.as_ref();
     webview.set_focus().map_err(|_| "launcher_unavailable")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{capture_shortcut, launcher_shortcut};
+
+    #[test]
+    fn capture_and_launcher_shortcuts_are_distinct() {
+        assert_ne!(capture_shortcut(), launcher_shortcut());
+    }
 }
