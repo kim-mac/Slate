@@ -65,6 +65,8 @@ function fakeClient(initialClips: Clip[] = []) {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.localStorage.clear();
+  delete document.documentElement.dataset.theme;
 });
 
 describe('App', () => {
@@ -306,36 +308,177 @@ describe('App', () => {
     ).toBe('true');
   });
 
-  test('opens the type filter below the trigger instead of aligning over it', async () => {
+  test('uses an icon-only type filter with an accessible active state', async () => {
     render(<App client={fakeClient().client} />);
     await screen.findByRole('heading', { name: 'No clips yet' });
     const trigger = screen.getByRole('combobox', {
-      name: 'Content type filter',
+      name: 'Filter clips',
     });
     expect(trigger.getAttribute('data-size')).toBe('sm');
+    expect(trigger.classList.contains('size-7')).toBe(true);
+    expect(
+      screen
+        .getByRole('button', { name: 'Toggle Sidebar' })
+        .classList.contains('size-7'),
+    ).toBe(true);
+    expect(trigger.querySelector('.lucide-list-filter')).toBeTruthy();
+    expect(trigger.textContent).not.toContain('All types');
+    expect(trigger.getAttribute('data-active')).toBeNull();
     fireEvent.click(trigger);
     const popup = screen
       .getByRole('listbox')
       .closest('[data-slot="select-content"]')!;
     expect(popup.getAttribute('data-align-trigger')).toBe('false');
     expect(popup.getAttribute('data-side')).toBe('bottom');
-    expect(popup.classList.contains('min-w-0')).toBe(true);
-    expect(popup.classList.contains('min-w-36')).toBe(false);
+    expect(popup.classList.contains('w-36')).toBe(true);
+    expect(popup.classList.contains('min-w-0')).toBe(false);
     fireEvent.keyDown(screen.getByRole('option', { name: 'Code' }), {
       key: 'Enter',
     });
     expect(screen.queryByRole('listbox')).toBeNull();
+    const activeTrigger = screen.getByRole('combobox', {
+      name: 'Filter clips: Code',
+    });
+    expect(activeTrigger.getAttribute('data-active')).toBe('true');
+
+    fireEvent.click(activeTrigger);
+    fireEvent.keyDown(screen.getByRole('option', { name: 'All types' }), {
+      key: 'Enter',
+    });
     expect(
-      screen.getByRole('combobox', { name: 'Content type filter' }).textContent,
-    ).toContain('Code');
+      screen
+        .getByRole('combobox', { name: 'Filter clips' })
+        .getAttribute('data-active'),
+    ).toBeNull();
+  });
+
+  test.each([
+    ['Text', 'text'],
+    ['Code', 'code'],
+    ['Prompt', 'prompt'],
+    ['Link', 'link'],
+  ] as const)('filters to the %s content type', async (label, contentType) => {
+    const typedClips = [
+      firstClip,
+      pinnedClip,
+      {
+        ...firstClip,
+        id: 'prompt-clip',
+        title: 'Prompt clip',
+        contentType: 'prompt' as const,
+      },
+      {
+        ...firstClip,
+        id: 'link-clip',
+        title: 'Link clip',
+        contentType: 'link' as const,
+      },
+    ];
+    render(<App client={fakeClient(typedClips).client} />);
+    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
+    fireEvent.keyDown(screen.getByRole('option', { name: label }), {
+      key: 'Enter',
+    });
+
+    expect(
+      screen
+        .getByLabelText('All Clips results')
+        .querySelectorAll('.clip-list-item'),
+    ).toHaveLength(1);
+    expect(
+      screen.getByRole('combobox', { name: `Filter clips: ${label}` }),
+    ).toBeTruthy();
+    expect(
+      typedClips.find((clip) => clip.contentType === contentType),
+    ).toBeTruthy();
+  });
+
+  test('toggles directly between light and dark without opening a theme menu', async () => {
+    render(<App client={fakeClient().client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+
+    const lightButton = screen.getByRole('button', {
+      name: 'Switch to dark mode',
+    });
+    expect(lightButton.querySelector('.lucide-sun')).toBeTruthy();
+    expect(lightButton.textContent).toBe('');
+    expect(screen.queryByRole('combobox', { name: /Theme:/ })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'System' })).toBeNull();
+    fireEvent.mouseEnter(lightButton);
+    expect(await screen.findByText('Switch to dark mode')).toBeTruthy();
+
+    fireEvent.click(lightButton);
+    const darkButton = screen.getByRole('button', {
+      name: 'Switch to light mode',
+    });
+    expect(darkButton.querySelector('.lucide-moon')).toBeTruthy();
+    expect(window.localStorage.getItem('ai-clip-memory-theme')).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+
+    fireEvent.click(darkButton);
+    expect(
+      screen
+        .getByRole('button', { name: 'Switch to dark mode' })
+        .querySelector('.lucide-sun'),
+    ).toBeTruthy();
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(window.localStorage.getItem('ai-clip-memory-theme')).toBe('light');
+  });
+
+  test.each([
+    ['light', 'Switch to dark mode', 'lucide-sun'],
+    ['dark', 'Switch to light mode', 'lucide-moon'],
+  ] as const)(
+    'restores a persisted %s preference',
+    async (mode, accessibleName, iconClass) => {
+      window.localStorage.setItem('ai-clip-memory-theme', mode);
+      render(<App client={fakeClient().client} />);
+      await screen.findByRole('heading', { name: 'No clips yet' });
+
+      const button = screen.getByRole('button', { name: accessibleName });
+      expect(button.querySelector(`.${iconClass}`)).toBeTruthy();
+      expect(document.documentElement.dataset.theme).toBe(mode);
+    },
+  );
+
+  test('resolves a persisted System preference once without exposing a third mode', async () => {
+    window.localStorage.setItem('ai-clip-memory-theme', 'system');
+    vi.spyOn(window, 'matchMedia').mockReturnValue({
+      ...window.matchMedia('(prefers-color-scheme: dark)'),
+      matches: true,
+    });
+
+    render(<App client={fakeClient().client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+
+    expect(
+      screen
+        .getByRole('button', { name: 'Switch to light mode' })
+        .querySelector('.lucide-moon'),
+    ).toBeTruthy();
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(window.localStorage.getItem('ai-clip-memory-theme')).toBe('dark');
+    expect(screen.queryByText('System')).toBeNull();
+  });
+
+  test('renders Refresh as an accessible icon-only action and keeps its behavior', async () => {
+    const fake = fakeClient();
+    render(<App client={fake.client} />);
+    await screen.findByRole('heading', { name: 'No clips yet' });
+
+    const refresh = screen.getByRole('button', { name: 'Refresh' });
+    expect(refresh.querySelector('.lucide-refresh-cw')).toBeTruthy();
+    expect(refresh.textContent).toBe('');
+    fireEvent.click(refresh);
+    await waitFor(() => expect(fake.list).toHaveBeenCalledTimes(2));
   });
 
   test('combines multi-term search and type filtering without changing counts', async () => {
     const fake = fakeClient([firstClip, pinnedClip]);
     render(<App client={fake.client} />);
-    expect(
-      screen.getByRole('combobox', { name: 'Content type filter' }).textContent,
-    ).toContain('All types');
+    expect(screen.getByRole('combobox', { name: 'Filter clips' })).toBeTruthy();
     await screen.findByText(firstClip.content, { selector: '.clip-content' });
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'CHATGPT unions' },
@@ -352,9 +495,7 @@ describe('App', () => {
       .getByRole('button', { name: 'All Clips' })
       .closest<HTMLElement>('[data-slot="sidebar-menu-item"]')!;
     expect(within(all).getByText('2')).toBeTruthy();
-    fireEvent.click(
-      screen.getByRole('combobox', { name: 'Content type filter' }),
-    );
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
     fireEvent.keyDown(screen.getByRole('option', { name: 'Text' }), {
       key: 'Enter',
     });
@@ -432,9 +573,7 @@ describe('App', () => {
     expect(screen.getByText('Try a different search.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-    fireEvent.click(
-      screen.getByRole('combobox', { name: 'Content type filter' }),
-    );
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
     fireEvent.keyDown(screen.getByRole('option', { name: 'Code' }), {
       key: 'Enter',
     });
@@ -559,20 +698,28 @@ describe('App', () => {
 
     const toolbar = document.querySelector<HTMLElement>('.desktop-header');
     expect(toolbar).not.toBeNull();
-    expect(
-      within(toolbar!).getByRole('combobox', {
-        name: 'Content type filter',
-      }),
-    ).toBeTruthy();
-    expect(
-      within(toolbar!).getByRole('searchbox', { name: 'Search clips' }),
-    ).toBeTruthy();
-    expect(
-      within(toolbar!).getByRole('button', { name: 'New clip' }),
-    ).toBeTruthy();
-    expect(
-      within(toolbar!).getByRole('button', { name: 'Refresh' }),
-    ).toBeTruthy();
+    const filter = within(toolbar!).getByRole('combobox', {
+      name: 'Filter clips',
+    });
+    const search = within(toolbar!).getByRole('searchbox', {
+      name: 'Search clips',
+    });
+    const create = within(toolbar!).getByRole('button', { name: 'New clip' });
+    const theme = within(toolbar!).getByRole('button', {
+      name: /Switch to (?:light|dark) mode/,
+    });
+    const refresh = within(toolbar!).getByRole('button', { name: 'Refresh' });
+    for (const [before, after] of [
+      [filter, search],
+      [search, create],
+      [create, theme],
+      [theme, refresh],
+    ] as const) {
+      expect(
+        before.compareDocumentPosition(after) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
     expect(within(toolbar!).queryByText('Library')).toBeNull();
     expect(within(toolbar!).queryByText('0 results')).toBeNull();
     const sidebar = screen

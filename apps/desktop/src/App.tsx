@@ -5,7 +5,15 @@ import {
   type Clip,
   type ClipInput,
 } from '@ai-clip-memory/shared';
-import { Plus, Search, ShieldCheck } from 'lucide-react';
+import {
+  ListFilter,
+  Moon,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Sun,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useClipLibrary } from './hooks/useClipLibrary';
@@ -25,7 +33,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from './components/ui/select';
 
 import { tauriClipClient, type ClipClient } from './clipClient';
@@ -49,9 +56,30 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from './components/ui/sidebar';
-import { TooltipProvider } from './components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './components/ui/tooltip';
 
 type FormMode = { type: 'create' } | { type: 'edit'; clip: Clip };
+type ThemeMode = 'light' | 'dark';
+
+const THEME_STORAGE_KEY = 'ai-clip-memory-theme';
+
+function initialThemeMode(): ThemeMode {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === 'light' || stored === 'dark') return stored;
+  } catch {
+    // Continue with the local OS preference when storage is unavailable.
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
+}
 
 interface AppProps {
   client?: ClipClient;
@@ -97,6 +125,7 @@ export function App({ client = tauriClipClient }: AppProps) {
   const [contentType, setContentType] = useState<ClipContentType | 'all'>(
     'all',
   );
+  const [themeMode, setThemeMode] = useState<ThemeMode>(initialThemeMode);
   const searchRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLElement>(null);
   const clipListRef = useRef<HTMLDivElement>(null);
@@ -160,6 +189,9 @@ export function App({ client = tauriClipClient }: AppProps) {
   const hasTypeFilter = contentType !== 'all';
   const hasFilters = hasSearch || hasTypeFilter;
   const initialLoadFailure = !!loadError && clips.length === 0 && !isLoading;
+  const ThemeIcon = themeMode === 'light' ? Sun : Moon;
+  const themeActionLabel =
+    themeMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
   function clearFilters() {
     setSearchText('');
     setContentType('all');
@@ -275,6 +307,20 @@ export function App({ client = tauriClipClient }: AppProps) {
   }
 
   useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = themeMode;
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+    } catch {
+      // Theme switching still works when local preference storage is unavailable.
+    }
+
+    return () => {
+      delete root.dataset.theme;
+    };
+  }, [themeMode]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (
         event.defaultPrevented ||
@@ -375,17 +421,29 @@ export function App({ client = tauriClipClient }: AppProps) {
                         setContentType(value as ClipContentType | 'all');
                     }}
                   >
-                    <SelectTrigger size="sm" aria-label="Content type filter">
-                      <SelectValue>
-                        {contentType === 'all'
-                          ? 'All types'
-                          : formatContentType(contentType)}
-                      </SelectValue>
-                    </SelectTrigger>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <SelectTrigger
+                            size="sm"
+                            className="toolbar-icon-select size-7 data-[active=true]:bg-accent data-[active=true]:text-accent-foreground [&>svg:last-child]:hidden"
+                            aria-label={
+                              contentType === 'all'
+                                ? 'Filter clips'
+                                : `Filter clips: ${formatContentType(contentType)}`
+                            }
+                            data-active={hasTypeFilter ? 'true' : undefined}
+                          />
+                        }
+                      >
+                        <ListFilter aria-hidden="true" />
+                      </TooltipTrigger>
+                      <TooltipContent>Filter clips</TooltipContent>
+                    </Tooltip>
                     <SelectContent
                       align="start"
                       alignItemWithTrigger={false}
-                      className="min-w-0"
+                      className="w-36"
                     >
                       <SelectItem value="all">All types</SelectItem>
                       {CLIP_CONTENT_TYPES.map((type) => (
@@ -445,18 +503,50 @@ export function App({ client = tauriClipClient }: AppProps) {
                       New clip
                     </Button>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (!operationPending.current) void refresh();
-                    }}
-                    disabled={
-                      isRefreshing || isBusy || !!formMode || !!deleteTarget
-                    }
-                  >
-                    {isRefreshing ? 'Refreshing…' : 'Refresh'}
-                  </Button>
+                  <div className="desktop-header-actions">
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label={themeActionLabel}
+                            onClick={() =>
+                              setThemeMode((current) =>
+                                current === 'light' ? 'dark' : 'light',
+                              )
+                            }
+                          />
+                        }
+                      >
+                        <ThemeIcon className="size-4" aria-hidden="true" />
+                      </TooltipTrigger>
+                      <TooltipContent>{themeActionLabel}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label="Refresh"
+                            onClick={() => {
+                              if (!operationPending.current) void refresh();
+                            }}
+                            disabled={
+                              isRefreshing ||
+                              isBusy ||
+                              !!formMode ||
+                              !!deleteTarget
+                            }
+                          />
+                        }
+                      >
+                        <RefreshCw aria-hidden="true" />
+                      </TooltipTrigger>
+                      <TooltipContent>Refresh</TooltipContent>
+                    </Tooltip>
+                  </div>
                 </>
               )}
             </header>
