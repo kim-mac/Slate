@@ -3,6 +3,7 @@ pub mod bridge;
 pub mod clips;
 mod commands;
 mod database;
+pub mod desktop_capture;
 mod launcher;
 mod platform;
 pub mod storage;
@@ -14,11 +15,13 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let application_data_directory = app.path().app_data_dir()?;
             app.manage(StorageState::new(application_data_directory));
             app.manage(launcher::LauncherController::default());
+            app.manage(desktop_capture::CaptureController::default());
             platform::initialize_launcher(app.handle());
             Ok(())
         })
