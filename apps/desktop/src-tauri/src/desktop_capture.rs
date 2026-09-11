@@ -21,7 +21,12 @@ pub struct SourceMetadata {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CaptureFailure {
+    ClipboardEdpApiUnavailable,
+    ClipboardEdpReadFailed { error_code: i32 },
+    ClipboardEdpRestoreFailed { error_code: i32 },
     ClipboardEmptyText,
+    ClipboardFormatDuplicateFailed { format: u32, win32_error: u32 },
+    ClipboardFormatReadFailed { format: u32, win32_error: u32 },
     ClipboardNoUnicodeText,
     ClipboardRestoration,
     ClipboardSequenceUnchanged,
@@ -116,7 +121,13 @@ impl<'a, B: ClipboardCaptureBackend> ClipboardRestorationGuard<'a, B> {
         let snapshot = self.snapshot.take().expect("restoration snapshot missing");
         self.backend
             .restore_clipboard(snapshot)
-            .map_err(|_| CaptureFailure::ClipboardRestoration)?;
+            .map_err(|failure| {
+                if matches!(failure, CaptureFailure::ClipboardEdpRestoreFailed { .. }) {
+                    failure
+                } else {
+                    CaptureFailure::ClipboardRestoration
+                }
+            })?;
         result
     }
 }
@@ -154,7 +165,9 @@ pub fn persist_capture(
 pub fn capture_feedback_message(result: Result<(), CaptureFailure>) -> &'static str {
     match result {
         Ok(()) => "Saved to Tin",
-        Err(CaptureFailure::ClipboardRestoration) => "Couldn't restore clipboard",
+        Err(
+            CaptureFailure::ClipboardRestoration | CaptureFailure::ClipboardEdpRestoreFailed { .. },
+        ) => "Couldn't restore clipboard",
         Err(
             CaptureFailure::ClipboardEmptyText
             | CaptureFailure::ClipboardNoUnicodeText
@@ -163,6 +176,10 @@ pub fn capture_feedback_message(result: Result<(), CaptureFailure>) -> &'static 
         ) => "No selected text found",
         Err(
             CaptureFailure::ClipboardSnapshotFailed
+            | CaptureFailure::ClipboardEdpApiUnavailable
+            | CaptureFailure::ClipboardEdpReadFailed { .. }
+            | CaptureFailure::ClipboardFormatDuplicateFailed { .. }
+            | CaptureFailure::ClipboardFormatReadFailed { .. }
             | CaptureFailure::ForegroundChanged
             | CaptureFailure::HotkeyKeysNotReleased
             | CaptureFailure::Storage
@@ -175,7 +192,14 @@ pub fn capture_feedback_message(result: Result<(), CaptureFailure>) -> &'static 
 pub const fn capture_failure_code(failure: CaptureFailure) -> &'static str {
     match failure {
         CaptureFailure::HotkeyKeysNotReleased => "hotkey_keys_not_released",
+        CaptureFailure::ClipboardEdpApiUnavailable => "clipboard_edp_api_unavailable",
+        CaptureFailure::ClipboardEdpReadFailed { .. } => "clipboard_edp_read_failed",
+        CaptureFailure::ClipboardEdpRestoreFailed { .. } => "clipboard_edp_restore_failed",
         CaptureFailure::ClipboardSnapshotFailed => "clipboard_snapshot_failed",
+        CaptureFailure::ClipboardFormatReadFailed { .. } => "clipboard_format_read_failed",
+        CaptureFailure::ClipboardFormatDuplicateFailed { .. } => {
+            "clipboard_format_duplicate_failed"
+        }
         CaptureFailure::ClipboardSequenceUnchanged => "clipboard_sequence_unchanged",
         CaptureFailure::ClipboardNoUnicodeText => "clipboard_no_unicode_text",
         CaptureFailure::ClipboardEmptyText => "clipboard_empty_text",
@@ -194,7 +218,27 @@ pub fn capture_notification_body(
 ) -> String {
     let generic = capture_feedback_message(result);
     match result {
-        Err(failure) if include_reason => format!("{generic} ({})", capture_failure_code(failure)),
+        Err(failure) if include_reason => {
+            let diagnostic = match failure {
+                CaptureFailure::ClipboardFormatReadFailed {
+                    format,
+                    win32_error,
+                }
+                | CaptureFailure::ClipboardFormatDuplicateFailed {
+                    format,
+                    win32_error,
+                } => format!(
+                    "{}; format={format}; win32={win32_error}",
+                    capture_failure_code(failure)
+                ),
+                CaptureFailure::ClipboardEdpReadFailed { error_code }
+                | CaptureFailure::ClipboardEdpRestoreFailed { error_code } => {
+                    format!("{}; code={error_code}", capture_failure_code(failure))
+                }
+                _ => capture_failure_code(failure).to_owned(),
+            };
+            format!("{generic} ({diagnostic})")
+        }
         _ => generic.to_owned(),
     }
 }

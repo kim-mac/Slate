@@ -214,6 +214,32 @@ fn structured_failure_reasons_are_stable_and_content_free() {
             "clipboard_snapshot_failed",
         ),
         (
+            CaptureFailure::ClipboardEdpApiUnavailable,
+            "clipboard_edp_api_unavailable",
+        ),
+        (
+            CaptureFailure::ClipboardEdpReadFailed { error_code: -1 },
+            "clipboard_edp_read_failed",
+        ),
+        (
+            CaptureFailure::ClipboardEdpRestoreFailed { error_code: -2 },
+            "clipboard_edp_restore_failed",
+        ),
+        (
+            CaptureFailure::ClipboardFormatReadFailed {
+                format: 13,
+                win32_error: 5,
+            },
+            "clipboard_format_read_failed",
+        ),
+        (
+            CaptureFailure::ClipboardFormatDuplicateFailed {
+                format: 13,
+                win32_error: 8,
+            },
+            "clipboard_format_duplicate_failed",
+        ),
+        (
             CaptureFailure::ClipboardSequenceUnchanged,
             "clipboard_sequence_unchanged",
         ),
@@ -251,6 +277,25 @@ fn structured_failure_reasons_are_stable_and_content_free() {
         capture_notification_body(Err(CaptureFailure::SyntheticCopyFailed), true),
         "Couldn't capture selection (synthetic_copy_failed)"
     );
+    assert_eq!(
+        capture_notification_body(
+            Err(CaptureFailure::ClipboardFormatDuplicateFailed {
+                format: 13,
+                win32_error: 8,
+            }),
+            true,
+        ),
+        "Couldn't capture selection (clipboard_format_duplicate_failed; format=13; win32=8)"
+    );
+    let notification = capture_notification_body(
+        Err(CaptureFailure::ClipboardEdpReadFailed { error_code: -1 }),
+        true,
+    );
+    assert_eq!(
+        notification,
+        "Couldn't capture selection (clipboard_edp_read_failed; code=-1)"
+    );
+    assert!(!notification.contains("enterprise.example"));
 }
 
 struct FakeClipboard {
@@ -260,6 +305,8 @@ struct FakeClipboard {
     send_succeeds: bool,
     modifiers_released: bool,
     foreground_unchanged: bool,
+    preserve_failure: Option<CaptureFailure>,
+    restore_failure: Option<CaptureFailure>,
     read_count: usize,
     restore_count: usize,
     events: Vec<&'static str>,
@@ -282,6 +329,9 @@ impl ClipboardCaptureBackend for FakeClipboard {
 
     fn preserve_clipboard(&mut self) -> Result<Self::Snapshot, CaptureFailure> {
         self.events.push("preserve");
+        if let Some(failure) = self.preserve_failure {
+            return Err(failure);
+        }
         Ok("previous clipboard".to_owned())
     }
 
@@ -318,6 +368,9 @@ impl ClipboardCaptureBackend for FakeClipboard {
         assert_eq!(snapshot, "previous clipboard");
         self.events.push("restore");
         self.restore_count += 1;
+        if let Some(failure) = self.restore_failure {
+            return Err(failure);
+        }
         self.restore_succeeds
             .then_some(())
             .ok_or(CaptureFailure::ClipboardRestoration)
@@ -332,6 +385,8 @@ fn fake_clipboard(changed: bool, text: Option<&str>) -> FakeClipboard {
         send_succeeds: true,
         modifiers_released: true,
         foreground_unchanged: true,
+        preserve_failure: None,
+        restore_failure: None,
         read_count: 0,
         restore_count: 0,
         events: Vec::new(),
@@ -386,6 +441,35 @@ fn restoration_failure_prevents_capture_from_reaching_storage() {
         Err(CaptureFailure::ClipboardRestoration)
     );
     assert_eq!(clipboard.restore_count, 1);
+}
+
+#[test]
+fn edp_snapshot_failure_aborts_before_synthetic_copy() {
+    let mut clipboard = fake_clipboard(true, Some("selected"));
+    clipboard.preserve_failure = Some(CaptureFailure::ClipboardEdpReadFailed { error_code: -1 });
+
+    assert_eq!(
+        capture_clipboard_selection(&mut clipboard),
+        Err(CaptureFailure::ClipboardEdpReadFailed { error_code: -1 })
+    );
+    assert!(!clipboard.events.contains(&"send_copy"));
+    assert_eq!(clipboard.restore_count, 0);
+}
+
+#[test]
+fn edp_restore_failure_is_reported_as_a_restoration_failure() {
+    let mut clipboard = fake_clipboard(true, Some("selected"));
+    clipboard.restore_failure = Some(CaptureFailure::ClipboardEdpRestoreFailed { error_code: -2 });
+
+    let failure = capture_clipboard_selection(&mut clipboard).unwrap_err();
+    assert_eq!(
+        failure,
+        CaptureFailure::ClipboardEdpRestoreFailed { error_code: -2 }
+    );
+    assert_eq!(
+        capture_feedback_message(Err(failure)),
+        "Couldn't restore clipboard"
+    );
 }
 
 #[test]
@@ -475,4 +559,107 @@ fn clip_save_failure_occurs_only_after_clipboard_restoration() {
         Err(CaptureFailure::Storage)
     );
     assert!(failing.inputs.lock().unwrap().is_empty());
+}
+
+struct StatefulClipboard {
+    current: String,
+    selected: Vec<String>,
+    sequence: u32,
+    restore_history: Vec<String>,
+}
+
+impl StatefulClipboard {
+    fn replace_externally(&mut self, text: &str) {
+        self.current = text.to_owned();
+        self.sequence += 1;
+    }
+}
+
+impl ClipboardCaptureBackend for StatefulClipboard {
+    type Snapshot = String;
+
+    fn foreground_metadata(&mut self) -> Result<SourceMetadata, CaptureFailure> {
+        Ok(SourceMetadata {
+            source_app: Some("Notepad".to_owned()),
+            source_page_title: None,
+        })
+    }
+
+    fn clipboard_sequence(&mut self) -> Result<u32, CaptureFailure> {
+        Ok(self.sequence)
+    }
+
+    fn preserve_clipboard(&mut self) -> Result<Self::Snapshot, CaptureFailure> {
+        Ok(self.current.clone())
+    }
+
+    fn wait_for_modifiers_released(&mut self) -> Result<(), CaptureFailure> {
+        Ok(())
+    }
+
+    fn foreground_is_unchanged(&mut self) -> bool {
+        true
+    }
+
+    fn send_copy(&mut self) -> Result<(), CaptureFailure> {
+        let next = self.selected.remove(0);
+        self.current = next;
+        self.sequence += 1;
+        Ok(())
+    }
+
+    fn wait_for_clipboard_change(&mut self, before: u32) -> Result<bool, CaptureFailure> {
+        Ok(self.sequence != before)
+    }
+
+    fn read_text(&mut self) -> Result<Option<String>, CaptureFailure> {
+        Ok(Some(self.current.clone()))
+    }
+
+    fn restore_clipboard(&mut self, snapshot: Self::Snapshot) -> Result<(), CaptureFailure> {
+        self.current = snapshot.clone();
+        self.sequence += 1;
+        self.restore_history.push(snapshot);
+        Ok(())
+    }
+}
+
+#[test]
+fn every_capture_uses_and_restores_a_fresh_external_clipboard_snapshot() {
+    let mut clipboard = StatefulClipboard {
+        current: "ORIGINAL_A".to_owned(),
+        selected: vec![
+            "CAPTURE_B".to_owned(),
+            "CAPTURE_D".to_owned(),
+            "CAPTURE_F".to_owned(),
+            "CAPTURE_H".to_owned(),
+            "CAPTURE_J".to_owned(),
+        ],
+        sequence: 1,
+        restore_history: Vec::new(),
+    };
+    let sink = RecordingSink::default();
+
+    for (external, expected_capture) in [
+        ("ORIGINAL_A", "CAPTURE_B"),
+        ("MANUAL_C", "CAPTURE_D"),
+        ("MANUAL_E", "CAPTURE_F"),
+        ("MANUAL_G", "CAPTURE_H"),
+        ("MANUAL_I", "CAPTURE_J"),
+    ] {
+        clipboard.replace_externally(external);
+        let capture = capture_clipboard_selection(&mut clipboard);
+        persist_capture(capture, &sink).unwrap();
+        assert_eq!(clipboard.current, external);
+        assert_eq!(
+            sink.inputs.lock().unwrap().last().unwrap().content,
+            expected_capture
+        );
+    }
+
+    assert_eq!(
+        clipboard.restore_history,
+        vec!["ORIGINAL_A", "MANUAL_C", "MANUAL_E", "MANUAL_G", "MANUAL_I"]
+    );
+    assert_eq!(sink.inputs.lock().unwrap().len(), 5);
 }
