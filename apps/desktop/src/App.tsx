@@ -78,6 +78,7 @@ type WorkspaceMode = 'calendar' | 'detail';
 type DetailOrigin = {
   type: 'calendar' | 'sidebar' | 'create';
   focusTargetId?: string;
+  fallbackFocusTargetId?: string;
 };
 
 const THEME_STORAGE_KEY = 'ai-clip-memory-theme';
@@ -151,7 +152,13 @@ export function App({ client = tauriClipClient }: AppProps) {
     calendarMonthFromDate(new Date()),
   );
   const detailBackRef = useRef<HTMLButtonElement>(null);
-  const pendingCalendarFocusId = useRef<string | null | undefined>(undefined);
+  const pendingCalendarFocus = useRef<
+    | {
+        targetId: string | null;
+        fallbackId: string | null;
+      }
+    | undefined
+  >(undefined);
   const [status, setStatus] = useState<{ message: string; id: number } | null>(
     null,
   );
@@ -214,10 +221,11 @@ export function App({ client = tauriClipClient }: AppProps) {
     setWorkspaceMode('detail');
   }
 
-  function returnToCalendar(
-    focusTargetId: string | null = detailOrigin?.focusTargetId ?? null,
-  ) {
-    pendingCalendarFocusId.current = focusTargetId ?? null;
+  function returnToCalendar(origin: DetailOrigin | null = detailOrigin) {
+    pendingCalendarFocus.current = {
+      targetId: origin?.focusTargetId ?? null,
+      fallbackId: origin?.fallbackFocusTargetId ?? null,
+    };
     setWorkspaceMode('calendar');
   }
 
@@ -362,14 +370,18 @@ export function App({ client = tauriClipClient }: AppProps) {
     if (
       workspaceMode !== 'calendar' ||
       activeView === 'settings' ||
-      pendingCalendarFocusId.current === undefined
+      pendingCalendarFocus.current === undefined
     )
       return;
-    const target = pendingCalendarFocusId.current
-      ? document.getElementById(pendingCalendarFocusId.current)
-      : null;
-    (target ?? document.getElementById('calendar-month-heading'))?.focus();
-    pendingCalendarFocusId.current = undefined;
+    const { targetId, fallbackId } = pendingCalendarFocus.current;
+    const target = targetId ? document.getElementById(targetId) : null;
+    const fallback = fallbackId ? document.getElementById(fallbackId) : null;
+    (
+      target ??
+      fallback ??
+      document.getElementById('calendar-month-heading')
+    )?.focus();
+    pendingCalendarFocus.current = undefined;
   }, [activeView, workspaceMode]);
 
   useEffect(() => {
@@ -687,13 +699,18 @@ export function App({ client = tauriClipClient }: AppProps) {
                     <MemoryCalendar
                       actionsDisabled={isBusy || isRefreshing}
                       clips={visibleClips}
-                      onActivateClip={(id, element) =>
+                      onActivateClip={(id, element) => {
+                        const fallbackFocusTargetId =
+                          element.closest<HTMLElement>('[role="gridcell"]')?.id;
                         openClip(id, {
                           type: 'calendar',
                           focusTargetId:
                             element.id || calendarClipElementId(id),
-                        })
-                      }
+                          ...(fallbackFocusTargetId
+                            ? { fallbackFocusTargetId }
+                            : {}),
+                        });
+                      }}
                       onCopyClip={(clip) => void copyClip(clip)}
                       onDeleteClip={setDeleteTarget}
                       onEditClip={editClip}

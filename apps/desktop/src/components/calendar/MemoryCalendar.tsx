@@ -44,6 +44,9 @@ export function MemoryCalendar({
     date: Date;
   } | null>(null);
   const pendingDayFocusKey = useRef<string | null>(null);
+  const pendingCardFocus = useRef<{ clipId: string; dayKey: string } | null>(
+    null,
+  );
   const cells = useMemo(
     () => buildMonthGrid(visibleMonth, today),
     [today, visibleMonth],
@@ -93,6 +96,17 @@ export function MemoryCalendar({
     pendingDayFocusKey.current = activeDay.key;
     setActiveDay(null);
   }
+
+  useEffect(() => {
+    const pending = pendingCardFocus.current;
+    if (!pending) return;
+    if (clips.some((clip) => clip.id === pending.clipId)) {
+      pendingCardFocus.current = null;
+      return;
+    }
+    pendingCardFocus.current = null;
+    dayFocusOrigin(pending.dayKey)?.focus();
+  }, [clips]);
 
   return (
     <section
@@ -177,6 +191,12 @@ export function MemoryCalendar({
                       onCopyClip={onCopyClip}
                       onDeleteClip={onDeleteClip}
                       onEditClip={onEditClip}
+                      onFocusClip={(candidate) => {
+                        pendingCardFocus.current = {
+                          clipId: candidate.id,
+                          dayKey: cell.key,
+                        };
+                      }}
                       onSetPinned={onSetPinned}
                     />
                   ))}
@@ -185,7 +205,7 @@ export function MemoryCalendar({
                       id={calendarMoreElementId(cell.key)}
                       className="memory-calendar-more"
                       type="button"
-                      aria-label={`${overflowCount} more ${overflowCount === 1 ? 'clip' : 'clips'}`}
+                      aria-label={`Show ${overflowCount} more ${overflowCount === 1 ? 'clip' : 'clips'} for ${fullDateFormatter.format(cell.date)}`}
                       onClick={() =>
                         setActiveDay({ key: cell.key, date: cell.date })
                       }

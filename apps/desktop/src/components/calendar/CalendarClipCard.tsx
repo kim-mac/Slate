@@ -23,12 +23,14 @@ export interface CalendarClipActions {
 interface CalendarClipCardProps extends CalendarClipActions {
   clip: Clip;
   disabled?: boolean;
+  onFocusClip?: (clip: Clip) => void;
   primaryId: string;
 }
 
 export function CalendarClipCard({
   clip,
   disabled = false,
+  onFocusClip,
   primaryId,
   onActivateClip,
   onCopyClip,
@@ -38,6 +40,7 @@ export function CalendarClipCard({
 }: CalendarClipCardProps) {
   const primaryRef = useRef<HTMLButtonElement>(null);
   const title = displayTitle(clip);
+  const pinnedDescriptionId = `${primaryId}-pinned-status`;
 
   function activate() {
     if (primaryRef.current) onActivateClip(clip.id, primaryRef.current);
@@ -52,7 +55,9 @@ export function CalendarClipCard({
         className="memory-calendar-clip"
         title={title}
         aria-label={`Open ${title}`}
+        aria-describedby={clip.isPinned ? pinnedDescriptionId : undefined}
         onClick={activate}
+        onFocus={() => onFocusClip?.(clip)}
         onKeyDown={(event) => {
           if (
             event.nativeEvent.isComposing ||
@@ -68,6 +73,11 @@ export function CalendarClipCard({
         )}
         <span className="memory-calendar-clip-label">{title}</span>
       </button>
+      {clip.isPinned && (
+        <span id={pinnedDescriptionId} className="sr-only">
+          Pinned
+        </span>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger
           disabled={disabled}
@@ -78,6 +88,7 @@ export function CalendarClipCard({
               size="icon-xs"
               className="memory-calendar-actions-trigger"
               aria-label={`Actions for ${title}`}
+              onFocus={() => onFocusClip?.(clip)}
             />
           }
         >

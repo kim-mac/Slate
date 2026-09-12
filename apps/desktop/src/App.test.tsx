@@ -76,6 +76,33 @@ const currentMonthClip: Clip = {
   ).toISOString(),
 };
 
+function currentDayClips(): Clip[] {
+  return [
+    currentMonthClip,
+    {
+      ...currentMonthClip,
+      id: 'calendar-day-two',
+      title: 'Second calendar memory',
+      content: 'Second same-day memory',
+    },
+    {
+      ...currentMonthClip,
+      id: 'calendar-day-three',
+      title: 'Third calendar memory',
+      content: 'Unique overflow filter target',
+    },
+  ];
+}
+
+function currentDayLabel(): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date(currentMonthClip.createdAt));
+}
+
 async function waitForCalendar() {
   return screen.findByRole('heading', { name: currentMonthLabel });
 }
@@ -162,6 +189,32 @@ describe('App', () => {
     );
   });
 
+  test('falls back to the originating day when a calendar card disappears before Back', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Open ${currentMonthClip.title!}`,
+      }),
+    );
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'does not match' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+
+    const dayLabel = new Intl.DateTimeFormat(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(new Date(currentMonthClip.createdAt));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', { name: dayLabel }),
+      ),
+    );
+  });
+
   test('opens calendar clips in Detail through keyboard activation', async () => {
     render(<App client={fakeClient([currentMonthClip]).client} />);
     await waitForCalendar();
@@ -208,9 +261,9 @@ describe('App', () => {
       target: { value: 'does not match the open clip' },
     });
     fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
-    fireEvent.keyDown(screen.getByRole('option', { name: 'Text' }), {
-      key: 'Enter',
-    });
+    const textOption = screen.getByRole('option', { name: 'Text' });
+    fireEvent.keyDown(textOption, { key: 'Enter' });
+    fireEvent.keyDown(textOption, { key: 'Escape' });
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
 
     expect(
@@ -218,10 +271,9 @@ describe('App', () => {
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
 
-    const monthHeading = screen.getByRole('heading', {
-      name: previousMonthLabel,
-    });
-    expect(monthHeading).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { name: previousMonthLabel }),
+    ).toBeTruthy();
     expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe(
       'does not match the open clip',
     );
@@ -233,7 +285,17 @@ describe('App', () => {
         .getByRole('button', { name: 'Pinned' })
         .getAttribute('aria-pressed'),
     ).toBe('true');
-    await waitFor(() => expect(document.activeElement).toBe(monthHeading));
+    const dayLabel = new Intl.DateTimeFormat(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(previousDate);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', { name: dayLabel }),
+      ),
+    );
   });
 
   test('restores a sidebar-origin row on Back and falls back to the month heading if it disappears', async () => {
@@ -445,6 +507,66 @@ describe('App', () => {
     expect(
       screen.queryByRole('button', { name: 'Back to calendar' }),
     ).toBeNull();
+  });
+
+  test('keeps an open day overflow coherent as the existing search filter changes', async () => {
+    render(<App client={fakeClient(currentDayClips()).client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Show 1 more clip for ${currentDayLabel()}`,
+      }),
+    );
+    expect(screen.getByText('3 matching clips')).toBeTruthy();
+
+    const searchbox = screen.getByRole('searchbox', { hidden: true });
+    fireEvent.change(searchbox, {
+      target: { value: 'unique overflow' },
+    });
+    expect(await screen.findByText('1 matching clip')).toBeTruthy();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    fireEvent.change(searchbox, {
+      target: { value: 'no matching calendar clip' },
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', { name: currentDayLabel() }),
+      ),
+    );
+  });
+
+  test('keeps overflow deletion keyboard-safe through the existing confirmation dialog', async () => {
+    const clipsForDay = currentDayClips();
+    render(<App client={fakeClient(clipsForDay).client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Show 1 more clip for ${currentDayLabel()}`,
+      }),
+    );
+    const dayDialog = screen.getByRole('dialog');
+    const trigger = within(dayDialog).getByRole('button', {
+      name: `Actions for ${clipsForDay[2]!.title!}`,
+    });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+
+    const confirmation = screen.getByRole('alertdialog', {
+      name: 'Delete clip?',
+    });
+    expect(document.body.contains(dayDialog)).toBe(true);
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: 'Cancel' }),
+    );
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.getByRole('dialog')).toBe(dayDialog);
+    await waitFor(() =>
+      expect(dayDialog.contains(document.activeElement)).toBe(true),
+    );
   });
 
   test('rechecks launcher availability whenever the main window regains focus', async () => {

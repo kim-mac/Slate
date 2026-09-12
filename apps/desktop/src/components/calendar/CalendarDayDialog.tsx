@@ -1,4 +1,5 @@
 import type { Clip } from '@ai-clip-memory/shared';
+import { useEffect, useRef } from 'react';
 
 import { CalendarClipCard, type CalendarClipActions } from './CalendarClipCard';
 import {
@@ -30,6 +31,28 @@ export function CalendarDayDialog({
   onOpenFromDialog,
   ...actions
 }: CalendarDayDialogProps) {
+  const previousClipIds = useRef(clips.map((clip) => clip.id));
+
+  useEffect(() => {
+    const currentIds = new Set(clips.map((clip) => clip.id));
+    const resultDisappeared = previousClipIds.current.some(
+      (id) => !currentIds.has(id),
+    );
+    previousClipIds.current = clips.map((clip) => clip.id);
+    if (!resultDisappeared) return;
+
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      activeElement !== document.body &&
+      activeElement.isConnected
+    )
+      return;
+    document
+      .getElementById(calendarDayDialogClipElementId(clips[0]!.id))
+      ?.focus();
+  }, [clips]);
+
   return (
     <Dialog
       open
@@ -54,7 +77,7 @@ export function CalendarDayDialog({
                 key={clip.id}
                 clip={clip}
                 disabled={disabled}
-                primaryId={`calendar-day-dialog-clip-${clip.id}`}
+                primaryId={calendarDayDialogClipElementId(clip.id)}
                 {...actions}
                 onActivateClip={() => onOpenFromDialog(clip)}
                 onEditClip={() => onEditFromDialog(clip)}
@@ -65,4 +88,8 @@ export function CalendarDayDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+export function calendarDayDialogClipElementId(id: string): string {
+  return `calendar-day-dialog-clip-${id}`;
 }

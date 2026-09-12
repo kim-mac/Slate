@@ -443,6 +443,12 @@
   white-space: nowrap;
 }
 
+.memory-calendar-header h1:focus-visible,
+.memory-calendar-day:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
 .memory-calendar-controls {
   display: flex;
   flex: 0 0 auto;
@@ -617,7 +623,9 @@
 .calendar-day-dialog-list {
   display: grid;
   gap: 0.3rem;
+  max-width: 100%;
   min-width: 0;
+  overflow-x: hidden;
   padding: 0.15rem;
 }
 

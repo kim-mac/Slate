@@ -4,11 +4,14 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import { MemoryCalendar } from './MemoryCalendar';
+
+const OVERFLOW_BUTTON_NAME = 'Show 1 more clip for Friday, September 11, 2026';
 
 function calendarActions() {
   return {
@@ -90,7 +93,9 @@ test('renders the month shell, weekday labels, outside dates, and two-item overf
   expect(within(septemberEleventh).getByText('Second memory')).toBeTruthy();
   expect(within(septemberEleventh).queryByText('Third')).toBeNull();
   expect(
-    within(septemberEleventh).getByRole('button', { name: '1 more clip' }),
+    within(septemberEleventh).getByRole('button', {
+      name: OVERFLOW_BUTTON_NAME,
+    }),
   ).toBeTruthy();
   const clipButton = within(septemberEleventh).getByRole('button', {
     name: `Open ${clips[0]!.title!}`,
@@ -275,7 +280,7 @@ test('opens a bounded day dialog with every supplied clip in newest-first order'
     />,
   );
 
-  fireEvent.click(screen.getByRole('button', { name: '1 more clip' }));
+  fireEvent.click(screen.getByRole('button', { name: OVERFLOW_BUTTON_NAME }));
   const dialog = screen.getByRole('dialog', {
     name: 'Friday, September 11, 2026',
   });
@@ -300,7 +305,7 @@ test('routes day-dialog actions without opening Detail or closing for Copy', () 
       timeZone="UTC"
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '1 more clip' }));
+  fireEvent.click(screen.getByRole('button', { name: OVERFLOW_BUTTON_NAME }));
   const dialog = screen.getByRole('dialog');
   fireEvent.click(
     within(dialog).getByRole('button', {
@@ -326,7 +331,7 @@ test('opens Detail from a day-dialog Preview using the overflow control as its o
       timeZone="UTC"
     />,
   );
-  const more = screen.getByRole('button', { name: '1 more clip' });
+  const more = screen.getByRole('button', { name: OVERFLOW_BUTTON_NAME });
   fireEvent.click(more);
   const dialog = screen.getByRole('dialog');
   fireEvent.click(
@@ -352,7 +357,7 @@ test('opens Detail when the day-dialog clip itself is activated', () => {
       timeZone="UTC"
     />,
   );
-  const more = screen.getByRole('button', { name: '1 more clip' });
+  const more = screen.getByRole('button', { name: OVERFLOW_BUTTON_NAME });
   fireEvent.click(more);
   fireEvent.click(
     within(screen.getByRole('dialog')).getByRole('button', {
@@ -376,7 +381,7 @@ test('closes the day dialog before routing Edit to the shared form flow', () => 
       timeZone="UTC"
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '1 more clip' }));
+  fireEvent.click(screen.getByRole('button', { name: OVERFLOW_BUTTON_NAME }));
   const dialog = screen.getByRole('dialog');
   fireEvent.click(
     within(dialog).getByRole('button', {
@@ -399,7 +404,7 @@ test('keeps a day dialog coherent as its filtered clips change and closes safely
     timeZone: 'UTC',
   };
   const { rerender } = render(<MemoryCalendar clips={clips} {...props} />);
-  fireEvent.click(screen.getByRole('button', { name: '1 more clip' }));
+  fireEvent.click(screen.getByRole('button', { name: OVERFLOW_BUTTON_NAME }));
 
   const dialog = screen.getByRole('dialog');
   fireEvent.click(
@@ -434,7 +439,7 @@ test('updates an open day dialog safely when unpinning removes a filtered clip',
   const { rerender } = render(
     <MemoryCalendar clips={pinnedClips} {...props} />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '1 more clip' }));
+  fireEvent.click(screen.getByRole('button', { name: OVERFLOW_BUTTON_NAME }));
   const dialog = screen.getByRole('dialog');
   fireEvent.click(
     within(dialog).getByRole('button', {
@@ -460,10 +465,123 @@ test('restores +N more focus when the day dialog closes with Escape', () => {
       timeZone="UTC"
     />,
   );
-  const more = screen.getByRole('button', { name: '1 more clip' });
+  const more = screen.getByRole('button', { name: OVERFLOW_BUTTON_NAME });
   fireEvent.click(more);
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
 
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(document.activeElement).toBe(more);
+});
+
+test('exposes pinned, today, and overflow context to assistive technology', () => {
+  render(
+    <MemoryCalendar
+      clips={clips}
+      visibleMonth={{ year: 2026, month: 8 }}
+      onVisibleMonthChange={vi.fn()}
+      {...calendarActions()}
+      today={new Date(2026, 8, 11, 12)}
+      timeZone="UTC"
+    />,
+  );
+
+  const today = screen.getByRole('gridcell', {
+    name: 'Friday, September 11, 2026',
+  });
+  expect(today.getAttribute('aria-current')).toBe('date');
+  expect(
+    within(today).getByRole('button', {
+      name: `Open ${clips[0]!.title!}`,
+      description: 'Pinned',
+    }),
+  ).toBeTruthy();
+  expect(
+    within(today).getByRole('button', {
+      name: 'Show 1 more clip for Friday, September 11, 2026',
+    }),
+  ).toBeTruthy();
+});
+
+test('restores focus to the day cell when a calendar action removes its trigger', async () => {
+  const actions = calendarActions();
+  const pinnedClips = clips.map((clip) => ({ ...clip, isPinned: true }));
+  const props = {
+    visibleMonth: { year: 2026, month: 8 },
+    onVisibleMonthChange: vi.fn(),
+    ...actions,
+    today: new Date(2026, 8, 11, 12),
+    timeZone: 'UTC',
+  };
+  const { rerender } = render(
+    <MemoryCalendar clips={pinnedClips} {...props} />,
+  );
+  const trigger = screen.getByRole('button', {
+    name: `Actions for ${pinnedClips[0]!.title!}`,
+  });
+  trigger.focus();
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Unpin' }));
+
+  rerender(<MemoryCalendar clips={pinnedClips.slice(1)} {...props} />);
+
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole('gridcell', {
+        name: 'Friday, September 11, 2026',
+      }),
+    ),
+  );
+});
+
+test('keeps focus in the day dialog when a focused result disappears', async () => {
+  const actions = calendarActions();
+  const props = {
+    visibleMonth: { year: 2026, month: 8 },
+    onVisibleMonthChange: vi.fn(),
+    ...actions,
+    today: new Date(2026, 8, 11, 12),
+    timeZone: 'UTC',
+  };
+  const { rerender } = render(<MemoryCalendar clips={clips} {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: OVERFLOW_BUTTON_NAME }));
+  const trigger = within(screen.getByRole('dialog')).getByRole('button', {
+    name: `Actions for ${clips[2]!.title!}`,
+  });
+  trigger.focus();
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+
+  rerender(<MemoryCalendar clips={clips.slice(0, 2)} {...props} />);
+
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: `Open ${clips[0]!.title!}`,
+        description: 'Pinned',
+      }),
+    ),
+  );
+});
+
+test('falls back to the day cell when +N more disappears before dialog close', async () => {
+  const actions = calendarActions();
+  const props = {
+    visibleMonth: { year: 2026, month: 8 },
+    onVisibleMonthChange: vi.fn(),
+    ...actions,
+    today: new Date(2026, 8, 11, 12),
+    timeZone: 'UTC',
+  };
+  const { rerender } = render(<MemoryCalendar clips={clips} {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: OVERFLOW_BUTTON_NAME }));
+  rerender(<MemoryCalendar clips={clips.slice(0, 2)} {...props} />);
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole('gridcell', {
+        name: 'Friday, September 11, 2026',
+      }),
+    ),
+  );
 });
