@@ -524,6 +524,14 @@
   min-width: 0;
 }
 
+.memory-calendar-clip-card {
+  align-items: center;
+  display: grid;
+  gap: 0.1rem;
+  grid-template-columns: minmax(0, 1fr) 1.25rem;
+  min-width: 0;
+}
+
 .memory-calendar-clip,
 .memory-calendar-more {
   border-radius: var(--radius-sm);
@@ -538,12 +546,36 @@
 }
 
 .memory-calendar-clip {
+  align-items: center;
   background: var(--muted);
   border: 0;
   color: var(--foreground);
-  display: block;
+  display: flex;
+  gap: 0.2rem;
+  height: 1.25rem;
   text-align: left;
   width: 100%;
+}
+
+.memory-calendar-clip-pin {
+  flex: 0 0 auto;
+  height: 0.65rem;
+  width: 0.65rem;
+}
+
+.memory-calendar-clip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-calendar-actions-trigger {
+  height: 1.25rem;
+  min-height: 1.25rem;
+  min-width: 1.25rem;
+  padding: 0;
+  width: 1.25rem;
 }
 
 .memory-calendar-more {
@@ -567,6 +599,41 @@
 .memory-calendar-clip:focus-visible,
 .memory-calendar-more:focus-visible {
   box-shadow: 0 0 0 2px var(--ring);
+}
+
+.calendar-day-dialog {
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: calc(100vh - 2rem);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.calendar-day-dialog-scroll {
+  max-height: min(20rem, calc(100vh - 9rem));
+  min-height: 0;
+  min-width: 0;
+}
+
+.calendar-day-dialog-list {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.15rem;
+}
+
+.calendar-day-dialog-list .memory-calendar-clip-card {
+  grid-template-columns: minmax(0, 1fr) 1.5rem;
+}
+
+.calendar-day-dialog-list .memory-calendar-clip,
+.calendar-day-dialog-list .memory-calendar-actions-trigger {
+  height: 1.75rem;
+}
+
+.calendar-day-dialog-list .memory-calendar-actions-trigger {
+  min-height: 1.5rem;
+  min-width: 1.5rem;
+  width: 1.5rem;
 }
 
 .load-error {

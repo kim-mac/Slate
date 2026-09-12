@@ -91,6 +91,11 @@ async function openClipFromSidebar(clip: Clip) {
   return screen.findByText(clip.content, { selector: '.clip-content' });
 }
 
+async function openCalendarActions(title: string) {
+  fireEvent.click(screen.getByRole('button', { name: `Actions for ${title}` }));
+  return screen.findByRole('menu', undefined, { timeout: 3_000 });
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -330,6 +335,116 @@ describe('App', () => {
     ).toBeTruthy();
     expect(fake.update.mock.calls[0]?.[1]).not.toHaveProperty('createdAt');
     expect(fake.setPinned).toHaveBeenCalledWith(currentMonthClip.id, true);
+  });
+
+  test('reuses App copy, edit, pin, and delete flows from calendar actions without opening Detail', async () => {
+    const pinned = { ...currentMonthClip, isPinned: true };
+    const fake = fakeClient([currentMonthClip]);
+    fake.setPinned.mockResolvedValue(pinned);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    const actionsName = `Actions for ${currentMonthClip.title!}`;
+
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Copy' },
+      ),
+    );
+    await waitFor(() =>
+      expect(fake.copyContent).toHaveBeenCalledWith(currentMonthClip.id),
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Back to calendar' }),
+    ).toBeNull();
+
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Edit' },
+      ),
+    );
+    expect(screen.getByRole('dialog', { name: 'Edit clip' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Pin' },
+      ),
+    );
+    await waitFor(() =>
+      expect(fake.setPinned).toHaveBeenCalledWith(currentMonthClip.id, true),
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Back to calendar' }),
+    ).toBeNull();
+
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Delete' },
+      ),
+    );
+    const alert = screen.getByRole('alertdialog', { name: 'Delete clip?' });
+    expect(fake.delete).not.toHaveBeenCalled();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Delete clip' }));
+    await waitFor(() =>
+      expect(fake.delete).toHaveBeenCalledWith(currentMonthClip.id),
+    );
+    expect(screen.queryByRole('button', { name: actionsName })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Back to calendar' }),
+    ).toBeNull();
+  });
+
+  test('opens the existing Detail from calendar Preview', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Preview' },
+      ),
+    );
+
+    expect(
+      await screen.findByText(currentMonthClip.content, {
+        selector: '.clip-content',
+      }),
+    ).toBeTruthy();
+  });
+
+  test('updates the calendar label after editing directly from its action menu', async () => {
+    const updated = {
+      ...currentMonthClip,
+      title: 'Renamed from calendar',
+    };
+    const fake = fakeClient([currentMonthClip]);
+    fake.update.mockResolvedValue(updated);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Edit' },
+      ),
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Edit clip' });
+    fireEvent.change(within(dialog).getByLabelText('Title'), {
+      target: { value: updated.title },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' }),
+    );
+
+    expect(
+      await screen.findByRole('button', { name: `Open ${updated.title}` }),
+    ).toBeTruthy();
+    expect(fake.update.mock.calls[0]?.[1]).not.toHaveProperty('createdAt');
+    expect(
+      screen.queryByRole('button', { name: 'Back to calendar' }),
+    ).toBeNull();
   });
 
   test('rechecks launcher availability whenever the main window regains focus', async () => {
@@ -750,7 +865,7 @@ describe('App', () => {
     });
     expect(
       screen.getByText(pinnedClip.title!, {
-        selector: '.memory-calendar-clip',
+        selector: '.memory-calendar-clip-label',
       }),
     ).toBeTruthy();
     expect(
@@ -779,12 +894,12 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
     expect(
       screen.getByText(pinnedClip.title!, {
-        selector: '.memory-calendar-clip',
+        selector: '.memory-calendar-clip-label',
       }),
     ).toBeTruthy();
     expect(
       screen.queryByText(firstClip.title!, {
-        selector: '.memory-calendar-clip',
+        selector: '.memory-calendar-clip-label',
       }),
     ).toBeNull();
   });

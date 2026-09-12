@@ -221,6 +221,11 @@ export function App({ client = tauriClipClient }: AppProps) {
     setWorkspaceMode('calendar');
   }
 
+  function editClip(clip: Clip) {
+    setFormError(null);
+    setFormMode({ type: 'edit', clip });
+  }
+
   function showLibrary(view: Exclude<AppView, 'settings'>) {
     setActiveView(view);
     setExpandedSection(view);
@@ -672,10 +677,7 @@ export function App({ client = tauriClipClient }: AppProps) {
                       onBack={() => returnToCalendar()}
                       onCopy={() => void copyClip(selectedClip)}
                       onDelete={() => setDeleteTarget(selectedClip)}
-                      onEdit={() => {
-                        setFormError(null);
-                        setFormMode({ type: 'edit', clip: selectedClip });
-                      }}
+                      onEdit={() => editClip(selectedClip)}
                       onOpenSource={() => void openSource(selectedClip)}
                       onSetPinned={(isPinned) =>
                         void setPinned(selectedClip, isPinned)
@@ -683,12 +685,20 @@ export function App({ client = tauriClipClient }: AppProps) {
                     />
                   ) : (
                     <MemoryCalendar
+                      actionsDisabled={isBusy || isRefreshing}
                       clips={visibleClips}
-                      onActivateClip={(id) =>
+                      onActivateClip={(id, element) =>
                         openClip(id, {
                           type: 'calendar',
-                          focusTargetId: calendarClipElementId(id),
+                          focusTargetId:
+                            element.id || calendarClipElementId(id),
                         })
+                      }
+                      onCopyClip={(clip) => void copyClip(clip)}
+                      onDeleteClip={setDeleteTarget}
+                      onEditClip={editClip}
+                      onSetPinned={(clip, isPinned) =>
+                        void setPinned(clip, isPinned)
                       }
                       visibleMonth={visibleMonth}
                       onVisibleMonthChange={setVisibleMonth}
