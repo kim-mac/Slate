@@ -533,6 +533,29 @@ test('restores focus to the day cell when a calendar action removes its trigger'
   );
 });
 
+test('restores focus to the day cell when a focused calendar clip disappears', async () => {
+  const actions = calendarActions();
+  const props = {
+    visibleMonth: { year: 2026, month: 8 },
+    onVisibleMonthChange: vi.fn(),
+    ...actions,
+    today: new Date(2026, 8, 11, 12),
+    timeZone: 'UTC',
+  };
+  const { rerender } = render(<MemoryCalendar clips={clips} {...props} />);
+  screen.getByRole('button', { name: `Open ${clips[0]!.title!}` }).focus();
+
+  rerender(<MemoryCalendar clips={clips.slice(1)} {...props} />);
+
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole('gridcell', {
+        name: 'Friday, September 11, 2026',
+      }),
+    ),
+  );
+});
+
 test('keeps focus in the day dialog when a focused result disappears', async () => {
   const actions = calendarActions();
   const props = {

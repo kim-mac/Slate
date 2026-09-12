@@ -105,6 +105,13 @@ export function MemoryCalendar({
       return;
     }
     pendingCardFocus.current = null;
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      activeElement !== document.body &&
+      activeElement.isConnected
+    )
+      return;
     dayFocusOrigin(pending.dayKey)?.focus();
   }, [clips]);
 

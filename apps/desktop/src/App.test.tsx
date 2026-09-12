@@ -215,6 +215,40 @@ describe('App', () => {
     );
   });
 
+  test('does not steal focus from Search when filtering removes the previously focused calendar clip', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    screen
+      .getByRole('button', { name: `Open ${currentMonthClip.title!}` })
+      .focus();
+
+    const searchbox = screen.getByRole('searchbox');
+    searchbox.focus();
+    fireEvent.change(searchbox, {
+      target: { value: 'does not match the calendar clip' },
+    });
+
+    await waitFor(() => expect(document.activeElement).toBe(searchbox));
+  });
+
+  test('does not steal focus from the type filter when it removes the previously focused calendar action', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    screen
+      .getByRole('button', { name: `Actions for ${currentMonthClip.title!}` })
+      .focus();
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
+    fireEvent.keyDown(screen.getByRole('option', { name: 'Code' }), {
+      key: 'Enter',
+    });
+
+    const typeFilter = screen.getByRole('combobox', {
+      name: 'Filter clips: Code',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(typeFilter));
+  });
+
   test('opens calendar clips in Detail through keyboard activation', async () => {
     render(<App client={fakeClient([currentMonthClip]).client} />);
     await waitForCalendar();
