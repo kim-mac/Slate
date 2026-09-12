@@ -222,6 +222,7 @@ export function App({ client = tauriClipClient }: AppProps) {
   }
 
   function returnToCalendar(origin: DetailOrigin | null = detailOrigin) {
+    if (workspaceMode === 'calendar') return;
     pendingCalendarFocus.current = {
       targetId: origin?.focusTargetId ?? null,
       fallbackId: origin?.fallbackFocusTargetId ?? null,

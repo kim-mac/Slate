@@ -494,6 +494,35 @@ describe('App', () => {
     ).toBeNull();
   });
 
+  test('does not queue stale App focus after deleting a clip in Calendar', async () => {
+    const fake = fakeClient([currentMonthClip]);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Delete' },
+      ),
+    );
+    fireEvent.click(
+      within(
+        screen.getByRole('alertdialog', { name: 'Delete clip?' }),
+      ).getByRole('button', { name: 'Delete clip' }),
+    );
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', { name: currentDayLabel() }),
+      ),
+    );
+    const pinned = screen.getByRole('button', { name: 'Pinned' });
+    pinned.focus();
+    fireEvent.click(pinned);
+
+    await waitFor(() => expect(document.activeElement).toBe(pinned));
+  });
+
   test('opens the existing Detail from calendar Preview', async () => {
     render(<App client={fakeClient([currentMonthClip]).client} />);
     await waitForCalendar();
