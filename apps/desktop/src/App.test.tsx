@@ -62,6 +62,26 @@ function fakeClient(initialClips: Clip[] = []) {
   return { client: methods satisfies ClipClient, ...methods };
 }
 
+const currentMonthLabel = new Intl.DateTimeFormat(undefined, {
+  month: 'long',
+  year: 'numeric',
+}).format(new Date());
+
+async function waitForCalendar() {
+  return screen.findByRole('heading', { name: currentMonthLabel });
+}
+
+async function openClipFromSidebar(clip: Clip) {
+  const sidebar = screen
+    .getByRole('navigation', { name: 'Clip library' })
+    .closest<HTMLElement>('[data-slot="sidebar"]')!;
+  const preview = await within(sidebar).findByText(clip.content, {
+    selector: '.clip-list-preview',
+  });
+  fireEvent.click(preview.closest('button')!);
+  return screen.findByText(clip.content, { selector: '.clip-content' });
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -70,6 +90,37 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  test('opens on the calendar and preserves an explicitly opened detail across section and filter changes', async () => {
+    render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
+
+    expect(
+      await screen.findByRole('heading', { name: currentMonthLabel }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeNull();
+
+    const sidebar = screen
+      .getByRole('navigation', { name: 'Clip library' })
+      .closest<HTMLElement>('[data-slot="sidebar"]')!;
+    fireEvent.click(
+      within(sidebar)
+        .getByText(firstClip.content, { selector: '.clip-list-preview' })
+        .closest('button')!,
+    );
+    expect(
+      screen.getByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'All Clips' }));
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'no matching result' },
+    });
+    expect(
+      screen.getByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+  });
+
   test('rechecks launcher availability whenever the main window regains focus', async () => {
     vi.mocked(getLauncherStatus)
       .mockResolvedValueOnce({
@@ -83,7 +134,7 @@ describe('App', () => {
         errorCode: 'shortcut_unavailable',
       });
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     fireEvent.focus(window);
     expect((await screen.findByRole('alert')).textContent).toContain(
       'Another app',
@@ -99,7 +150,7 @@ describe('App', () => {
       }),
     );
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     const dialog = screen.getByRole('dialog', { name: 'Create clip' });
     const content = within(dialog).getByLabelText('Content');
@@ -146,7 +197,7 @@ describe('App', () => {
   });
   test('collapses to icons while preserving toolbar filters, counts and selected clips', async () => {
     render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
     const sidebar = screen
       .getByRole('button', { name: 'All Clips' })
       .closest<HTMLElement>('[data-slot="sidebar"]')!;
@@ -161,7 +212,7 @@ describe('App', () => {
     expect(within(sidebar).queryByLabelText('All Clips results')).toBeNull();
     expect(within(sidebar).queryByLabelText('Pinned results')).toBeNull();
     expect(
-      screen.getByRole('heading', { name: pinnedClip.title! }),
+      screen.getByRole('heading', { name: firstClip.title! }),
     ).toBeTruthy();
     expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe(
       'unions',
@@ -170,7 +221,7 @@ describe('App', () => {
     expect(privacy.tabIndex).toBe(0);
     expect(privacy.closest('[data-slot="tooltip-trigger"]')).not.toBeNull();
     expect(
-      screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
+      screen.getByText(firstClip.content, { selector: '.clip-content' }),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
     expect(screen.getByRole('region', { name: 'Pinned' })).toBeTruthy();
@@ -187,7 +238,7 @@ describe('App', () => {
 
   test('focuses toolbar search with Ctrl/Cmd+F and keeps primary actions usable', async () => {
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     const toggle = screen.getByRole('button', { name: 'Toggle Sidebar' });
     for (const modifier of [{ ctrlKey: true }, { metaKey: true }]) {
       fireEvent.click(toggle);
@@ -211,7 +262,7 @@ describe('App', () => {
   test('guards sidebar shortcuts and does not persist sidebar state', async () => {
     const cookieWrite = vi.spyOn(document, 'cookie', 'set');
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     const sidebar = screen
       .getByRole('button', { name: 'All Clips' })
       .closest('[data-slot="sidebar"]')!;
@@ -246,7 +297,7 @@ describe('App', () => {
   test('focuses search from the webview body before any control is clicked', async () => {
     const fake = fakeClient();
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true });
     expect(document.activeElement).toBe(screen.getByRole('searchbox'));
   });
@@ -259,7 +310,7 @@ describe('App', () => {
       }),
     );
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
     const row = screen.getByRole('button', { name: /Local-first notesA calm/ });
     fireEvent.keyDown(row, { key: 'c', ctrlKey: true, shiftKey: true });
     fireEvent.keyDown(row, { key: 'c', ctrlKey: true, shiftKey: true });
@@ -278,7 +329,7 @@ describe('App', () => {
       .mockRejectedValueOnce(new Error('sensitive details'))
       .mockResolvedValueOnce(undefined);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     expect((await screen.findByRole('alert')).textContent).toContain(
       'Try the action again',
@@ -292,15 +343,18 @@ describe('App', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  test('falls back to the newest remaining selection after refresh removes it', async () => {
+  test('returns to the calendar when refresh removes the explicitly selected clip', async () => {
     const fake = fakeClient([firstClip, pinnedClip]);
     fake.list
       .mockResolvedValueOnce([firstClip, pinnedClip])
       .mockResolvedValueOnce([pinnedClip]);
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: firstClip.title! });
+    await openClipFromSidebar(firstClip);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
-    await screen.findByRole('heading', { name: pinnedClip.title! });
+    await waitForCalendar();
+    expect(
+      screen.queryByRole('heading', { name: pinnedClip.title! }),
+    ).toBeNull();
     expect(
       screen
         .getByRole('button', { name: 'All Clips' })
@@ -310,7 +364,7 @@ describe('App', () => {
 
   test('uses an icon-only type filter with an accessible active state', async () => {
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     const trigger = screen.getByRole('combobox', {
       name: 'Filter clips',
     });
@@ -375,7 +429,7 @@ describe('App', () => {
       },
     ];
     render(<App client={fakeClient(typedClips).client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
     fireEvent.keyDown(screen.getByRole('option', { name: label }), {
@@ -397,7 +451,7 @@ describe('App', () => {
 
   test('toggles directly between light and dark without opening a theme menu', async () => {
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     const lightButton = screen.getByRole('button', {
       name: 'Switch to dark mode',
@@ -435,7 +489,7 @@ describe('App', () => {
     async (mode, accessibleName, iconClass) => {
       window.localStorage.setItem('ai-clip-memory-theme', mode);
       render(<App client={fakeClient().client} />);
-      await screen.findByRole('heading', { name: 'No clips yet' });
+      await waitForCalendar();
 
       const button = screen.getByRole('button', { name: accessibleName });
       expect(button.querySelector(`.${iconClass}`)).toBeTruthy();
@@ -451,7 +505,7 @@ describe('App', () => {
     });
 
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     expect(
       screen
@@ -466,7 +520,7 @@ describe('App', () => {
   test('renders Refresh as an accessible icon-only action and keeps its behavior', async () => {
     const fake = fakeClient();
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     const refresh = screen.getByRole('button', { name: 'Refresh' });
     expect(refresh.querySelector('.lucide-refresh-cw')).toBeTruthy();
@@ -479,12 +533,14 @@ describe('App', () => {
     const fake = fakeClient([firstClip, pinnedClip]);
     render(<App client={fake.client} />);
     expect(screen.getByRole('combobox', { name: 'Filter clips' })).toBeTruthy();
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'CHATGPT unions' },
     });
     expect(
-      screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
+      screen.getByText(pinnedClip.title!, {
+        selector: '.memory-calendar-clip',
+      }),
     ).toBeTruthy();
     expect(
       screen
@@ -499,8 +555,9 @@ describe('App', () => {
     fireEvent.keyDown(screen.getByRole('option', { name: 'Text' }), {
       key: 'Enter',
     });
+    expect(screen.getByText('No matching clips.')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'No matching clips' }),
+      screen.getByRole('heading', { name: currentMonthLabel }),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     expect(
@@ -510,10 +567,14 @@ describe('App', () => {
     ).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
     expect(
-      screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
+      screen.getByText(pinnedClip.title!, {
+        selector: '.memory-calendar-clip',
+      }),
     ).toBeTruthy();
     expect(
-      screen.queryByText(firstClip.content, { selector: '.clip-content' }),
+      screen.queryByText(firstClip.title!, {
+        selector: '.memory-calendar-clip',
+      }),
     ).toBeNull();
   });
 
@@ -530,7 +591,7 @@ describe('App', () => {
       .mockResolvedValueOnce([firstClip])
       .mockResolvedValueOnce([captured, firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'local' },
     });
@@ -557,41 +618,37 @@ describe('App', () => {
     expect(screen.queryByRole('heading', { name: 'No clips yet' })).toBeNull();
     expect(screen.queryByText('private path')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
+    expect(
+      screen.getByText(firstClip.content, { selector: '.clip-list-preview' }),
+    ).toBeTruthy();
   });
 
-  test('uses filter-specific guidance for empty results', async () => {
+  test('keeps the calendar shell visible when filters have no results', async () => {
     render(<App client={fakeClient([firstClip]).client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
 
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'missing' },
     });
+    expect(screen.getByText('No matching clips.')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'No matching clips' }),
+      screen.getByRole('heading', { name: currentMonthLabel }),
     ).toBeTruthy();
-    expect(screen.getByText('Try a different search.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
     fireEvent.keyDown(screen.getByRole('option', { name: 'Code' }), {
       key: 'Enter',
     });
-    expect(
-      screen.getByRole('heading', { name: 'No clips of this type' }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText('Choose another content type or clear the filter.'),
-    ).toBeTruthy();
+    expect(screen.getByText('No matching clips.')).toBeTruthy();
 
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'missing' },
     });
+    expect(screen.getByText('No matching clips.')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'No matching clips' }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText('Try a different search or content type.'),
+      screen.getByRole('heading', { name: currentMonthLabel }),
     ).toBeTruthy();
   });
 
@@ -601,18 +658,18 @@ describe('App', () => {
       .mockResolvedValueOnce([firstClip])
       .mockRejectedValueOnce(new Error('private'));
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await screen.findByRole('button', { name: 'Retry' });
     expect(
-      screen.getByText(firstClip.content, { selector: '.clip-content' }),
+      screen.getByText(firstClip.content, { selector: '.clip-list-preview' }),
     ).toBeTruthy();
   });
 
   test('supports app search, result focus and copy shortcuts with editable/dialog guards', async () => {
     const fake = fakeClient([firstClip, pinnedClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
     const search = screen.getByRole('searchbox');
     const shell = search.closest('.app-shell')!;
     fireEvent.keyDown(shell, { key: 'f', ctrlKey: true });
@@ -648,22 +705,18 @@ describe('App', () => {
     expect(fake.copyContent).toHaveBeenCalledTimes(1);
   });
 
-  test('shows the empty library after loading an empty database', async () => {
+  test('shows the calendar and sidebar empty guidance after loading an empty database', async () => {
     const { client } = fakeClient();
     render(<App client={client} />);
 
-    expect(
-      await screen.findByRole('heading', { name: 'No clips yet' }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText('Create a clip here or save one from your browser.'),
-    ).toBeTruthy();
+    expect(await waitForCalendar()).toBeTruthy();
+    expect(screen.getByText('No clips yet.')).toBeTruthy();
   });
 
   test('keeps local status in the sidebar and places primary controls in the main toolbar', async () => {
     const { client } = fakeClient();
     render(<App client={client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     const sidebar = screen
       .getByRole('navigation', { name: 'Clip library' })
@@ -694,7 +747,7 @@ describe('App', () => {
 
   test('uses the main toolbar for retrieval controls without redundant view copy', async () => {
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     const toolbar = document.querySelector<HTMLElement>('.desktop-header');
     expect(toolbar).not.toBeNull();
@@ -744,12 +797,10 @@ describe('App', () => {
     const { client } = fakeClient([firstClip, pinnedClip]);
     render(<App client={client} />);
 
+    expect(await waitForCalendar()).toBeTruthy();
     expect(
-      await screen.findByText(firstClip.content, { selector: '.clip-content' }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole('heading', { name: firstClip.title! }),
-    ).toBeTruthy();
+      screen.queryByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeNull();
     const allClipsItem = screen
       .getByRole('button', { name: 'All Clips' })
       .closest<HTMLElement>('[data-slot="sidebar-menu-item"]');
@@ -793,7 +844,7 @@ describe('App', () => {
 
   test('browses clips through accessible accordion sections without clearing detail selection', async () => {
     render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
-    await screen.findByRole('heading', { name: firstClip.title! });
+    await openClipFromSidebar(firstClip);
 
     const all = screen.getByRole('button', { name: 'All Clips' });
     const pinned = screen.getByRole('button', { name: 'Pinned' });
@@ -828,13 +879,13 @@ describe('App', () => {
     expect(pinned.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByLabelText('Pinned results')).toBeNull();
     expect(
-      screen.getByRole('heading', { name: pinnedClip.title! }),
+      screen.getByRole('heading', { name: firstClip.title! }),
     ).toBeTruthy();
   });
 
   test('restores the open library section after icon-collapse', async () => {
     render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
-    await screen.findByRole('heading', { name: firstClip.title! });
+    await openClipFromSidebar(firstClip);
 
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
     expect(screen.getByLabelText('Pinned results')).toBeTruthy();
@@ -845,14 +896,14 @@ describe('App', () => {
     fireEvent.click(toggle);
     expect(screen.getByLabelText('Pinned results')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: pinnedClip.title! }),
+      screen.getByRole('heading', { name: firstClip.title! }),
     ).toBeTruthy();
   });
 
   test('filters the loaded list with case-insensitive substring search', async () => {
     const { client } = fakeClient([firstClip, pinnedClip]);
     render(<App client={client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search clips' }), {
       target: { value: 'TYPESCRIPT' },
@@ -887,7 +938,7 @@ describe('App', () => {
     const fake = fakeClient();
     fake.create.mockResolvedValue(created);
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     const dialog = screen.getByRole('dialog', { name: 'Create clip' });
@@ -933,7 +984,7 @@ describe('App', () => {
       message: 'Content is required.',
     });
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     const dialog = screen.getByRole('dialog', { name: 'Create clip' });
@@ -966,7 +1017,7 @@ describe('App', () => {
     const fake = fakeClient([firstClip]);
     fake.update.mockResolvedValue(updated);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = screen.getByRole('dialog', { name: 'Edit clip' });
@@ -1012,7 +1063,7 @@ describe('App', () => {
   test('cancels create without calling the client', async () => {
     const fake = fakeClient();
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     const dialog = screen.getByRole('dialog', { name: 'Create clip' });
@@ -1029,7 +1080,7 @@ describe('App', () => {
   test('cancels deletion without calling the client', async () => {
     const fake = fakeClient([firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
 
     const deleteButton = screen.getByRole('button', { name: 'Delete' });
     expect((deleteButton as HTMLButtonElement).disabled).toBe(false);
@@ -1051,14 +1102,14 @@ describe('App', () => {
   test('deletes a clip after alert-dialog confirmation', async () => {
     const fake = fakeClient([firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const alert = screen.getByRole('alertdialog', { name: 'Delete clip?' });
     fireEvent.click(within(alert).getByRole('button', { name: 'Delete clip' }));
 
     await waitFor(() => expect(fake.delete).toHaveBeenCalledWith(firstClip.id));
-    expect(screen.getByRole('heading', { name: 'No clips yet' })).toBeTruthy();
+    expect(await waitForCalendar()).toBeTruthy();
   });
 
   test('pins and unpins a clip', async () => {
@@ -1067,7 +1118,7 @@ describe('App', () => {
       .mockResolvedValueOnce({ ...firstClip, isPinned: true })
       .mockResolvedValueOnce(firstClip);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
 
     fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
     await screen.findByRole('button', { name: 'Unpin' });
@@ -1085,7 +1136,7 @@ describe('App', () => {
   test('copies content and opens the stored source through the client', async () => {
     const fake = fakeClient([firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     await screen.findByText('Clip copied.');

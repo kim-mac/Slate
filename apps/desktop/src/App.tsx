@@ -26,6 +26,7 @@ import {
 } from './lib/clipRetrieval';
 import { ClipFeedback } from './components/ClipFeedback';
 import { LauncherAvailability } from './components/LauncherAvailability';
+import { MemoryCalendar } from './components/calendar/MemoryCalendar';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import {
@@ -51,6 +52,7 @@ import {
 } from './components/ui/alert-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Separator } from './components/ui/separator';
+import { calendarMonthFromDate } from './lib/memoryCalendar';
 import {
   SidebarInset,
   SidebarProvider,
@@ -131,6 +133,9 @@ export function App({ client = tauriClipClient }: AppProps) {
   const clipListRef = useRef<HTMLDivElement>(null);
   const [searchText, setSearchText] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [visibleMonth, setVisibleMonth] = useState(() =>
+    calendarMonthFromDate(new Date()),
+  );
   const [status, setStatus] = useState<{ message: string; id: number } | null>(
     null,
   );
@@ -173,18 +178,8 @@ export function App({ client = tauriClipClient }: AppProps) {
       ),
     [expandedSection, matchingClips],
   );
-  const selectedClip =
-    visibleClips.find((clip) => clip.id === selectedId) ??
-    visibleClips[0] ??
-    null;
+  const selectedClip = clips.find((clip) => clip.id === selectedId) ?? null;
   const pinnedCount = clips.filter((clip) => clip.isPinned).length;
-  useEffect(() => {
-    setSelectedId((current) =>
-      visibleClips.some((clip) => clip.id === current)
-        ? current
-        : (visibleClips[0]?.id ?? null),
-    );
-  }, [visibleClips]);
   const hasSearch = !!searchText.trim();
   const hasTypeFilter = contentType !== 'all';
   const hasFilters = hasSearch || hasTypeFilter;
@@ -599,32 +594,6 @@ export function App({ client = tauriClipClient }: AppProps) {
                         Retry
                       </Button>
                     </div>
-                  ) : visibleClips.length === 0 ? (
-                    <div className="empty-state">
-                      <div className="empty-state-mark" aria-hidden="true">
-                        {activeView === 'pinned' ? '◇' : '□'}
-                      </div>
-                      <h2>
-                        {hasSearch
-                          ? 'No matching clips'
-                          : hasTypeFilter
-                            ? 'No clips of this type'
-                            : activeView === 'pinned'
-                              ? 'No pinned clips'
-                              : 'No clips yet'}
-                      </h2>
-                      <p>
-                        {hasSearch && hasTypeFilter
-                          ? 'Try a different search or content type.'
-                          : hasSearch
-                            ? 'Try a different search.'
-                            : hasTypeFilter
-                              ? 'Choose another content type or clear the filter.'
-                              : activeView === 'pinned'
-                                ? 'Clips you pin will appear here.'
-                                : 'Create a clip here or save one from your browser.'}
-                      </p>
-                    </div>
                   ) : selectedClip ? (
                     <ClipDetail
                       clip={selectedClip}
@@ -641,9 +610,11 @@ export function App({ client = tauriClipClient }: AppProps) {
                       }
                     />
                   ) : (
-                    <div className="empty-state">
-                      <h2>Select a clip to view it</h2>
-                    </div>
+                    <MemoryCalendar
+                      clips={visibleClips}
+                      visibleMonth={visibleMonth}
+                      onVisibleMonthChange={setVisibleMonth}
+                    />
                   )}
                 </section>
               )}
