@@ -539,7 +539,11 @@
 
 .memory-calendar-clip {
   background: var(--muted);
+  border: 0;
   color: var(--foreground);
+  display: block;
+  text-align: left;
+  width: 100%;
 }
 
 .memory-calendar-more {
@@ -551,6 +555,8 @@
   width: 100%;
 }
 
+.memory-calendar-clip:hover,
+.memory-calendar-clip:focus-visible,
 .memory-calendar-more:hover,
 .memory-calendar-more:focus-visible {
   background: var(--accent);
@@ -558,6 +564,7 @@
   outline: none;
 }
 
+.memory-calendar-clip:focus-visible,
 .memory-calendar-more:focus-visible {
   box-shadow: 0 0 0 2px var(--ring);
 }

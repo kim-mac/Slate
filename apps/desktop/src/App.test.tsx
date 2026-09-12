@@ -66,6 +66,15 @@ const currentMonthLabel = new Intl.DateTimeFormat(undefined, {
   month: 'long',
   year: 'numeric',
 }).format(new Date());
+const currentMonthClip: Clip = {
+  ...firstClip,
+  createdAt: new Date(
+    new Date().getFullYear(),
+    new Date().getMonth(),
+    11,
+    12,
+  ).toISOString(),
+};
 
 async function waitForCalendar() {
   return screen.findByRole('heading', { name: currentMonthLabel });
@@ -119,6 +128,208 @@ describe('App', () => {
     expect(
       screen.getByText(firstClip.content, { selector: '.clip-content' }),
     ).toBeTruthy();
+  });
+
+  test('opens calendar clips in the existing detail and restores calendar focus on Back', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    const calendarClip = screen.getByRole('button', {
+      name: `Open ${currentMonthClip.title!}`,
+    });
+
+    fireEvent.click(calendarClip);
+    const back = await screen.findByRole('button', {
+      name: 'Back to calendar',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(back));
+    expect(
+      screen.getByText(currentMonthClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+
+    fireEvent.click(back);
+    await waitForCalendar();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', {
+          name: `Open ${currentMonthClip.title!}`,
+        }),
+      ),
+    );
+  });
+
+  test('opens calendar clips in Detail through keyboard activation', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    const calendarClip = screen.getByRole('button', {
+      name: `Open ${currentMonthClip.title!}`,
+    });
+
+    calendarClip.focus();
+    fireEvent.keyDown(calendarClip, { key: 'Enter' });
+
+    expect(
+      await screen.findByText(currentMonthClip.content, {
+        selector: '.clip-content',
+      }),
+    ).toBeTruthy();
+  });
+
+  test('Back preserves the visible month, search, type filter, and sidebar scope', async () => {
+    const previousDate = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth() - 1,
+      12,
+      12,
+    );
+    const previousClip: Clip = {
+      ...firstClip,
+      id: 'previous-month',
+      contentType: 'code',
+      createdAt: previousDate.toISOString(),
+      updatedAt: previousDate.toISOString(),
+    };
+    const previousMonthLabel = new Intl.DateTimeFormat(undefined, {
+      month: 'long',
+      year: 'numeric',
+    }).format(previousDate);
+    render(<App client={fakeClient([previousClip]).client} />);
+    await waitForCalendar();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous month' }));
+    await screen.findByRole('heading', { name: previousMonthLabel });
+    fireEvent.click(
+      screen.getByRole('button', { name: `Open ${previousClip.title!}` }),
+    );
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'does not match the open clip' },
+    });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
+    fireEvent.keyDown(screen.getByRole('option', { name: 'Text' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
+
+    expect(
+      screen.getByText(previousClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+
+    const monthHeading = screen.getByRole('heading', {
+      name: previousMonthLabel,
+    });
+    expect(monthHeading).toBeTruthy();
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe(
+      'does not match the open clip',
+    );
+    expect(
+      screen.getByRole('combobox', { name: 'Filter clips: Text' }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('button', { name: 'Pinned' })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+    await waitFor(() => expect(document.activeElement).toBe(monthHeading));
+  });
+
+  test('restores a sidebar-origin row on Back and falls back to the month heading if it disappears', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    const sidebar = screen
+      .getByRole('navigation', { name: 'Clip library' })
+      .closest<HTMLElement>('[data-slot="sidebar"]')!;
+    const row = within(sidebar)
+      .getByText(currentMonthClip.content, { selector: '.clip-list-preview' })
+      .closest<HTMLButtonElement>('button')!;
+    fireEvent.click(row);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+    await waitFor(() => expect(document.activeElement).toBe(row));
+
+    fireEvent.click(row);
+    fireEvent.click(screen.getByRole('button', { name: 'All Clips' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+    const heading = await screen.findByRole('heading', {
+      name: currentMonthLabel,
+    });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+
+  test('opens a created clip in Detail and returns to its local creation month', async () => {
+    const createdDate = new Date(2025, 1, 15, 12);
+    const created: Clip = {
+      ...firstClip,
+      id: 'created-in-february',
+      title: 'Created memory',
+      content: 'A newly created memory',
+      createdAt: createdDate.toISOString(),
+      updatedAt: createdDate.toISOString(),
+    };
+    const fake = fakeClient();
+    fake.create.mockResolvedValue(created);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create clip' });
+    fireEvent.change(within(dialog).getByLabelText('Content'), {
+      target: { value: created.content },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Title'), {
+      target: { value: created.title },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save clip' }));
+
+    expect(
+      await screen.findByRole('heading', { name: created.title! }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+    expect(
+      screen.getByRole('heading', {
+        name: new Intl.DateTimeFormat(undefined, {
+          month: 'long',
+          year: 'numeric',
+        }).format(createdDate),
+      }),
+    ).toBeTruthy();
+  });
+
+  test('keeps calendar placement while editing and pinning an open clip', async () => {
+    const updated = {
+      ...currentMonthClip,
+      title: 'Updated calendar memory',
+      content: 'Updated without moving dates',
+    };
+    const fake = fakeClient([currentMonthClip]);
+    fake.update.mockResolvedValue(updated);
+    fake.setPinned.mockResolvedValue({ ...updated, isPinned: true });
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Open ${currentMonthClip.title!}`,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit clip' });
+    fireEvent.change(within(dialog).getByLabelText('Content'), {
+      target: { value: updated.content },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Title'), {
+      target: { value: updated.title },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' }),
+    );
+    await screen.findByRole('heading', { name: updated.title });
+    fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
+    await screen.findByRole('button', { name: 'Unpin' });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+
+    expect(await waitForCalendar()).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: `Open ${updated.title}` }),
+    ).toBeTruthy();
+    expect(fake.update.mock.calls[0]?.[1]).not.toHaveProperty('createdAt');
+    expect(fake.setPinned).toHaveBeenCalledWith(currentMonthClip.id, true);
   });
 
   test('rechecks launcher availability whenever the main window regains focus', async () => {
@@ -1099,8 +1310,8 @@ describe('App', () => {
     expect(fake.delete).not.toHaveBeenCalled();
   });
 
-  test('deletes a clip after alert-dialog confirmation', async () => {
-    const fake = fakeClient([firstClip]);
+  test('deletes a selected clip into Calendar without selecting another clip', async () => {
+    const fake = fakeClient([firstClip, pinnedClip]);
     render(<App client={fake.client} />);
     await openClipFromSidebar(firstClip);
 
@@ -1110,6 +1321,9 @@ describe('App', () => {
 
     await waitFor(() => expect(fake.delete).toHaveBeenCalledWith(firstClip.id));
     expect(await waitForCalendar()).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: pinnedClip.title! }),
+    ).toBeNull();
   });
 
   test('pins and unpins a clip', async () => {

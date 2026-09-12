@@ -143,6 +143,7 @@ export function AppSidebar({
                               ariaLabel={`${label} clip list`}
                               clips={clips}
                               compact
+                              itemIdPrefix="sidebar-clip"
                               selectedId={selectedId}
                               onSelect={onSelectClip}
                             />

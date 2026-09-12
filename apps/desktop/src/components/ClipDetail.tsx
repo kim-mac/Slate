@@ -1,5 +1,14 @@
 import type { Clip } from '@ai-clip-memory/shared';
-import { Copy, ExternalLink, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Copy,
+  ExternalLink,
+  Pencil,
+  Pin,
+  PinOff,
+  Trash2,
+} from 'lucide-react';
+import type { RefObject } from 'react';
 import { displayTitle, formatContentType } from '@/lib/clipRetrieval';
 
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +25,8 @@ import {
 interface ClipDetailProps {
   clip: Clip;
   disabled: boolean;
+  backButtonRef: RefObject<HTMLButtonElement | null>;
+  onBack: () => void;
   onCopy: () => void;
   onDelete: () => void;
   onEdit: () => void;
@@ -26,6 +37,8 @@ interface ClipDetailProps {
 export function ClipDetail({
   clip,
   disabled,
+  backButtonRef,
+  onBack,
   onCopy,
   onDelete,
   onEdit,
@@ -38,6 +51,17 @@ export function ClipDetail({
         <article>
           <CardHeader className="clip-detail-header">
             <div className="clip-heading">
+              <Button
+                ref={backButtonRef}
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label="Back to calendar"
+                onClick={onBack}
+              >
+                <ArrowLeft aria-hidden="true" />
+                Back
+              </Button>
               <Badge variant="secondary">
                 {formatContentType(clip.contentType)}
               </Badge>

@@ -26,7 +26,10 @@ import {
 } from './lib/clipRetrieval';
 import { ClipFeedback } from './components/ClipFeedback';
 import { LauncherAvailability } from './components/LauncherAvailability';
-import { MemoryCalendar } from './components/calendar/MemoryCalendar';
+import {
+  calendarClipElementId,
+  MemoryCalendar,
+} from './components/calendar/MemoryCalendar';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import {
@@ -39,6 +42,7 @@ import {
 import { tauriClipClient, type ClipClient } from './clipClient';
 import { AppSidebar, type AppView } from './components/AppSidebar';
 import { ClipDetail } from './components/ClipDetail';
+import { clipListItemElementId } from './components/ClipList';
 import { ClipFormDialog } from './components/ClipFormDialog';
 import {
   AlertDialog,
@@ -52,7 +56,10 @@ import {
 } from './components/ui/alert-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Separator } from './components/ui/separator';
-import { calendarMonthFromDate } from './lib/memoryCalendar';
+import {
+  calendarMonthFromDate,
+  calendarMonthFromTimestamp,
+} from './lib/memoryCalendar';
 import {
   SidebarInset,
   SidebarProvider,
@@ -67,6 +74,11 @@ import {
 
 type FormMode = { type: 'create' } | { type: 'edit'; clip: Clip };
 type ThemeMode = 'light' | 'dark';
+type WorkspaceMode = 'calendar' | 'detail';
+type DetailOrigin = {
+  type: 'calendar' | 'sidebar' | 'create';
+  focusTargetId?: string;
+};
 
 const THEME_STORAGE_KEY = 'ai-clip-memory-theme';
 
@@ -133,9 +145,13 @@ export function App({ client = tauriClipClient }: AppProps) {
   const clipListRef = useRef<HTMLDivElement>(null);
   const [searchText, setSearchText] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('calendar');
+  const [detailOrigin, setDetailOrigin] = useState<DetailOrigin | null>(null);
   const [visibleMonth, setVisibleMonth] = useState(() =>
     calendarMonthFromDate(new Date()),
   );
+  const detailBackRef = useRef<HTMLButtonElement>(null);
+  const pendingCalendarFocusId = useRef<string | null | undefined>(undefined);
   const [status, setStatus] = useState<{ message: string; id: number } | null>(
     null,
   );
@@ -192,6 +208,19 @@ export function App({ client = tauriClipClient }: AppProps) {
     setContentType('all');
   }
 
+  function openClip(id: string, origin: DetailOrigin) {
+    setSelectedId(id);
+    setDetailOrigin(origin);
+    setWorkspaceMode('detail');
+  }
+
+  function returnToCalendar(
+    focusTargetId: string | null = detailOrigin?.focusTargetId ?? null,
+  ) {
+    pendingCalendarFocusId.current = focusTargetId ?? null;
+    setWorkspaceMode('calendar');
+  }
+
   function showLibrary(view: Exclude<AppView, 'settings'>) {
     setActiveView(view);
     setExpandedSection(view);
@@ -220,7 +249,9 @@ export function App({ client = tauriClipClient }: AppProps) {
         setClips((current) => [created, ...current]);
         setActiveView('all');
         setExpandedSection('all');
-        setSelectedId(created.id);
+        const createdMonth = calendarMonthFromTimestamp(created.createdAt);
+        if (createdMonth) setVisibleMonth(createdMonth);
+        openClip(created.id, { type: 'create' });
       }
       setFormMode(null);
       setFormError(null);
@@ -257,6 +288,8 @@ export function App({ client = tauriClipClient }: AppProps) {
       await client.delete(clip.id);
       setClips((current) => current.filter((item) => item.id !== clip.id));
       setSelectedId(null);
+      setDetailOrigin(null);
+      returnToCalendar(null);
       notify('Clip deleted.');
     } catch (deleteError) {
       setActionError(safeErrorMessage(deleteError));
@@ -316,6 +349,39 @@ export function App({ client = tauriClipClient }: AppProps) {
   }, [themeMode]);
 
   useEffect(() => {
+    if (workspaceMode !== 'detail' || !selectedClip) return;
+    detailBackRef.current?.focus();
+  }, [selectedId, selectedClip, workspaceMode]);
+
+  useEffect(() => {
+    if (
+      workspaceMode !== 'calendar' ||
+      activeView === 'settings' ||
+      pendingCalendarFocusId.current === undefined
+    )
+      return;
+    const target = pendingCalendarFocusId.current
+      ? document.getElementById(pendingCalendarFocusId.current)
+      : null;
+    (target ?? document.getElementById('calendar-month-heading'))?.focus();
+    pendingCalendarFocusId.current = undefined;
+  }, [activeView, workspaceMode]);
+
+  useEffect(() => {
+    if (
+      workspaceMode !== 'detail' ||
+      !selectedId ||
+      isLoading ||
+      isRefreshing ||
+      clips.some((clip) => clip.id === selectedId)
+    )
+      return;
+    setSelectedId(null);
+    setDetailOrigin(null);
+    returnToCalendar(null);
+  }, [clips, isLoading, isRefreshing, selectedId, workspaceMode]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (
         event.defaultPrevented ||
@@ -340,6 +406,7 @@ export function App({ client = tauriClipClient }: AppProps) {
         event.key.toLowerCase() === 'c' &&
         event.shiftKey &&
         activeView !== 'settings' &&
+        workspaceMode === 'detail' &&
         selectedClip
       ) {
         const target = event.target;
@@ -380,7 +447,10 @@ export function App({ client = tauriClipClient }: AppProps) {
             onClearFilters={clearFilters}
             onSelectClip={(id) => {
               if (expandedSection) setActiveView(expandedSection);
-              setSelectedId(id);
+              openClip(id, {
+                type: 'sidebar',
+                focusTargetId: clipListItemElementId('sidebar-clip', id),
+              });
             }}
             onToggleSection={toggleLibrarySection}
             pinnedCount={pinnedCount}
@@ -594,10 +664,12 @@ export function App({ client = tauriClipClient }: AppProps) {
                         Retry
                       </Button>
                     </div>
-                  ) : selectedClip ? (
+                  ) : workspaceMode === 'detail' && selectedClip ? (
                     <ClipDetail
                       clip={selectedClip}
                       disabled={isBusy || isRefreshing}
+                      backButtonRef={detailBackRef}
+                      onBack={() => returnToCalendar()}
                       onCopy={() => void copyClip(selectedClip)}
                       onDelete={() => setDeleteTarget(selectedClip)}
                       onEdit={() => {
@@ -612,6 +684,12 @@ export function App({ client = tauriClipClient }: AppProps) {
                   ) : (
                     <MemoryCalendar
                       clips={visibleClips}
+                      onActivateClip={(id) =>
+                        openClip(id, {
+                          type: 'calendar',
+                          focusTargetId: calendarClipElementId(id),
+                        })
+                      }
                       visibleMonth={visibleMonth}
                       onVisibleMonthChange={setVisibleMonth}
                     />

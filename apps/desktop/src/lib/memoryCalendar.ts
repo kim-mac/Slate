@@ -25,6 +25,17 @@ export function calendarMonthFromDate(date: Date): CalendarMonth {
   return { year: date.getFullYear(), month: date.getMonth() };
 }
 
+export function calendarMonthFromTimestamp(
+  timestamp: string,
+  timeZone?: string,
+): CalendarMonth | null {
+  const key = localDateKey(timestamp, timeZone);
+  if (!key) return null;
+  const [year, month] = key.split('-').map(Number);
+  if (!Number.isInteger(year) || !Number.isInteger(month)) return null;
+  return { year: year!, month: month! - 1 };
+}
+
 export function addCalendarMonths(
   visibleMonth: CalendarMonth,
   amount: number,

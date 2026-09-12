@@ -15,6 +15,7 @@ interface ClipListProps {
   compact?: boolean;
   onSelect: (id: string) => void;
   selectedId: string | null;
+  itemIdPrefix?: string;
 }
 
 export function ClipList({
@@ -23,6 +24,7 @@ export function ClipList({
   compact = false,
   onSelect,
   selectedId,
+  itemIdPrefix,
 }: ClipListProps) {
   return (
     <ScrollArea
@@ -32,6 +34,11 @@ export function ClipList({
       <div className="clip-list-items">
         {clips.map((clip, index) => (
           <Button
+            id={
+              itemIdPrefix
+                ? clipListItemElementId(itemIdPrefix, clip.id)
+                : undefined
+            }
             className="clip-list-item"
             variant="ghost"
             type="button"
@@ -104,6 +111,10 @@ export function ClipList({
       </div>
     </ScrollArea>
   );
+}
+
+export function clipListItemElementId(prefix: string, id: string): string {
+  return `${prefix}-${id}`;
 }
 
 function PinBadge() {

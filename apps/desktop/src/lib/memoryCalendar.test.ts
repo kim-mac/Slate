@@ -5,6 +5,7 @@ import {
   addCalendarMonths,
   buildMonthGrid,
   calendarMonthFromDate,
+  calendarMonthFromTimestamp,
   getDayClipSummary,
   groupClipsByLocalDate,
   localDateKey,
@@ -68,6 +69,16 @@ describe('memory calendar model', () => {
       year: 2026,
       month: 8,
     });
+  });
+
+  test('derives a clip month through local-time timestamp conversion', () => {
+    expect(
+      calendarMonthFromTimestamp(
+        '2026-09-01T01:00:00.000Z',
+        'America/Los_Angeles',
+      ),
+    ).toEqual({ year: 2026, month: 7 });
+    expect(calendarMonthFromTimestamp('not-a-date')).toBeNull();
   });
 
   test('groups UTC timestamps by their local calendar date without slicing UTC text', () => {

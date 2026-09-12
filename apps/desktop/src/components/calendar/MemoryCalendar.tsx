@@ -18,6 +18,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 interface MemoryCalendarProps {
   clips: Clip[];
+  onActivateClip: (id: string, element: HTMLButtonElement) => void;
   visibleMonth: CalendarMonth;
   onVisibleMonthChange: (month: CalendarMonth) => void;
   today?: Date;
@@ -26,6 +27,7 @@ interface MemoryCalendarProps {
 
 export function MemoryCalendar({
   clips,
+  onActivateClip,
   visibleMonth,
   onVisibleMonthChange,
   today = new Date(),
@@ -88,7 +90,9 @@ export function MemoryCalendar({
             Today
           </Button>
         </div>
-        <h1 id="calendar-month-heading">{monthLabel}</h1>
+        <h1 id="calendar-month-heading" tabIndex={-1}>
+          {monthLabel}
+        </h1>
       </header>
 
       <div className="memory-calendar-weekdays" role="row">
@@ -120,13 +124,28 @@ export function MemoryCalendar({
                 <span className="memory-calendar-day-number">{cell.day}</span>
                 <div className="memory-calendar-clips">
                   {visibleClips.map((clip) => (
-                    <div
+                    <button
                       key={clip.id}
+                      id={calendarClipElementId(clip.id)}
+                      type="button"
                       className="memory-calendar-clip"
                       title={displayTitle(clip)}
+                      aria-label={`Open ${displayTitle(clip)}`}
+                      onClick={(event) =>
+                        onActivateClip(clip.id, event.currentTarget)
+                      }
+                      onKeyDown={(event) => {
+                        if (
+                          event.nativeEvent.isComposing ||
+                          (event.key !== 'Enter' && event.key !== ' ')
+                        )
+                          return;
+                        event.preventDefault();
+                        onActivateClip(clip.id, event.currentTarget);
+                      }}
                     >
                       {displayTitle(clip)}
-                    </div>
+                    </button>
                   ))}
                   {overflowCount > 0 && (
                     <button
@@ -145,4 +164,8 @@ export function MemoryCalendar({
       </ScrollArea>
     </section>
   );
+}
+
+export function calendarClipElementId(id: string): string {
+  return `calendar-clip-${id}`;
 }

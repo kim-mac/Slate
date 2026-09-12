@@ -52,11 +52,13 @@ const clips: Clip[] = [
 afterEach(cleanup);
 
 test('renders the month shell, weekday labels, outside dates, and two-item overflow', () => {
+  const onActivateClip = vi.fn();
   render(
     <MemoryCalendar
       clips={clips}
       visibleMonth={{ year: 2026, month: 8 }}
       onVisibleMonthChange={vi.fn()}
+      onActivateClip={onActivateClip}
       today={new Date(2026, 8, 11, 12)}
       timeZone="UTC"
     />,
@@ -76,6 +78,11 @@ test('renders the month shell, weekday labels, outside dates, and two-item overf
   expect(
     within(septemberEleventh).getByRole('button', { name: '1 more clip' }),
   ).toBeTruthy();
+  const clipButton = within(septemberEleventh).getByRole('button', {
+    name: `Open ${clips[0]!.title!}`,
+  });
+  fireEvent.click(clipButton);
+  expect(onActivateClip).toHaveBeenLastCalledWith(clips[0]!.id, clipButton);
   expect(
     screen.getByRole('gridcell', { name: /Sunday, August 30, 2026/i }).dataset
       .outsideMonth,
@@ -89,6 +96,7 @@ test('moves to previous, next, and current months through controlled callbacks',
       clips={[]}
       visibleMonth={{ year: 2026, month: 0 }}
       onVisibleMonthChange={onVisibleMonthChange}
+      onActivateClip={vi.fn()}
       today={new Date(2026, 8, 11, 12)}
     />,
   );
@@ -103,3 +111,28 @@ test('moves to previous, next, and current months through controlled callbacks',
     [{ year: 2026, month: 8 }],
   ]);
 });
+
+test.each(['Enter', ' '])(
+  'activates a focused calendar clip with the %s key',
+  (key) => {
+    const onActivateClip = vi.fn();
+    render(
+      <MemoryCalendar
+        clips={clips.slice(0, 1)}
+        visibleMonth={{ year: 2026, month: 8 }}
+        onVisibleMonthChange={vi.fn()}
+        onActivateClip={onActivateClip}
+        today={new Date(2026, 8, 11, 12)}
+        timeZone="UTC"
+      />,
+    );
+    const clipButton = screen.getByRole('button', {
+      name: `Open ${clips[0]!.title!}`,
+    });
+
+    clipButton.focus();
+    fireEvent.keyDown(clipButton, { key });
+
+    expect(onActivateClip).toHaveBeenCalledWith(clips[0]!.id, clipButton);
+  },
+);
