@@ -62,6 +62,67 @@ function fakeClient(initialClips: Clip[] = []) {
   return { client: methods satisfies ClipClient, ...methods };
 }
 
+const currentMonthLabel = new Intl.DateTimeFormat(undefined, {
+  month: 'long',
+  year: 'numeric',
+}).format(new Date());
+const currentMonthClip: Clip = {
+  ...firstClip,
+  createdAt: new Date(
+    new Date().getFullYear(),
+    new Date().getMonth(),
+    11,
+    12,
+  ).toISOString(),
+};
+
+function currentDayClips(): Clip[] {
+  return [
+    currentMonthClip,
+    {
+      ...currentMonthClip,
+      id: 'calendar-day-two',
+      title: 'Second calendar memory',
+      content: 'Second same-day memory',
+    },
+    {
+      ...currentMonthClip,
+      id: 'calendar-day-three',
+      title: 'Third calendar memory',
+      content: 'Unique overflow filter target',
+    },
+  ];
+}
+
+function currentDayLabel(): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date(currentMonthClip.createdAt));
+}
+
+async function waitForCalendar() {
+  return screen.findByRole('heading', { name: currentMonthLabel });
+}
+
+async function openClipFromSidebar(clip: Clip) {
+  const sidebar = screen
+    .getByRole('navigation', { name: 'Clip library' })
+    .closest<HTMLElement>('[data-slot="sidebar"]')!;
+  const preview = await within(sidebar).findByText(clip.content, {
+    selector: '.clip-list-preview',
+  });
+  fireEvent.click(preview.closest('button')!);
+  return screen.findByText(clip.content, { selector: '.clip-content' });
+}
+
+async function openCalendarActions(title: string) {
+  fireEvent.click(screen.getByRole('button', { name: `Actions for ${title}` }));
+  return screen.findByRole('menu', undefined, { timeout: 3_000 });
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -70,6 +131,605 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  test('opens on the calendar and preserves an explicitly opened detail across section and filter changes', async () => {
+    render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
+
+    expect(
+      await screen.findByRole('heading', { name: currentMonthLabel }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeNull();
+
+    const sidebar = screen
+      .getByRole('navigation', { name: 'Clip library' })
+      .closest<HTMLElement>('[data-slot="sidebar"]')!;
+    fireEvent.click(
+      within(sidebar)
+        .getByText(firstClip.content, { selector: '.clip-list-preview' })
+        .closest('button')!,
+    );
+    expect(
+      screen.getByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'All Clips' }));
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'no matching result' },
+    });
+    expect(
+      screen.getByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+  });
+
+  test('opens calendar clips in the existing detail and restores calendar focus on Back', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    const calendarClip = screen.getByRole('button', {
+      name: `Open ${currentMonthClip.title!}`,
+    });
+
+    fireEvent.click(calendarClip);
+    const back = await screen.findByRole('button', {
+      name: 'Back to calendar',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(back));
+    expect(
+      screen.getByText(currentMonthClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+
+    fireEvent.click(back);
+    await waitForCalendar();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', {
+          name: `Open ${currentMonthClip.title!}`,
+        }),
+      ),
+    );
+  });
+
+  test('falls back to the originating day when a calendar card disappears before Back', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Open ${currentMonthClip.title!}`,
+      }),
+    );
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'does not match' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+
+    const dayLabel = new Intl.DateTimeFormat(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(new Date(currentMonthClip.createdAt));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', { name: dayLabel }),
+      ),
+    );
+  });
+
+  test('does not steal focus from Search when filtering removes the previously focused calendar clip', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    screen
+      .getByRole('button', { name: `Open ${currentMonthClip.title!}` })
+      .focus();
+
+    const searchbox = screen.getByRole('searchbox');
+    searchbox.focus();
+    fireEvent.change(searchbox, {
+      target: { value: 'does not match the calendar clip' },
+    });
+
+    await waitFor(() => expect(document.activeElement).toBe(searchbox));
+  });
+
+  test('does not steal focus from the type filter when it removes the previously focused calendar action', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    screen
+      .getByRole('button', { name: `Actions for ${currentMonthClip.title!}` })
+      .focus();
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
+    fireEvent.keyDown(screen.getByRole('option', { name: 'Code' }), {
+      key: 'Enter',
+    });
+
+    const typeFilter = screen.getByRole('combobox', {
+      name: 'Filter clips: Code',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(typeFilter));
+  });
+
+  test('opens calendar clips in Detail through keyboard activation', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    const calendarClip = screen.getByRole('button', {
+      name: `Open ${currentMonthClip.title!}`,
+    });
+
+    calendarClip.focus();
+    fireEvent.keyDown(calendarClip, { key: 'Enter' });
+
+    expect(
+      await screen.findByText(currentMonthClip.content, {
+        selector: '.clip-content',
+      }),
+    ).toBeTruthy();
+  });
+
+  test('Back preserves the visible month, search, type filter, and sidebar scope', async () => {
+    const previousDate = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth() - 1,
+      12,
+      12,
+    );
+    const previousClip: Clip = {
+      ...firstClip,
+      id: 'previous-month',
+      contentType: 'code',
+      createdAt: previousDate.toISOString(),
+      updatedAt: previousDate.toISOString(),
+    };
+    const previousMonthLabel = new Intl.DateTimeFormat(undefined, {
+      month: 'long',
+      year: 'numeric',
+    }).format(previousDate);
+    render(<App client={fakeClient([previousClip]).client} />);
+    await waitForCalendar();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous month' }));
+    await screen.findByRole('heading', { name: previousMonthLabel });
+    fireEvent.click(
+      screen.getByRole('button', { name: `Open ${previousClip.title!}` }),
+    );
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'does not match the open clip' },
+    });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
+    const textOption = screen.getByRole('option', { name: 'Text' });
+    fireEvent.keyDown(textOption, { key: 'Enter' });
+    fireEvent.keyDown(textOption, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
+
+    expect(
+      screen.getByText(previousClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+
+    expect(
+      screen.getByRole('heading', { name: previousMonthLabel }),
+    ).toBeTruthy();
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe(
+      'does not match the open clip',
+    );
+    expect(
+      screen.getByRole('combobox', { name: 'Filter clips: Text' }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('button', { name: 'Pinned' })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+    const dayLabel = new Intl.DateTimeFormat(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(previousDate);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', { name: dayLabel }),
+      ),
+    );
+  });
+
+  test('restores a sidebar-origin row on Back and falls back to the month heading if it disappears', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    const sidebar = screen
+      .getByRole('navigation', { name: 'Clip library' })
+      .closest<HTMLElement>('[data-slot="sidebar"]')!;
+    const row = within(sidebar)
+      .getByText(currentMonthClip.content, { selector: '.clip-list-preview' })
+      .closest<HTMLButtonElement>('button')!;
+    fireEvent.click(row);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+    await waitFor(() => expect(document.activeElement).toBe(row));
+
+    fireEvent.click(row);
+    fireEvent.click(screen.getByRole('button', { name: 'All Clips' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+    const heading = await screen.findByRole('heading', {
+      name: currentMonthLabel,
+    });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+
+  test('opens a created clip in Detail and returns to its local creation month', async () => {
+    const createdDate = new Date(2025, 1, 15, 12);
+    const created: Clip = {
+      ...firstClip,
+      id: 'created-in-february',
+      title: 'Created memory',
+      content: 'A newly created memory',
+      createdAt: createdDate.toISOString(),
+      updatedAt: createdDate.toISOString(),
+    };
+    const fake = fakeClient();
+    fake.create.mockResolvedValue(created);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create clip' });
+    fireEvent.change(within(dialog).getByLabelText('Content'), {
+      target: { value: created.content },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Title'), {
+      target: { value: created.title },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save clip' }));
+
+    expect(
+      await screen.findByRole('heading', { name: created.title! }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+    expect(
+      screen.getByRole('heading', {
+        name: new Intl.DateTimeFormat(undefined, {
+          month: 'long',
+          year: 'numeric',
+        }).format(createdDate),
+      }),
+    ).toBeTruthy();
+  });
+
+  test('keeps calendar placement while editing and pinning an open clip', async () => {
+    const updated = {
+      ...currentMonthClip,
+      title: 'Updated calendar memory',
+      content: 'Updated without moving dates',
+    };
+    const fake = fakeClient([currentMonthClip]);
+    fake.update.mockResolvedValue(updated);
+    fake.setPinned.mockResolvedValue({ ...updated, isPinned: true });
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Open ${currentMonthClip.title!}`,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit clip' });
+    fireEvent.change(within(dialog).getByLabelText('Content'), {
+      target: { value: updated.content },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Title'), {
+      target: { value: updated.title },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' }),
+    );
+    await screen.findByRole('heading', { name: updated.title });
+    fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
+    await screen.findByRole('button', { name: 'Unpin' });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+
+    expect(await waitForCalendar()).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: `Open ${updated.title}` }),
+    ).toBeTruthy();
+    expect(fake.update.mock.calls[0]?.[1]).not.toHaveProperty('createdAt');
+    expect(fake.setPinned).toHaveBeenCalledWith(currentMonthClip.id, true);
+  });
+
+  test('reuses App copy, edit, pin, and delete flows from calendar actions without opening Detail', async () => {
+    const pinned = { ...currentMonthClip, isPinned: true };
+    const fake = fakeClient([currentMonthClip]);
+    fake.setPinned.mockResolvedValue(pinned);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    const actionsName = `Actions for ${currentMonthClip.title!}`;
+
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Copy' },
+      ),
+    );
+    await waitFor(() =>
+      expect(fake.copyContent).toHaveBeenCalledWith(currentMonthClip.id),
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Back to calendar' }),
+    ).toBeNull();
+
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Edit' },
+      ),
+    );
+    expect(screen.getByRole('dialog', { name: 'Edit clip' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Pin' },
+      ),
+    );
+    await waitFor(() =>
+      expect(fake.setPinned).toHaveBeenCalledWith(currentMonthClip.id, true),
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Back to calendar' }),
+    ).toBeNull();
+
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Delete' },
+      ),
+    );
+    const alert = screen.getByRole('alertdialog', { name: 'Delete clip?' });
+    expect(fake.delete).not.toHaveBeenCalled();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Delete clip' }));
+    await waitFor(() =>
+      expect(fake.delete).toHaveBeenCalledWith(currentMonthClip.id),
+    );
+    expect(screen.queryByRole('button', { name: actionsName })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Back to calendar' }),
+    ).toBeNull();
+  });
+
+  test('does not queue stale App focus after deleting a clip in Calendar', async () => {
+    const fake = fakeClient([currentMonthClip]);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Delete' },
+      ),
+    );
+    fireEvent.click(
+      within(
+        screen.getByRole('alertdialog', { name: 'Delete clip?' }),
+      ).getByRole('button', { name: 'Delete clip' }),
+    );
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', { name: currentDayLabel() }),
+      ),
+    );
+    const pinned = screen.getByRole('button', { name: 'Pinned' });
+    pinned.focus();
+    fireEvent.click(pinned);
+
+    await waitFor(() => expect(document.activeElement).toBe(pinned));
+  });
+
+  test('does not queue stale App focus when delayed Detail deletion resolves after Back', async () => {
+    const fake = fakeClient([currentMonthClip]);
+    let resolveDelete!: () => void;
+    fake.delete.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveDelete = resolve;
+      }),
+    );
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Open ${currentMonthClip.title!}`,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      within(
+        screen.getByRole('alertdialog', { name: 'Delete clip?' }),
+      ).getByRole('button', { name: 'Delete clip' }),
+    );
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', {
+          name: `Open ${currentMonthClip.title!}`,
+        }),
+      ),
+    );
+
+    resolveDelete();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', { name: currentDayLabel() }),
+      ),
+    );
+    const pinned = screen.getByRole('button', { name: 'Pinned' });
+    pinned.focus();
+    fireEvent.click(pinned);
+
+    await waitFor(() => expect(document.activeElement).toBe(pinned));
+  });
+
+  test('keeps a newer Detail selection when an earlier clip deletion resolves', async () => {
+    const secondClip: Clip = {
+      ...currentMonthClip,
+      id: 'calendar-selection-b',
+      title: 'Second selected clip',
+      content: 'Second clip remains selected.',
+    };
+    const fake = fakeClient([currentMonthClip, secondClip]);
+    let resolveDelete!: () => void;
+    fake.delete.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveDelete = resolve;
+      }),
+    );
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    await openClipFromSidebar(currentMonthClip);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      within(
+        screen.getByRole('alertdialog', { name: 'Delete clip?' }),
+      ).getByRole('button', { name: 'Delete clip' }),
+    );
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+
+    await openClipFromSidebar(secondClip);
+    const back = screen.getByRole('button', { name: 'Back to calendar' });
+    await waitFor(() => expect(document.activeElement).toBe(back));
+
+    resolveDelete();
+
+    await waitFor(() =>
+      expect(fake.delete).toHaveBeenCalledWith(currentMonthClip.id),
+    );
+    const sidebar = screen
+      .getByRole('navigation', { name: 'Clip library' })
+      .closest<HTMLElement>('[data-slot="sidebar"]')!;
+    await waitFor(() =>
+      expect(
+        within(sidebar).queryByText(currentMonthClip.content, {
+          selector: '.clip-list-preview',
+        }),
+      ).toBeNull(),
+    );
+    expect(
+      screen.getByText(secondClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back to calendar' })).toBe(back);
+    expect(document.activeElement).toBe(back);
+  });
+
+  test('opens the existing Detail from calendar Preview', async () => {
+    render(<App client={fakeClient([currentMonthClip]).client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Preview' },
+      ),
+    );
+
+    expect(
+      await screen.findByText(currentMonthClip.content, {
+        selector: '.clip-content',
+      }),
+    ).toBeTruthy();
+  });
+
+  test('updates the calendar label after editing directly from its action menu', async () => {
+    const updated = {
+      ...currentMonthClip,
+      title: 'Renamed from calendar',
+    };
+    const fake = fakeClient([currentMonthClip]);
+    fake.update.mockResolvedValue(updated);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      within(await openCalendarActions(currentMonthClip.title!)).getByRole(
+        'menuitem',
+        { name: 'Edit' },
+      ),
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Edit clip' });
+    fireEvent.change(within(dialog).getByLabelText('Title'), {
+      target: { value: updated.title },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' }),
+    );
+
+    expect(
+      await screen.findByRole('button', { name: `Open ${updated.title}` }),
+    ).toBeTruthy();
+    expect(fake.update.mock.calls[0]?.[1]).not.toHaveProperty('createdAt');
+    expect(
+      screen.queryByRole('button', { name: 'Back to calendar' }),
+    ).toBeNull();
+  });
+
+  test('keeps an open day overflow coherent as the existing search filter changes', async () => {
+    render(<App client={fakeClient(currentDayClips()).client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Show 1 more clip for ${currentDayLabel()}`,
+      }),
+    );
+    expect(screen.getByText('3 matching clips')).toBeTruthy();
+
+    const searchbox = screen.getByRole('searchbox', { hidden: true });
+    fireEvent.change(searchbox, {
+      target: { value: 'unique overflow' },
+    });
+    expect(await screen.findByText('1 matching clip')).toBeTruthy();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    fireEvent.change(searchbox, {
+      target: { value: 'no matching calendar clip' },
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', { name: currentDayLabel() }),
+      ),
+    );
+  });
+
+  test('keeps overflow deletion keyboard-safe through the existing confirmation dialog', async () => {
+    const clipsForDay = currentDayClips();
+    render(<App client={fakeClient(clipsForDay).client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Show 1 more clip for ${currentDayLabel()}`,
+      }),
+    );
+    const dayDialog = screen.getByRole('dialog');
+    const trigger = within(dayDialog).getByRole('button', {
+      name: `Actions for ${clipsForDay[2]!.title!}`,
+    });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+
+    const confirmation = screen.getByRole('alertdialog', {
+      name: 'Delete clip?',
+    });
+    expect(document.body.contains(dayDialog)).toBe(true);
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: 'Cancel' }),
+    );
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.getByRole('dialog')).toBe(dayDialog);
+    await waitFor(() =>
+      expect(dayDialog.contains(document.activeElement)).toBe(true),
+    );
+  });
+
   test('rechecks launcher availability whenever the main window regains focus', async () => {
     vi.mocked(getLauncherStatus)
       .mockResolvedValueOnce({
@@ -83,7 +743,7 @@ describe('App', () => {
         errorCode: 'shortcut_unavailable',
       });
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     fireEvent.focus(window);
     expect((await screen.findByRole('alert')).textContent).toContain(
       'Another app',
@@ -99,7 +759,7 @@ describe('App', () => {
       }),
     );
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     const dialog = screen.getByRole('dialog', { name: 'Create clip' });
     const content = within(dialog).getByLabelText('Content');
@@ -146,7 +806,7 @@ describe('App', () => {
   });
   test('collapses to icons while preserving toolbar filters, counts and selected clips', async () => {
     render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
     const sidebar = screen
       .getByRole('button', { name: 'All Clips' })
       .closest<HTMLElement>('[data-slot="sidebar"]')!;
@@ -161,7 +821,7 @@ describe('App', () => {
     expect(within(sidebar).queryByLabelText('All Clips results')).toBeNull();
     expect(within(sidebar).queryByLabelText('Pinned results')).toBeNull();
     expect(
-      screen.getByRole('heading', { name: pinnedClip.title! }),
+      screen.getByRole('heading', { name: firstClip.title! }),
     ).toBeTruthy();
     expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe(
       'unions',
@@ -170,7 +830,7 @@ describe('App', () => {
     expect(privacy.tabIndex).toBe(0);
     expect(privacy.closest('[data-slot="tooltip-trigger"]')).not.toBeNull();
     expect(
-      screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
+      screen.getByText(firstClip.content, { selector: '.clip-content' }),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
     expect(screen.getByRole('region', { name: 'Pinned' })).toBeTruthy();
@@ -187,7 +847,7 @@ describe('App', () => {
 
   test('focuses toolbar search with Ctrl/Cmd+F and keeps primary actions usable', async () => {
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     const toggle = screen.getByRole('button', { name: 'Toggle Sidebar' });
     for (const modifier of [{ ctrlKey: true }, { metaKey: true }]) {
       fireEvent.click(toggle);
@@ -211,7 +871,7 @@ describe('App', () => {
   test('guards sidebar shortcuts and does not persist sidebar state', async () => {
     const cookieWrite = vi.spyOn(document, 'cookie', 'set');
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     const sidebar = screen
       .getByRole('button', { name: 'All Clips' })
       .closest('[data-slot="sidebar"]')!;
@@ -246,7 +906,7 @@ describe('App', () => {
   test('focuses search from the webview body before any control is clicked', async () => {
     const fake = fakeClient();
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true });
     expect(document.activeElement).toBe(screen.getByRole('searchbox'));
   });
@@ -259,7 +919,7 @@ describe('App', () => {
       }),
     );
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
     const row = screen.getByRole('button', { name: /Local-first notesA calm/ });
     fireEvent.keyDown(row, { key: 'c', ctrlKey: true, shiftKey: true });
     fireEvent.keyDown(row, { key: 'c', ctrlKey: true, shiftKey: true });
@@ -278,7 +938,7 @@ describe('App', () => {
       .mockRejectedValueOnce(new Error('sensitive details'))
       .mockResolvedValueOnce(undefined);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     expect((await screen.findByRole('alert')).textContent).toContain(
       'Try the action again',
@@ -292,15 +952,18 @@ describe('App', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  test('falls back to the newest remaining selection after refresh removes it', async () => {
+  test('returns to the calendar when refresh removes the explicitly selected clip', async () => {
     const fake = fakeClient([firstClip, pinnedClip]);
     fake.list
       .mockResolvedValueOnce([firstClip, pinnedClip])
       .mockResolvedValueOnce([pinnedClip]);
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: firstClip.title! });
+    await openClipFromSidebar(firstClip);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
-    await screen.findByRole('heading', { name: pinnedClip.title! });
+    await waitForCalendar();
+    expect(
+      screen.queryByRole('heading', { name: pinnedClip.title! }),
+    ).toBeNull();
     expect(
       screen
         .getByRole('button', { name: 'All Clips' })
@@ -310,7 +973,7 @@ describe('App', () => {
 
   test('uses an icon-only type filter with an accessible active state', async () => {
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
     const trigger = screen.getByRole('combobox', {
       name: 'Filter clips',
     });
@@ -375,7 +1038,7 @@ describe('App', () => {
       },
     ];
     render(<App client={fakeClient(typedClips).client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
     fireEvent.keyDown(screen.getByRole('option', { name: label }), {
@@ -397,7 +1060,7 @@ describe('App', () => {
 
   test('toggles directly between light and dark without opening a theme menu', async () => {
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     const lightButton = screen.getByRole('button', {
       name: 'Switch to dark mode',
@@ -435,7 +1098,7 @@ describe('App', () => {
     async (mode, accessibleName, iconClass) => {
       window.localStorage.setItem('ai-clip-memory-theme', mode);
       render(<App client={fakeClient().client} />);
-      await screen.findByRole('heading', { name: 'No clips yet' });
+      await waitForCalendar();
 
       const button = screen.getByRole('button', { name: accessibleName });
       expect(button.querySelector(`.${iconClass}`)).toBeTruthy();
@@ -451,7 +1114,7 @@ describe('App', () => {
     });
 
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     expect(
       screen
@@ -466,7 +1129,7 @@ describe('App', () => {
   test('renders Refresh as an accessible icon-only action and keeps its behavior', async () => {
     const fake = fakeClient();
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     const refresh = screen.getByRole('button', { name: 'Refresh' });
     expect(refresh.querySelector('.lucide-refresh-cw')).toBeTruthy();
@@ -479,12 +1142,14 @@ describe('App', () => {
     const fake = fakeClient([firstClip, pinnedClip]);
     render(<App client={fake.client} />);
     expect(screen.getByRole('combobox', { name: 'Filter clips' })).toBeTruthy();
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'CHATGPT unions' },
     });
     expect(
-      screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
+      screen.getByText(pinnedClip.title!, {
+        selector: '.memory-calendar-clip-label',
+      }),
     ).toBeTruthy();
     expect(
       screen
@@ -499,8 +1164,9 @@ describe('App', () => {
     fireEvent.keyDown(screen.getByRole('option', { name: 'Text' }), {
       key: 'Enter',
     });
+    expect(screen.getByText('No matching clips.')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'No matching clips' }),
+      screen.getByRole('heading', { name: currentMonthLabel }),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     expect(
@@ -510,10 +1176,14 @@ describe('App', () => {
     ).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
     expect(
-      screen.getByText(pinnedClip.content, { selector: '.clip-content' }),
+      screen.getByText(pinnedClip.title!, {
+        selector: '.memory-calendar-clip-label',
+      }),
     ).toBeTruthy();
     expect(
-      screen.queryByText(firstClip.content, { selector: '.clip-content' }),
+      screen.queryByText(firstClip.title!, {
+        selector: '.memory-calendar-clip-label',
+      }),
     ).toBeNull();
   });
 
@@ -530,7 +1200,7 @@ describe('App', () => {
       .mockResolvedValueOnce([firstClip])
       .mockResolvedValueOnce([captured, firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'local' },
     });
@@ -557,41 +1227,37 @@ describe('App', () => {
     expect(screen.queryByRole('heading', { name: 'No clips yet' })).toBeNull();
     expect(screen.queryByText('private path')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
+    expect(
+      screen.getByText(firstClip.content, { selector: '.clip-list-preview' }),
+    ).toBeTruthy();
   });
 
-  test('uses filter-specific guidance for empty results', async () => {
+  test('keeps the calendar shell visible when filters have no results', async () => {
     render(<App client={fakeClient([firstClip]).client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
 
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'missing' },
     });
+    expect(screen.getByText('No matching clips.')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'No matching clips' }),
+      screen.getByRole('heading', { name: currentMonthLabel }),
     ).toBeTruthy();
-    expect(screen.getByText('Try a different search.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
     fireEvent.keyDown(screen.getByRole('option', { name: 'Code' }), {
       key: 'Enter',
     });
-    expect(
-      screen.getByRole('heading', { name: 'No clips of this type' }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText('Choose another content type or clear the filter.'),
-    ).toBeTruthy();
+    expect(screen.getByText('No matching clips.')).toBeTruthy();
 
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'missing' },
     });
+    expect(screen.getByText('No matching clips.')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'No matching clips' }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText('Try a different search or content type.'),
+      screen.getByRole('heading', { name: currentMonthLabel }),
     ).toBeTruthy();
   });
 
@@ -601,18 +1267,18 @@ describe('App', () => {
       .mockResolvedValueOnce([firstClip])
       .mockRejectedValueOnce(new Error('private'));
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await screen.findByRole('button', { name: 'Retry' });
     expect(
-      screen.getByText(firstClip.content, { selector: '.clip-content' }),
+      screen.getByText(firstClip.content, { selector: '.clip-list-preview' }),
     ).toBeTruthy();
   });
 
   test('supports app search, result focus and copy shortcuts with editable/dialog guards', async () => {
     const fake = fakeClient([firstClip, pinnedClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
     const search = screen.getByRole('searchbox');
     const shell = search.closest('.app-shell')!;
     fireEvent.keyDown(shell, { key: 'f', ctrlKey: true });
@@ -648,22 +1314,18 @@ describe('App', () => {
     expect(fake.copyContent).toHaveBeenCalledTimes(1);
   });
 
-  test('shows the empty library after loading an empty database', async () => {
+  test('shows the calendar and sidebar empty guidance after loading an empty database', async () => {
     const { client } = fakeClient();
     render(<App client={client} />);
 
-    expect(
-      await screen.findByRole('heading', { name: 'No clips yet' }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText('Create a clip here or save one from your browser.'),
-    ).toBeTruthy();
+    expect(await waitForCalendar()).toBeTruthy();
+    expect(screen.getByText('No clips yet.')).toBeTruthy();
   });
 
   test('keeps local status in the sidebar and places primary controls in the main toolbar', async () => {
     const { client } = fakeClient();
     render(<App client={client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     const sidebar = screen
       .getByRole('navigation', { name: 'Clip library' })
@@ -694,7 +1356,7 @@ describe('App', () => {
 
   test('uses the main toolbar for retrieval controls without redundant view copy', async () => {
     render(<App client={fakeClient().client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     const toolbar = document.querySelector<HTMLElement>('.desktop-header');
     expect(toolbar).not.toBeNull();
@@ -744,12 +1406,10 @@ describe('App', () => {
     const { client } = fakeClient([firstClip, pinnedClip]);
     render(<App client={client} />);
 
+    expect(await waitForCalendar()).toBeTruthy();
     expect(
-      await screen.findByText(firstClip.content, { selector: '.clip-content' }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole('heading', { name: firstClip.title! }),
-    ).toBeTruthy();
+      screen.queryByText(firstClip.content, { selector: '.clip-content' }),
+    ).toBeNull();
     const allClipsItem = screen
       .getByRole('button', { name: 'All Clips' })
       .closest<HTMLElement>('[data-slot="sidebar-menu-item"]');
@@ -793,7 +1453,7 @@ describe('App', () => {
 
   test('browses clips through accessible accordion sections without clearing detail selection', async () => {
     render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
-    await screen.findByRole('heading', { name: firstClip.title! });
+    await openClipFromSidebar(firstClip);
 
     const all = screen.getByRole('button', { name: 'All Clips' });
     const pinned = screen.getByRole('button', { name: 'Pinned' });
@@ -828,13 +1488,13 @@ describe('App', () => {
     expect(pinned.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByLabelText('Pinned results')).toBeNull();
     expect(
-      screen.getByRole('heading', { name: pinnedClip.title! }),
+      screen.getByRole('heading', { name: firstClip.title! }),
     ).toBeTruthy();
   });
 
   test('restores the open library section after icon-collapse', async () => {
     render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
-    await screen.findByRole('heading', { name: firstClip.title! });
+    await openClipFromSidebar(firstClip);
 
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
     expect(screen.getByLabelText('Pinned results')).toBeTruthy();
@@ -845,14 +1505,14 @@ describe('App', () => {
     fireEvent.click(toggle);
     expect(screen.getByLabelText('Pinned results')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: pinnedClip.title! }),
+      screen.getByRole('heading', { name: firstClip.title! }),
     ).toBeTruthy();
   });
 
   test('filters the loaded list with case-insensitive substring search', async () => {
     const { client } = fakeClient([firstClip, pinnedClip]);
     render(<App client={client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await waitForCalendar();
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search clips' }), {
       target: { value: 'TYPESCRIPT' },
@@ -887,7 +1547,7 @@ describe('App', () => {
     const fake = fakeClient();
     fake.create.mockResolvedValue(created);
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     const dialog = screen.getByRole('dialog', { name: 'Create clip' });
@@ -933,7 +1593,7 @@ describe('App', () => {
       message: 'Content is required.',
     });
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     const dialog = screen.getByRole('dialog', { name: 'Create clip' });
@@ -966,7 +1626,7 @@ describe('App', () => {
     const fake = fakeClient([firstClip]);
     fake.update.mockResolvedValue(updated);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = screen.getByRole('dialog', { name: 'Edit clip' });
@@ -1012,7 +1672,7 @@ describe('App', () => {
   test('cancels create without calling the client', async () => {
     const fake = fakeClient();
     render(<App client={fake.client} />);
-    await screen.findByRole('heading', { name: 'No clips yet' });
+    await waitForCalendar();
 
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     const dialog = screen.getByRole('dialog', { name: 'Create clip' });
@@ -1029,7 +1689,7 @@ describe('App', () => {
   test('cancels deletion without calling the client', async () => {
     const fake = fakeClient([firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
 
     const deleteButton = screen.getByRole('button', { name: 'Delete' });
     expect((deleteButton as HTMLButtonElement).disabled).toBe(false);
@@ -1048,17 +1708,20 @@ describe('App', () => {
     expect(fake.delete).not.toHaveBeenCalled();
   });
 
-  test('deletes a clip after alert-dialog confirmation', async () => {
-    const fake = fakeClient([firstClip]);
+  test('deletes a selected clip into Calendar without selecting another clip', async () => {
+    const fake = fakeClient([firstClip, pinnedClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const alert = screen.getByRole('alertdialog', { name: 'Delete clip?' });
     fireEvent.click(within(alert).getByRole('button', { name: 'Delete clip' }));
 
     await waitFor(() => expect(fake.delete).toHaveBeenCalledWith(firstClip.id));
-    expect(screen.getByRole('heading', { name: 'No clips yet' })).toBeTruthy();
+    expect(await waitForCalendar()).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: pinnedClip.title! }),
+    ).toBeNull();
   });
 
   test('pins and unpins a clip', async () => {
@@ -1067,7 +1730,7 @@ describe('App', () => {
       .mockResolvedValueOnce({ ...firstClip, isPinned: true })
       .mockResolvedValueOnce(firstClip);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
 
     fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
     await screen.findByRole('button', { name: 'Unpin' });
@@ -1085,7 +1748,7 @@ describe('App', () => {
   test('copies content and opens the stored source through the client', async () => {
     const fake = fakeClient([firstClip]);
     render(<App client={fake.client} />);
-    await screen.findByText(firstClip.content, { selector: '.clip-content' });
+    await openClipFromSidebar(firstClip);
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     await screen.findByText('Clip copied.');
