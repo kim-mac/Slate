@@ -569,6 +569,58 @@ describe('App', () => {
     await waitFor(() => expect(document.activeElement).toBe(pinned));
   });
 
+  test('keeps a newer Detail selection when an earlier clip deletion resolves', async () => {
+    const secondClip: Clip = {
+      ...currentMonthClip,
+      id: 'calendar-selection-b',
+      title: 'Second selected clip',
+      content: 'Second clip remains selected.',
+    };
+    const fake = fakeClient([currentMonthClip, secondClip]);
+    let resolveDelete!: () => void;
+    fake.delete.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveDelete = resolve;
+      }),
+    );
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    await openClipFromSidebar(currentMonthClip);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      within(
+        screen.getByRole('alertdialog', { name: 'Delete clip?' }),
+      ).getByRole('button', { name: 'Delete clip' }),
+    );
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+
+    await openClipFromSidebar(secondClip);
+    const back = screen.getByRole('button', { name: 'Back to calendar' });
+    await waitFor(() => expect(document.activeElement).toBe(back));
+
+    resolveDelete();
+
+    await waitFor(() =>
+      expect(fake.delete).toHaveBeenCalledWith(currentMonthClip.id),
+    );
+    const sidebar = screen
+      .getByRole('navigation', { name: 'Clip library' })
+      .closest<HTMLElement>('[data-slot="sidebar"]')!;
+    await waitFor(() =>
+      expect(
+        within(sidebar).queryByText(currentMonthClip.content, {
+          selector: '.clip-list-preview',
+        }),
+      ).toBeNull(),
+    );
+    expect(
+      screen.getByText(secondClip.content, { selector: '.clip-content' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back to calendar' })).toBe(back);
+    expect(document.activeElement).toBe(back);
+  });
+
   test('opens the existing Detail from calendar Preview', async () => {
     render(<App client={fakeClient([currentMonthClip]).client} />);
     await waitForCalendar();

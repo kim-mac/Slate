@@ -146,6 +146,7 @@ export function App({ client = tauriClipClient }: AppProps) {
   const clipListRef = useRef<HTMLDivElement>(null);
   const [searchText, setSearchText] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const currentSelectedId = useRef<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('calendar');
   const currentWorkspaceMode = useRef<WorkspaceMode>('calendar');
   const [detailOrigin, setDetailOrigin] = useState<DetailOrigin | null>(null);
@@ -216,8 +217,13 @@ export function App({ client = tauriClipClient }: AppProps) {
     setContentType('all');
   }
 
-  function openClip(id: string, origin: DetailOrigin) {
+  function updateSelectedId(id: string | null) {
+    currentSelectedId.current = id;
     setSelectedId(id);
+  }
+
+  function openClip(id: string, origin: DetailOrigin) {
+    updateSelectedId(id);
     setDetailOrigin(origin);
     currentWorkspaceMode.current = 'detail';
     setWorkspaceMode('detail');
@@ -260,7 +266,7 @@ export function App({ client = tauriClipClient }: AppProps) {
         setClips((current) =>
           current.map((clip) => (clip.id === updated.id ? updated : clip)),
         );
-        setSelectedId(updated.id);
+        updateSelectedId(updated.id);
       } else {
         const created = await client.create(input);
         setClips((current) => [created, ...current]);
@@ -304,9 +310,11 @@ export function App({ client = tauriClipClient }: AppProps) {
     try {
       await client.delete(clip.id);
       setClips((current) => current.filter((item) => item.id !== clip.id));
-      setSelectedId(null);
-      setDetailOrigin(null);
-      returnToCalendar(null);
+      if (currentSelectedId.current === clip.id) {
+        updateSelectedId(null);
+        setDetailOrigin(null);
+        returnToCalendar(null);
+      }
       notify('Clip deleted.');
     } catch (deleteError) {
       setActionError(safeErrorMessage(deleteError));
@@ -397,7 +405,7 @@ export function App({ client = tauriClipClient }: AppProps) {
       clips.some((clip) => clip.id === selectedId)
     )
       return;
-    setSelectedId(null);
+    updateSelectedId(null);
     setDetailOrigin(null);
     returnToCalendar(null);
   }, [clips, isLoading, isRefreshing, selectedId, workspaceMode]);
