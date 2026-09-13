@@ -523,6 +523,52 @@ describe('App', () => {
     await waitFor(() => expect(document.activeElement).toBe(pinned));
   });
 
+  test('does not queue stale App focus when delayed Detail deletion resolves after Back', async () => {
+    const fake = fakeClient([currentMonthClip]);
+    let resolveDelete!: () => void;
+    fake.delete.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveDelete = resolve;
+      }),
+    );
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Open ${currentMonthClip.title!}`,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      within(
+        screen.getByRole('alertdialog', { name: 'Delete clip?' }),
+      ).getByRole('button', { name: 'Delete clip' }),
+    );
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to calendar' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', {
+          name: `Open ${currentMonthClip.title!}`,
+        }),
+      ),
+    );
+
+    resolveDelete();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', { name: currentDayLabel() }),
+      ),
+    );
+    const pinned = screen.getByRole('button', { name: 'Pinned' });
+    pinned.focus();
+    fireEvent.click(pinned);
+
+    await waitFor(() => expect(document.activeElement).toBe(pinned));
+  });
+
   test('opens the existing Detail from calendar Preview', async () => {
     render(<App client={fakeClient([currentMonthClip]).client} />);
     await waitForCalendar();

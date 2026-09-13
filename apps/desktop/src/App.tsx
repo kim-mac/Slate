@@ -147,6 +147,7 @@ export function App({ client = tauriClipClient }: AppProps) {
   const [searchText, setSearchText] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('calendar');
+  const currentWorkspaceMode = useRef<WorkspaceMode>('calendar');
   const [detailOrigin, setDetailOrigin] = useState<DetailOrigin | null>(null);
   const [visibleMonth, setVisibleMonth] = useState(() =>
     calendarMonthFromDate(new Date()),
@@ -218,11 +219,13 @@ export function App({ client = tauriClipClient }: AppProps) {
   function openClip(id: string, origin: DetailOrigin) {
     setSelectedId(id);
     setDetailOrigin(origin);
+    currentWorkspaceMode.current = 'detail';
     setWorkspaceMode('detail');
   }
 
   function returnToCalendar(origin: DetailOrigin | null = detailOrigin) {
-    if (workspaceMode === 'calendar') return;
+    if (currentWorkspaceMode.current === 'calendar') return;
+    currentWorkspaceMode.current = 'calendar';
     pendingCalendarFocus.current = {
       targetId: origin?.focusTargetId ?? null,
       fallbackId: origin?.fallbackFocusTargetId ?? null,
