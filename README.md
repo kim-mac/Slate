@@ -1,4 +1,4 @@
-# AI Clip Memory
+# Slate
 
 AI Clip Memory is a local-first Windows desktop application and Chromium
 extension for saving and reusing useful pieces of AI conversations. The MVP
