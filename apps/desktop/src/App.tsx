@@ -26,6 +26,7 @@ import {
 } from './lib/clipRetrieval';
 import { ClipFeedback } from './components/ClipFeedback';
 import { LauncherAvailability } from './components/LauncherAvailability';
+import { StartupSetting } from './components/StartupSetting';
 import {
   calendarClipElementId,
   MemoryCalendar,
@@ -40,6 +41,7 @@ import {
 } from './components/ui/select';
 
 import { tauriClipClient, type ClipClient } from './clipClient';
+import { tauriStartupClient, type StartupClient } from './startupClient';
 import { AppSidebar, type AppView } from './components/AppSidebar';
 import { ClipDetail } from './components/ClipDetail';
 import { clipListItemElementId } from './components/ClipList';
@@ -98,6 +100,7 @@ function initialThemeMode(): ThemeMode {
 
 interface AppProps {
   client?: ClipClient;
+  startupClient?: StartupClient;
 }
 
 function safeErrorMessage(error: unknown): string {
@@ -114,7 +117,10 @@ function safeErrorMessage(error: unknown): string {
   return 'The local clip operation could not be completed.';
 }
 
-export function App({ client = tauriClipClient }: AppProps) {
+export function App({
+  client = tauriClipClient,
+  startupClient = tauriStartupClient,
+}: AppProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<AppView>('all');
   const [expandedSection, setExpandedSection] = useState<Exclude<
@@ -782,6 +788,7 @@ export function App({ client = tauriClipClient }: AppProps) {
                       </dl>
                     </CardContent>
                   </Card>
+                  <StartupSetting client={startupClient} />
                 </section>
               )}
             </div>

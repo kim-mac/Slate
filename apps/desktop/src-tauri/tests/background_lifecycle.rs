@@ -1,0 +1,88 @@
+use ai_clip_memory_desktop_lib::background::{
+    should_show_main_window, startup_plan, MainCloseDecision, RuntimePolicy, TrayMenuAction,
+};
+
+#[test]
+fn ordinary_close_hides_until_an_explicit_quit_is_requested() {
+    let policy = RuntimePolicy::default();
+
+    assert_eq!(policy.main_close_decision(), MainCloseDecision::Hide);
+
+    policy.request_quit();
+    assert_eq!(policy.main_close_decision(), MainCloseDecision::AllowExit);
+}
+
+#[test]
+fn tray_initialization_can_only_be_claimed_once_per_process() {
+    let policy = RuntimePolicy::default();
+
+    assert!(policy.claim_tray_initialization());
+    assert!(!policy.claim_tray_initialization());
+}
+
+#[test]
+fn tray_menu_ids_map_only_to_the_two_approved_actions() {
+    assert_eq!(TrayMenuAction::from_id("open"), TrayMenuAction::Open);
+    assert_eq!(TrayMenuAction::from_id("quit"), TrayMenuAction::Quit);
+    assert_eq!(
+        TrayMenuAction::from_id("unexpected"),
+        TrayMenuAction::Ignore
+    );
+}
+
+#[test]
+fn exact_autostart_argument_hides_the_main_window_without_disabling_shortcuts() {
+    let autostart = startup_plan(["tin.exe", "--autostart"]);
+    let manual = startup_plan(["tin.exe"]);
+
+    assert!(autostart.start_hidden);
+    assert!(autostart.initialize_shortcuts);
+    assert!(!manual.start_hidden);
+    assert!(manual.initialize_shortcuts);
+    assert!(!should_show_main_window(autostart.start_hidden));
+    assert!(should_show_main_window(manual.start_hidden));
+}
+
+#[test]
+fn configured_main_window_starts_hidden_before_rust_applies_the_startup_plan() {
+    let config: serde_json::Value =
+        serde_json::from_str(include_str!("../tauri.conf.json")).expect("valid Tauri config");
+    let main = config["app"]["windows"]
+        .as_array()
+        .and_then(|windows| windows.iter().find(|window| window["label"] == "main"))
+        .expect("configured main window");
+
+    assert_eq!(main["visible"], false);
+}
+
+#[test]
+fn single_instance_interception_is_registered_before_other_runtime_plugins_and_setup() {
+    let source = include_str!("../src/lib.rs");
+    let single_instance = source
+        .find("tauri_plugin_single_instance::init")
+        .expect("single-instance plugin registration");
+    let autostart = source
+        .find("tauri_plugin_autostart::Builder")
+        .expect("autostart plugin registration");
+    let setup = source.find(".setup(|app|").expect("application setup");
+
+    assert!(single_instance < autostart);
+    assert!(single_instance < setup);
+}
+
+#[test]
+fn duplicate_activation_reuses_the_existing_main_window_presentation_path() {
+    let source = include_str!("../src/lib.rs");
+    let callback = source
+        .split("tauri_plugin_single_instance::init")
+        .nth(1)
+        .expect("single-instance callback");
+
+    assert!(callback.contains("background::show_main_window(app)"));
+}
+
+#[test]
+fn similar_arguments_do_not_trigger_hidden_startup() {
+    assert!(!startup_plan(["tin.exe", "--autostart=true"]).start_hidden);
+    assert!(!startup_plan(["tin.exe", "autostart"]).start_hidden);
+}

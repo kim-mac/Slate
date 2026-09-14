@@ -11,6 +11,8 @@ fn main() {
             "launcher_ready",
             "hide_launcher",
             "get_launcher_status",
+            "get_autostart_enabled",
+            "set_autostart_enabled",
         ]),
     ))
     .expect("failed to build application permissions");

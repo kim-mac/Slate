@@ -11,6 +11,8 @@
     "allow-set-clip-pinned",
     "allow-copy-clip-content",
     "allow-open-clip-source",
-    "allow-get-launcher-status"
+    "allow-get-launcher-status",
+    "allow-get-autostart-enabled",
+    "allow-set-autostart-enabled"
   ]
 }
