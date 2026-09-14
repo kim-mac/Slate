@@ -11,6 +11,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { App } from './App';
 import type { ClipClient } from './clipClient';
+import type { StartupClient } from './startupClient';
 import { getLauncherStatus } from './launcher/launcherClient';
 
 vi.mock('./launcher/launcherClient', () => ({
@@ -60,6 +61,13 @@ function fakeClient(initialClips: Clip[] = []) {
     openSource: vi.fn<ClipClient['openSource']>().mockResolvedValue(undefined),
   };
   return { client: methods satisfies ClipClient, ...methods };
+}
+
+function fakeStartupClient(enabled = false): StartupClient {
+  return {
+    getEnabled: vi.fn().mockResolvedValue(enabled),
+    setEnabled: vi.fn().mockImplementation(async (next) => next),
+  };
 }
 
 const currentMonthLabel = new Intl.DateTimeFormat(undefined, {
@@ -131,6 +139,22 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  test('shows the real Windows startup setting in Privacy & About', async () => {
+    render(
+      <App
+        client={fakeClient().client}
+        startupClient={fakeStartupClient(true)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Privacy & About' }));
+
+    const startup = await screen.findByRole('switch', {
+      name: 'Start Tin when I sign in to Windows',
+    });
+    expect(startup.getAttribute('aria-checked')).toBe('true');
+  });
+
   test('opens on the calendar and preserves an explicitly opened detail across section and filter changes', async () => {
     render(<App client={fakeClient([firstClip, pinnedClip]).client} />);
 

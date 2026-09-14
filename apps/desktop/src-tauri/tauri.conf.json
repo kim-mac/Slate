@@ -15,7 +15,8 @@
         "label": "main",
         "title": "AI Clip Memory",
         "width": 800,
-        "height": 500
+        "height": 500,
+        "visible": false
       }
     ],
     "security": {

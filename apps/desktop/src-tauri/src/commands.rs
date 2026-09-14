@@ -6,10 +6,31 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::clips::{Clip, ClipService, CreateClip, UpdateClip};
+use crate::platform;
 use crate::storage::{StorageBootstrapError, StorageState};
 
 const MAX_CONTENT_BYTES: usize = 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 16 * 1024;
+
+#[tauri::command]
+pub async fn get_autostart_enabled(app: AppHandle) -> Result<bool, CommandError> {
+    platform::get_autostart_enabled(&app).map_err(|_| {
+        CommandError::new(
+            "startup_state_unavailable",
+            "Windows startup status is unavailable.",
+        )
+    })
+}
+
+#[tauri::command]
+pub async fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<bool, CommandError> {
+    platform::set_autostart_enabled(&app, enabled).map_err(|_| {
+        CommandError::new(
+            "startup_update_failed",
+            "Windows startup could not be updated.",
+        )
+    })
+}
 
 #[derive(Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -16,7 +16,7 @@ fn permissions(value: &Value) -> BTreeSet<String> {
 }
 
 #[test]
-fn main_has_only_the_seven_library_commands_and_launcher_status() {
+fn main_has_only_library_launcher_status_and_autostart_commands() {
     let main = config("capabilities/default.json");
     assert_eq!(main["windows"], json!(["main"]));
     assert_eq!(
@@ -31,6 +31,8 @@ fn main_has_only_the_seven_library_commands_and_launcher_status() {
                 "allow-copy-clip-content",
                 "allow-open-clip-source",
                 "allow-get-launcher-status",
+                "allow-get-autostart-enabled",
+                "allow-set-autostart-enabled",
             ]
             .map(str::to_owned)
         )
@@ -72,6 +74,8 @@ fn every_application_command_is_registered_in_generated_acl_metadata() {
         "get_launcher_status",
         "launcher_ready",
         "hide_launcher",
+        "get_autostart_enabled",
+        "set_autostart_enabled",
     ] {
         let allow = format!("allow-{}", command.replace('_', "-"));
         assert_eq!(

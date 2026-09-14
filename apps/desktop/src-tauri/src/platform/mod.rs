@@ -4,7 +4,9 @@ mod windows;
 mod windows_capture;
 
 #[cfg(windows)]
-pub use windows::{initialize_launcher, present_launcher};
+pub use windows::{
+    get_autostart_enabled, initialize_launcher, present_launcher, set_autostart_enabled,
+};
 #[cfg(windows)]
 pub use windows_capture::capture_selected_text;
 
@@ -30,4 +32,17 @@ pub fn capture_selected_text(
     _app: &tauri::AppHandle,
 ) -> Result<crate::desktop_capture::CapturedSelection, crate::desktop_capture::CaptureFailure> {
     Err(crate::desktop_capture::CaptureFailure::Unavailable)
+}
+
+#[cfg(not(windows))]
+pub fn get_autostart_enabled(_app: &tauri::AppHandle) -> Result<bool, &'static str> {
+    Err("unsupported_platform")
+}
+
+#[cfg(not(windows))]
+pub fn set_autostart_enabled(
+    _app: &tauri::AppHandle,
+    _enabled: bool,
+) -> Result<bool, &'static str> {
+    Err("unsupported_platform")
 }
