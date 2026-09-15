@@ -1,4 +1,5 @@
 import type { Clip } from '@ai-clip-memory/shared';
+import { AppWindow } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { tauriClipClient, type ClipClient } from '../clipClient';
 import { Button } from '../components/ui/button';
@@ -16,6 +17,7 @@ import {
   type LauncherHost,
   type LauncherState,
 } from './launcherClient';
+import { observeThemePreference } from '../themePreference';
 
 type RetrievalClient = Pick<ClipClient, 'list' | 'copyContent'>;
 interface Props {
@@ -34,6 +36,7 @@ export function Launcher({
   const [connectionError, setConnectionError] = useState(false);
   const [connectionAttempt, setConnectionAttempt] = useState(0);
   const focusSearch = useRef<(() => void) | null>(null);
+  useEffect(() => observeThemePreference(), []);
   useEffect(
     () =>
       connectLauncher(
@@ -96,13 +99,17 @@ function LauncherSession({
   const active = useRef(true);
   const loadingGeneration = useRef(0);
   const copying = useRef(false);
+  const openingTin = useRef(false);
   const composing = useRef(false);
   const [clips, setClips] = useState<Clip[]>([]);
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<'load' | 'copy' | 'hide' | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<'load' | 'copy' | 'hide' | 'open' | null>(
+    null,
+  );
   const results = recentClips(clips).filter((clip) =>
     matchesSearch(clip, query),
   );
@@ -162,14 +169,29 @@ function LauncherSession({
     if (copying.current) return;
     copying.current = true;
     setBusy(true);
+    setCopied(false);
     setError(null);
     try {
       await client.copyContent(id);
-      if (active.current) await hide();
+      if (active.current) setCopied(true);
     } catch {
       if (active.current) setError('copy');
     } finally {
       copying.current = false;
+      if (active.current) setBusy(false);
+    }
+  }
+  async function openTin() {
+    if (openingTin.current) return;
+    openingTin.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      await host.openTin(session);
+    } catch {
+      if (active.current) setError('open');
+    } finally {
+      openingTin.current = false;
       if (active.current) setBusy(false);
     }
   }
@@ -209,6 +231,21 @@ function LauncherSession({
   }
   return (
     <main className="launcher-shell" onKeyDown={onKeyDown}>
+      <header className="launcher-header" data-tauri-drag-region>
+        <span className="launcher-heading" data-tauri-drag-region>
+          Quick Search
+        </span>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Open Tin"
+          title="Open Tin"
+          disabled={busy}
+          onClick={() => void openTin()}
+        >
+          <AppWindow aria-hidden="true" />
+        </Button>
+      </header>
       <Input
         ref={searchRef}
         type="search"
@@ -236,7 +273,9 @@ function LauncherSession({
           <span>
             {error === 'copy'
               ? 'Clip could not be copied.'
-              : 'Quick search could not close.'}
+              : error === 'open'
+                ? 'Tin could not be opened.'
+                : 'Quick search could not close.'}
           </span>
           <Button
             variant="outline"
@@ -245,10 +284,15 @@ function LauncherSession({
             onClick={() => {
               if (error === 'copy') {
                 if (selected) void copy(selected.id);
-              } else void hide();
+              } else if (error === 'open') void openTin();
+              else void hide();
             }}
           >
-            {error === 'copy' ? 'Retry copy' : 'Retry closing'}
+            {error === 'copy'
+              ? 'Retry copy'
+              : error === 'open'
+                ? 'Retry opening'
+                : 'Retry closing'}
           </Button>
         </div>
       )}
@@ -296,15 +340,18 @@ function LauncherSession({
               role="option"
               aria-selected={clip.id === selected?.id}
               className="launcher-result"
-              onMouseDown={(event) => event.preventDefault()}
+              onMouseDown={() => setSelectedId(clip.id)}
               onClick={() => {
                 setSelectedId(clip.id);
-                searchRef.current?.focus();
+                if (window.getSelection()?.isCollapsed !== false)
+                  searchRef.current?.focus();
               }}
             >
               <div className="launcher-title">{displayTitle(clip)}</div>
               <div className="launcher-preview">
-                {clipPreview(clip.content)}
+                {clip.id === selected?.id
+                  ? clip.content
+                  : clipPreview(clip.content)}
               </div>
               <div className="launcher-meta">
                 {clip.sourceApp || 'Local clip'} ·{' '}
@@ -315,12 +362,16 @@ function LauncherSession({
         )}
       </div>
       <footer className="launcher-footer">
-        <span>
+        <span aria-live="polite">
           {busy
             ? 'Copying…'
-            : `${results.length} ${results.length === 1 ? 'clip' : 'clips'} · Local only`}
+            : copied
+              ? 'Copied'
+              : `${results.length} ${results.length === 1 ? 'clip' : 'clips'} · Local only`}
         </span>
-        <span>↑↓ Select · Enter Copy · Esc Close</span>
+        <span>
+          ↑↓ Select · Enter Copy all · Ctrl+C Copy selection · Esc Close
+        </span>
       </footer>
     </main>
   );

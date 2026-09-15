@@ -51,8 +51,10 @@ fn launcher_has_only_read_copy_lifecycle_and_event_subscriptions() {
                 "allow-copy-clip-content",
                 "allow-launcher-ready",
                 "allow-hide-launcher",
+                "allow-open-tin-from-launcher",
                 "core:event:allow-listen",
                 "core:event:allow-unlisten",
+                "core:window:allow-start-dragging",
             ]
             .map(str::to_owned)
         )
@@ -74,6 +76,7 @@ fn every_application_command_is_registered_in_generated_acl_metadata() {
         "get_launcher_status",
         "launcher_ready",
         "hide_launcher",
+        "open_tin_from_launcher",
         "get_autostart_enabled",
         "set_autostart_enabled",
     ] {

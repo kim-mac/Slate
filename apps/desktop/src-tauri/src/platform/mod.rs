@@ -23,6 +23,7 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
 pub fn present_launcher(
     _app: &tauri::AppHandle,
     _window: &tauri::WebviewWindow,
+    _needs_initial_position: bool,
 ) -> Result<(), &'static str> {
     Err("launcher_unavailable")
 }

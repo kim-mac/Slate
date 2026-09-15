@@ -8,7 +8,9 @@
     "allow-copy-clip-content",
     "allow-launcher-ready",
     "allow-hide-launcher",
+    "allow-open-tin-from-launcher",
     "core:event:allow-listen",
-    "core:event:allow-unlisten"
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging"
   ]
 }

@@ -73,30 +73,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from './components/ui/tooltip';
+import {
+  persistThemeMode,
+  readThemeMode,
+  type ThemeMode,
+} from './themePreference';
 
 type FormMode = { type: 'create' } | { type: 'edit'; clip: Clip };
-type ThemeMode = 'light' | 'dark';
 type WorkspaceMode = 'calendar' | 'detail';
 type DetailOrigin = {
   type: 'calendar' | 'sidebar' | 'create';
   focusTargetId?: string;
   fallbackFocusTargetId?: string;
 };
-
-const THEME_STORAGE_KEY = 'ai-clip-memory-theme';
-
-function initialThemeMode(): ThemeMode {
-  try {
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark') return stored;
-  } catch {
-    // Continue with the local OS preference when storage is unavailable.
-  }
-
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
-}
 
 interface AppProps {
   client?: ClipClient;
@@ -146,7 +135,7 @@ export function App({
   const [contentType, setContentType] = useState<ClipContentType | 'all'>(
     'all',
   );
-  const [themeMode, setThemeMode] = useState<ThemeMode>(initialThemeMode);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(readThemeMode);
   const searchRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLElement>(null);
   const clipListRef = useRef<HTMLDivElement>(null);
@@ -366,16 +355,10 @@ export function App({
   }
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.dataset.theme = themeMode;
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
-    } catch {
-      // Theme switching still works when local preference storage is unavailable.
-    }
+    persistThemeMode(themeMode);
 
     return () => {
-      delete root.dataset.theme;
+      delete document.documentElement.dataset.theme;
     };
   }, [themeMode]);
 

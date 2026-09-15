@@ -67,6 +67,7 @@ pub fn run() {
             commands::open_clip_source,
             launcher::launcher_ready,
             launcher::hide_launcher,
+            launcher::open_tin_from_launcher,
             launcher::get_launcher_status,
             commands::get_autostart_enabled,
             commands::set_autostart_enabled,

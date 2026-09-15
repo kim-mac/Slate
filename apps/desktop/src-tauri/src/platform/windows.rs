@@ -277,34 +277,37 @@ fn capture_shortcut() -> Shortcut {
 pub fn present_launcher(
     app: &tauri::AppHandle,
     window: &WebviewWindow,
+    needs_initial_position: bool,
 ) -> Result<(), &'static str> {
     // A visible activation focuses the existing session without moving the UI.
     if !window.is_visible().map_err(|_| "launcher_unavailable")? {
-        let monitor = app
-            .cursor_position()
-            .ok()
-            .and_then(|point| app.monitor_from_point(point.x, point.y).ok().flatten())
-            .or_else(|| {
-                app.get_webview_window("main")
-                    .and_then(|w| w.current_monitor().ok().flatten())
-            })
-            .or_else(|| app.primary_monitor().ok().flatten())
+        if needs_initial_position {
+            let monitor = app
+                .cursor_position()
+                .ok()
+                .and_then(|point| app.monitor_from_point(point.x, point.y).ok().flatten())
+                .or_else(|| {
+                    app.get_webview_window("main")
+                        .and_then(|w| w.current_monitor().ok().flatten())
+                })
+                .or_else(|| app.primary_monitor().ok().flatten())
+                .ok_or("launcher_unavailable")?;
+            let area = monitor.work_area();
+            let bounds = launcher::launcher_bounds(
+                area.position.x,
+                area.position.y,
+                area.size.width,
+                area.size.height,
+                monitor.scale_factor(),
+            )
             .ok_or("launcher_unavailable")?;
-        let area = monitor.work_area();
-        let bounds = launcher::launcher_bounds(
-            area.position.x,
-            area.position.y,
-            area.size.width,
-            area.size.height,
-            monitor.scale_factor(),
-        )
-        .ok_or("launcher_unavailable")?;
-        window
-            .set_position(PhysicalPosition::new(bounds.x, bounds.y))
-            .map_err(|_| "launcher_unavailable")?;
-        window
-            .set_size(PhysicalSize::new(bounds.width, bounds.height))
-            .map_err(|_| "launcher_unavailable")?;
+            window
+                .set_position(PhysicalPosition::new(bounds.x, bounds.y))
+                .map_err(|_| "launcher_unavailable")?;
+            window
+                .set_size(PhysicalSize::new(bounds.width, bounds.height))
+                .map_err(|_| "launcher_unavailable")?;
+        }
         window.show().map_err(|_| "launcher_unavailable")?;
     }
     window.set_focus().map_err(|_| "launcher_unavailable")?;
