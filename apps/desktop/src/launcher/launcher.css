@@ -12,6 +12,22 @@
   color: var(--foreground);
   border: 1px solid var(--border);
 }
+.launcher-header {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  user-select: none;
+}
+.launcher-heading {
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  cursor: grab;
+}
 .launcher-results {
   flex: 1;
   min-height: 0;
@@ -44,6 +60,15 @@
   font-size: 13px;
   margin-top: 2px;
   color: var(--muted-foreground);
+  user-select: text;
+  cursor: text;
+}
+.launcher-result[aria-selected='true'] .launcher-preview {
+  max-height: 5.25em;
+  overflow: auto;
+  text-overflow: clip;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .launcher-meta {
   font-size: 11px;

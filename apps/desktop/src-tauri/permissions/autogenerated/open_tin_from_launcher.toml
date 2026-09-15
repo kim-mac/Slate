@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-tin-from-launcher"
+description = "Enables the open_tin_from_launcher command without any pre-configured scope."
+commands.allow = ["open_tin_from_launcher"]
+
+[[permission]]
+identifier = "deny-open-tin-from-launcher"
+description = "Denies the open_tin_from_launcher command without any pre-configured scope."
+commands.deny = ["open_tin_from_launcher"]

@@ -46,6 +46,7 @@ struct LauncherPolicy {
     exiting: bool,
     hiding: bool,
     initializing: bool,
+    positioned: bool,
 }
 impl LauncherPolicy {
     fn new(status: LauncherStatus) -> Self {
@@ -61,6 +62,7 @@ impl LauncherPolicy {
             exiting: false,
             hiding: false,
             initializing: false,
+            positioned: false,
         }
     }
     fn snapshot(&self) -> LauncherSnapshot {
@@ -123,6 +125,12 @@ impl LauncherPolicy {
     }
     fn status(&self) -> LauncherStatus {
         self.status.clone()
+    }
+    fn needs_initial_position(&self) -> bool {
+        !self.positioned
+    }
+    fn mark_positioned(&mut self) {
+        self.positioned = true;
     }
 }
 
@@ -205,8 +213,14 @@ async fn on_main<T: Send + 'static>(
 
 fn apply_snapshot(app: &tauri::AppHandle, snapshot: LauncherSnapshot) -> Result<(), &'static str> {
     let window = app.get_webview_window(LABEL).ok_or(UNAVAILABLE)?;
+    let needs_initial_position = app
+        .state::<LauncherController>()
+        .0
+        .lock()
+        .map_err(|_| UNAVAILABLE)?
+        .needs_initial_position();
     let result = if snapshot.visible {
-        crate::platform::present_launcher(app, &window)
+        crate::platform::present_launcher(app, &window, needs_initial_position)
     } else {
         window.hide().map_err(|_| UNAVAILABLE)
     };
@@ -224,6 +238,13 @@ fn apply_snapshot(app: &tauri::AppHandle, snapshot: LauncherSnapshot) -> Result<
             },
         );
         return Err(UNAVAILABLE);
+    }
+    if snapshot.visible && needs_initial_position {
+        app.state::<LauncherController>()
+            .0
+            .lock()
+            .map_err(|_| UNAVAILABLE)?
+            .mark_positioned();
     }
     window.emit(EVENT, snapshot).map_err(|_| UNAVAILABLE)
 }
@@ -321,6 +342,18 @@ pub async fn hide_launcher(app: tauri::AppHandle, session: u64) -> Result<(), &'
 }
 
 #[tauri::command]
+pub async fn open_tin_from_launcher(
+    app: tauri::AppHandle,
+    session: u64,
+) -> Result<(), &'static str> {
+    on_main(app, move |app| {
+        crate::background::show_main_window(app)?;
+        hide_session(app, session)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn get_launcher_status(app: tauri::AppHandle) -> LauncherStatus {
     // WebView initialization can pump IPC before setup finishes. Wait off the
     // event loop so a main-window status request cannot observe partial setup.
@@ -404,6 +437,15 @@ mod tests {
         assert_eq!(policy.shortcut(true), None);
         assert_eq!(policy.shortcut(false), None);
         assert_eq!(policy.shortcut(true), Some(first));
+    }
+
+    #[test]
+    fn launcher_position_is_initialized_only_once_per_process() {
+        let mut policy = available();
+
+        assert!(policy.needs_initial_position());
+        policy.mark_positioned();
+        assert!(!policy.needs_initial_position());
     }
 
     #[test]

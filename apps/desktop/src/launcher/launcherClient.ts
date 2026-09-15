@@ -14,12 +14,14 @@ export interface LauncherHost {
   listen(handler: (state: LauncherState) => void): Promise<() => void>;
   ready(): Promise<LauncherState>;
   hide(session: number): Promise<void>;
+  openTin(session: number): Promise<void>;
 }
 export const tauriLauncherHost: LauncherHost = {
   listen: (handler) =>
     listen<LauncherState>('launcher-state', (event) => handler(event.payload)),
   ready: () => invoke<LauncherState>('launcher_ready'),
   hide: (session) => invoke<void>('hide_launcher', { session }),
+  openTin: (session) => invoke<void>('open_tin_from_launcher', { session }),
 };
 export const getLauncherStatus = () =>
   invoke<LauncherStatus>('get_launcher_status');

@@ -40,6 +40,7 @@ function setup() {
     }),
     ready: vi.fn(async () => ({ session: 1, visible: true })),
     hide: vi.fn(async () => undefined),
+    openTin: vi.fn(async () => undefined),
   };
   const client = {
     list: vi.fn(async () => [older, newer]),
@@ -55,6 +56,53 @@ function setup() {
   };
 }
 afterEach(cleanup);
+afterEach(() => {
+  window.localStorage.clear();
+  delete document.documentElement.dataset.theme;
+});
+
+test.each(['light', 'dark'] as const)(
+  'uses the persisted %s desktop theme',
+  async (theme) => {
+    window.localStorage.setItem('ai-clip-memory-theme', theme);
+    setup();
+
+    await screen.findByRole('searchbox');
+    expect(document.documentElement.dataset.theme).toBe(theme);
+  },
+);
+
+test('updates an open launcher when the shared desktop theme preference changes', async () => {
+  window.localStorage.setItem('ai-clip-memory-theme', 'light');
+  setup();
+  await screen.findByRole('searchbox');
+
+  window.localStorage.setItem('ai-clip-memory-theme', 'dark');
+  window.dispatchEvent(
+    new StorageEvent('storage', { key: 'ai-clip-memory-theme' }),
+  );
+
+  expect(document.documentElement.dataset.theme).toBe('dark');
+});
+
+test('limits dragging to the header and opens Tin through the launcher host', async () => {
+  const { host } = setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+
+  const header = screen.getByRole('banner');
+  expect(header.hasAttribute('data-tauri-drag-region')).toBe(true);
+  expect(
+    screen.getByRole('searchbox').hasAttribute('data-tauri-drag-region'),
+  ).toBe(false);
+  expect(
+    document
+      .querySelector('.launcher-preview')
+      ?.hasAttribute('data-tauri-drag-region'),
+  ).toBe(false);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Open Tin' }));
+  await waitFor(() => expect(host.openTin).toHaveBeenCalledWith(1));
+});
 test('restores search focus when the native webview receives focus after rendering', async () => {
   setup();
   const search = await screen.findByRole('searchbox');
@@ -96,11 +144,11 @@ test('a failed hide can be retried without copying again', async () => {
   vi.mocked(host.hide).mockRejectedValueOnce(
     new Error('private native detail'),
   );
-  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' });
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' });
   await screen.findByRole('button', { name: 'Retry closing' });
   fireEvent.click(screen.getByRole('button', { name: 'Retry closing' }));
   await waitFor(() => expect(host.hide).toHaveBeenCalledTimes(2));
-  expect(client.copyContent).toHaveBeenCalledTimes(1);
+  expect(client.copyContent).not.toHaveBeenCalled();
 });
 test('focuses search, orders recent clips, uses existing multi-term rules and keeps typing during navigation', async () => {
   const { client } = setup();
@@ -120,7 +168,7 @@ test('focuses search, orders recent clips, uses existing multi-term rules and ke
   fireEvent.keyDown(search, { key: 'Enter' });
   await waitFor(() => expect(client.copyContent).toHaveBeenCalledWith('older'));
 });
-test('deduplicates Enter and hides only after successful copy', async () => {
+test('deduplicates Enter, stays open, and supports repeated copies', async () => {
   const { client, host } = setup();
   await screen.findByRole('option', { name: /Recent note/ });
   let resolve!: () => void;
@@ -140,7 +188,17 @@ test('deduplicates Enter and hides only after successful copy', async () => {
   expect(client.copyContent).toHaveBeenCalledTimes(1);
   expect(host.hide).not.toHaveBeenCalled();
   await act(async () => resolve());
-  expect(host.hide).toHaveBeenCalledWith(1);
+  expect(host.hide).not.toHaveBeenCalled();
+  expect(screen.getByText('Copied')).toBeTruthy();
+
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.keyDown(search, { key: 'Enter' });
+  await waitFor(() => expect(client.copyContent).toHaveBeenCalledTimes(2));
+  expect(client.copyContent.mock.calls.map(([id]) => id)).toEqual([
+    'newer',
+    'older',
+  ]);
+  expect(host.hide).not.toHaveBeenCalled();
 });
 test('Escape hides without copying; new sessions reload/reset, repeated invocation only focuses', async () => {
   const { client, host, emit } = setup();
@@ -169,7 +227,16 @@ test('copy failure stays open, hides raw errors and supports retry', async () =>
   expect(error.textContent).not.toContain('sensitive');
   expect(host.hide).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Retry copy' }));
-  await waitFor(() => expect(host.hide).toHaveBeenCalledWith(1));
+  await waitFor(() => expect(client.copyContent).toHaveBeenCalledTimes(2));
+  expect(host.hide).not.toHaveBeenCalled();
+});
+
+test('clip preview text remains naturally selectable', async () => {
+  setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+  const preview = document.querySelector('.launcher-preview');
+  expect(preview).not.toBeNull();
+  expect(fireEvent.mouseDown(preview!)).toBe(true);
 });
 
 test('a copy error with no selected result cannot dismiss the launcher through retry', async () => {
@@ -228,5 +295,9 @@ test('presents content-type labels and Windows shortcuts consistently', async ()
   const recent = await screen.findByRole('option', { name: /Recent note/ });
   expect(recent.textContent).toContain('Text');
   expect(recent.textContent).not.toContain('· text');
-  expect(screen.getByText('↑↓ Select · Enter Copy · Esc Close')).toBeTruthy();
+  expect(
+    screen.getByText(
+      '↑↓ Select · Enter Copy all · Ctrl+C Copy selection · Esc Close',
+    ),
+  ).toBeTruthy();
 });

@@ -10,6 +10,7 @@ fn main() {
             "open_clip_source",
             "launcher_ready",
             "hide_launcher",
+            "open_tin_from_launcher",
             "get_launcher_status",
             "get_autostart_enabled",
             "set_autostart_enabled",

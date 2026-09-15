@@ -17,6 +17,7 @@ test('subscribes before ready and ignores a ready snapshot superseded by an even
         }),
     ),
     hide: vi.fn(),
+    openTin: vi.fn(),
   } as LauncherHost;
   const receive = vi.fn();
   const disconnect = connectLauncher(host, receive, vi.fn());
@@ -39,6 +40,7 @@ test('cleans up a subscription which resolves after unmount without calling read
       }),
     ready: vi.fn(),
     hide: vi.fn(),
+    openTin: vi.fn(),
   };
   const disconnect = connectLauncher(host, vi.fn(), vi.fn());
   disconnect();
