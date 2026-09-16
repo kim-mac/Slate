@@ -58,7 +58,16 @@ test('delegates launcher scrolling to the shared custom ScrollArea', () => {
     /\.launcher-results\s*\{[^}]*overflow:\s*auto/s,
   );
   expect(stylesheet).toMatch(
-    /\.launcher-preview-scroll\s*\{[^}]*max-height:\s*5\.25em/s,
+    /\.launcher-results-content\s*\{[^}]*padding-right:\s*12px/s,
+  );
+  expect(stylesheet).toMatch(
+    /\.launcher-preview-scroll\s*\{[^}]*height:\s*5\.25em/s,
+  );
+});
+
+test('uses a background-only hover state for unselected pointer results', () => {
+  expect(stylesheet).toMatch(
+    /@media\s*\(hover:\s*hover\)[^{]*\{[\s\S]*\.launcher-result:not\(\[aria-selected='true'\]\):hover\s*\{[^}]*background:/,
   );
 });
 ```
@@ -188,6 +197,7 @@ Update `launcher.css` with focused rules:
   width: 14px;
   height: 14px;
   flex: none;
+  pointer-events: none;
   cursor: grab;
 }
 .launcher-header-actions {
@@ -200,14 +210,22 @@ Update `launcher.css` with focused rules:
   min-height: 0;
   overscroll-behavior: contain;
 }
+.launcher-results-content {
+  padding-right: 12px;
+}
 .launcher-preview-scroll {
-  max-height: 5.25em;
+  height: 5.25em;
 }
 .launcher-preview-content {
   display: block;
   padding-right: 10px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+@media (hover: hover) {
+  .launcher-result:not([aria-selected='true']):hover {
+    background: color-mix(in srgb, var(--accent) 60%, transparent);
+  }
 }
 ```
 
@@ -289,6 +307,8 @@ Confirm:
 - the footer no longer says **Local only**;
 - the results list shows only the shadcn scrollbar;
 - the expanded preview shows only the shadcn scrollbar;
+- the results scrollbar sits in a right gutter instead of overlapping selected cards;
+- unselected clips gain a subtle background on pointer hover without gaining the selected border;
 - both scroll areas are vertical-only and mouse wheel/trackpad scrolling remains usable;
 - clip text remains selectable and Ctrl+C copies only the selection;
 - Enter still copies the whole selected clip and keeps the launcher open;
