@@ -15,6 +15,7 @@ Make the Quick Search launcher easier to understand and close, while aligning it
   - the main results list;
   - the expanded selected-clip preview.
 - Keep both scroll areas vertical-only and rely on the existing packaged native-scrollbar suppression.
+- Give unselected clip results a subtle background-only hover state on pointer-capable devices. Keep the selected result visually stronger through its existing background and border.
 
 ## Accessibility and Interaction
 
@@ -23,6 +24,7 @@ Make the Quick Search launcher easier to understand and close, while aligning it
 - Escape continues to hide the launcher.
 - Search focus, arrow navigation, Enter whole-clip copy, normal Ctrl+C selection copy, retry states, and repeated-copy behavior remain unchanged.
 - Scrollbar changes must not prevent selecting clip text.
+- Hover styling must not alter layout, selection state, or touch behavior.
 
 ## Scope Boundaries
 
