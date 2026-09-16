@@ -241,7 +241,86 @@ pnpm --filter @ai-clip-memory/desktop test -- --run src/launcher/Launcher.test.t
 
 Expected: all focused launcher tests PASS.
 
-### Task 3: Run launcher regression and repository gates
+### Task 3: Require explicit launcher selection
+
+**Files:**
+- Modify: `apps/desktop/src/launcher/Launcher.test.tsx`
+- Modify: `apps/desktop/src/launcher/Launcher.tsx`
+
+- [ ] **Step 1: Add failing explicit-selection coverage**
+
+Add a test that proves the launcher has no initial active option, Enter is inert, and first/last keyboard entry works:
+
+```tsx
+test('starts unselected and enters results explicitly from either direction', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  const options = await screen.findAllByRole('option');
+
+  expect(options.every((option) => option.getAttribute('aria-selected') === 'false')).toBe(true);
+  expect(search.getAttribute('aria-activedescendant')).toBeNull();
+  fireEvent.keyDown(search, { key: 'Enter' });
+  expect(client.copyContent).not.toHaveBeenCalled();
+
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  expect(options[0]?.getAttribute('aria-selected')).toBe('true');
+
+  fireEvent.change(search, { target: { value: ' ' } });
+  fireEvent.keyDown(search, { key: 'ArrowUp' });
+  expect(options.at(-1)?.getAttribute('aria-selected')).toBe('true');
+});
+```
+
+Update existing copy, retry, IME, and navigation tests so they explicitly select a result before expecting Enter to copy. After a query change, assert Enter remains inert until Down selects the filtered result.
+
+- [ ] **Step 2: Run the launcher tests and verify the new behavior fails**
+
+```powershell
+pnpm --filter @ai-clip-memory/desktop test -- --run src/launcher/Launcher.test.tsx
+```
+
+Expected: FAIL because the first result is still implicitly selected.
+
+- [ ] **Step 3: Remove the implicit selection fallback**
+
+Change the selected result calculation to:
+
+```tsx
+const selected = selectedId
+  ? results.find((clip) => clip.id === selectedId)
+  : undefined;
+```
+
+For arrow navigation, use explicit entry behavior when the current index is `-1`:
+
+```tsx
+const index = results.findIndex((clip) => clip.id === selected?.id);
+const next =
+  index === -1
+    ? event.key === 'ArrowDown'
+      ? 0
+      : results.length - 1
+    : Math.max(
+        0,
+        Math.min(
+          results.length - 1,
+          index + (event.key === 'ArrowDown' ? 1 : -1),
+        ),
+      );
+setSelectedId(results[next]?.id ?? null);
+```
+
+Keep the existing Enter guard on `selected`, so Enter naturally does nothing before explicit selection.
+
+- [ ] **Step 4: Run launcher tests and verify they pass**
+
+```powershell
+pnpm --filter @ai-clip-memory/desktop test -- --run src/launcher/Launcher.test.tsx
+```
+
+Expected: all launcher and desktop tests PASS.
+
+### Task 4: Run launcher regression and repository gates
 
 **Files:**
 - Verify only; no expected source changes.
@@ -291,7 +370,7 @@ git diff --name-status
 
 Expected: only launcher React/CSS/tests and the approved planning documents are changed; no Rust, capability, dependency, lockfile, persistence, extension, or generated build artifact changes.
 
-### Task 4: Manual launcher verification and checkpoint
+### Task 5: Manual launcher verification and checkpoint
 
 **Files:**
 - Verify only; no expected source changes.
@@ -309,6 +388,8 @@ Confirm:
 - the expanded preview shows only the shadcn scrollbar;
 - the results scrollbar sits in a right gutter instead of overlapping selected cards;
 - unselected clips gain a subtle background on pointer hover without gaining the selected border;
+- the launcher opens with no selected or expanded clip;
+- Enter does nothing before selection, Down selects the first result, and Up selects the last result;
 - both scroll areas are vertical-only and mouse wheel/trackpad scrolling remains usable;
 - clip text remains selectable and Ctrl+C copies only the selection;
 - Enter still copies the whole selected clip and keeps the launcher open;
