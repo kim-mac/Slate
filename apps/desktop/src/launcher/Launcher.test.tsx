@@ -103,6 +103,34 @@ test('limits dragging to the header and opens Tin through the launcher host', as
   fireEvent.click(screen.getByRole('button', { name: 'Open Tin' }));
   await waitFor(() => expect(host.openTin).toHaveBeenCalledWith(1));
 });
+
+test('shows a drag affordance and closes through the existing hide path', async () => {
+  const { host, client } = setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+
+  const handle = document.querySelector('.launcher-drag-handle');
+  expect(handle).not.toBeNull();
+  expect(handle?.getAttribute('aria-hidden')).toBe('true');
+  expect(handle?.hasAttribute('data-tauri-drag-region')).toBe(true);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Close Quick Search' }));
+
+  await waitFor(() => expect(host.hide).toHaveBeenCalledWith(1));
+  expect(client.copyContent).not.toHaveBeenCalled();
+});
+
+test('removes the Local only footer copy and uses shared scroll areas', async () => {
+  setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+
+  expect(screen.queryByText(/Local only/)).toBeNull();
+  expect(
+    document.querySelectorAll('[data-slot="scroll-area"]').length,
+  ).toBeGreaterThanOrEqual(2);
+  expect(
+    document.querySelectorAll('[data-slot="scroll-area-viewport"]').length,
+  ).toBeGreaterThanOrEqual(2);
+});
 test('restores search focus when the native webview receives focus after rendering', async () => {
   setup();
   const search = await screen.findByRole('searchbox');

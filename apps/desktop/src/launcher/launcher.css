@@ -23,15 +23,28 @@
 .launcher-heading {
   min-width: 0;
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   font-weight: 600;
   color: var(--muted-foreground);
   cursor: grab;
 }
+.launcher-drag-handle {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  cursor: grab;
+}
+.launcher-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .launcher-results {
   flex: 1;
   min-height: 0;
-  overflow: auto;
   overscroll-behavior: contain;
 }
 .launcher-result {
@@ -63,10 +76,13 @@
   user-select: text;
   cursor: text;
 }
-.launcher-result[aria-selected='true'] .launcher-preview {
+.launcher-preview-scroll {
   max-height: 5.25em;
-  overflow: auto;
   text-overflow: clip;
+}
+.launcher-preview-content {
+  display: block;
+  padding-right: 10px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

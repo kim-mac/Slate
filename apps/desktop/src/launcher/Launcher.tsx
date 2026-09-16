@@ -1,9 +1,10 @@
 import type { Clip } from '@ai-clip-memory/shared';
-import { AppWindow } from 'lucide-react';
+import { AppWindow, GripVertical, X } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { tauriClipClient, type ClipClient } from '../clipClient';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { ScrollArea } from '../components/ui/scroll-area';
 import {
   clipPreview,
   displayTitle,
@@ -233,18 +234,34 @@ function LauncherSession({
     <main className="launcher-shell" onKeyDown={onKeyDown}>
       <header className="launcher-header" data-tauri-drag-region>
         <span className="launcher-heading" data-tauri-drag-region>
-          Quick Search
+          <GripVertical
+            className="launcher-drag-handle"
+            aria-hidden="true"
+            data-tauri-drag-region
+          />
+          <span data-tauri-drag-region>Quick Search</span>
         </span>
-        <Button
-          variant="outline"
-          size="icon-sm"
-          aria-label="Open Tin"
-          title="Open Tin"
-          disabled={busy}
-          onClick={() => void openTin()}
-        >
-          <AppWindow aria-hidden="true" />
-        </Button>
+        <div className="launcher-header-actions">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Open Tin"
+            title="Open Tin"
+            disabled={busy}
+            onClick={() => void openTin()}
+          >
+            <AppWindow aria-hidden="true" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Close Quick Search"
+            title="Close Quick Search"
+            onClick={() => void hide()}
+          >
+            <X aria-hidden="true" />
+          </Button>
+        </div>
       </header>
       <Input
         ref={searchRef}
@@ -296,7 +313,7 @@ function LauncherSession({
           </Button>
         </div>
       )}
-      <div
+      <ScrollArea
         className="launcher-results"
         id="launcher-results"
         role="listbox"
@@ -348,11 +365,17 @@ function LauncherSession({
               }}
             >
               <div className="launcher-title">{displayTitle(clip)}</div>
-              <div className="launcher-preview">
-                {clip.id === selected?.id
-                  ? clip.content
-                  : clipPreview(clip.content)}
-              </div>
+              {clip.id === selected?.id ? (
+                <ScrollArea className="launcher-preview launcher-preview-scroll">
+                  <span className="launcher-preview-content">
+                    {clip.content}
+                  </span>
+                </ScrollArea>
+              ) : (
+                <div className="launcher-preview">
+                  {clipPreview(clip.content)}
+                </div>
+              )}
               <div className="launcher-meta">
                 {clip.sourceApp || 'Local clip'} ·{' '}
                 {formatContentType(clip.contentType)}
@@ -360,14 +383,14 @@ function LauncherSession({
             </div>
           ))
         )}
-      </div>
+      </ScrollArea>
       <footer className="launcher-footer">
         <span aria-live="polite">
           {busy
             ? 'Copying…'
             : copied
               ? 'Copied'
-              : `${results.length} ${results.length === 1 ? 'clip' : 'clips'} · Local only`}
+              : `${results.length} ${results.length === 1 ? 'clip' : 'clips'}`}
         </span>
         <span>
           ↑↓ Select · Enter Copy all · Ctrl+C Copy selection · Esc Close
