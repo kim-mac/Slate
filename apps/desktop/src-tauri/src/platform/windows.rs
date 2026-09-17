@@ -214,7 +214,6 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
         Ok(window) => {
             let handle = app.clone();
             window.on_window_event(move |event| match event {
-                WindowEvent::Focused(false) => launcher::dismiss_window(&handle, true),
                 WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     launcher::dismiss_window(&handle, false);

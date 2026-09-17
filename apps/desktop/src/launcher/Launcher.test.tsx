@@ -1,4 +1,4 @@
-import type { Clip } from '@ai-clip-memory/shared';
+import type { Clip, ClipInput } from '@ai-clip-memory/shared';
 import {
   act,
   cleanup,
@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Launcher } from './Launcher';
@@ -44,6 +45,21 @@ function setup() {
   };
   const client = {
     list: vi.fn(async () => [older, newer]),
+    create: vi.fn(async () => ({
+      ...newer,
+      id: 'created',
+      title: null,
+      content: 'Created locally',
+      contentType: 'text' as const,
+      sourceApp: null,
+      sourceUrl: null,
+      sourcePageTitle: null,
+    })),
+    update: vi.fn(async (id: string, input: ClipInput) => ({
+      ...newer,
+      ...input,
+      id,
+    })),
     copyContent: vi
       .fn<(id: string) => Promise<void>>()
       .mockResolvedValue(undefined),
@@ -188,6 +204,163 @@ test('starts unselected and enters results explicitly from either direction', as
   fireEvent.change(search, { target: { value: ' ' } });
   fireEvent.keyDown(search, { key: 'ArrowUp' });
   expect(options.at(-1)?.getAttribute('aria-selected')).toBe('true');
+});
+test('opens compact create mode, focuses Content, and Escape returns to search before hiding', async () => {
+  const { host } = setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  await waitFor(() => expect(document.activeElement).toBe(content));
+  expect(screen.getByRole('combobox', { name: 'Content type' })).toBeTruthy();
+  expect(screen.queryByRole('searchbox')).toBeNull();
+
+  fireEvent.keyDown(content, { key: 'Escape' });
+  const search = await screen.findByRole('searchbox');
+  await waitFor(() => expect(document.activeElement).toBe(search));
+  expect(host.hide).not.toHaveBeenCalled();
+
+  fireEvent.keyDown(search, { key: 'Escape' });
+  await waitFor(() => expect(host.hide).toHaveBeenCalledWith(1));
+});
+test('creates through the existing client, clears search, and selects the local result', async () => {
+  const { client, host } = setup();
+  const search = await screen.findByRole('searchbox');
+  fireEvent.change(search, { target: { value: 'guide' } });
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, {
+    target: { value: '  https://example.com/new  ' },
+  });
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+
+  await waitFor(() =>
+    expect(client.create).toHaveBeenCalledWith({
+      content: '  https://example.com/new  ',
+      contentType: 'link',
+      title: null,
+      sourceApp: null,
+      sourceUrl: null,
+      sourcePageTitle: null,
+    }),
+  );
+  const returnedSearch = await screen.findByRole('searchbox');
+  expect(returnedSearch).toHaveProperty('value', '');
+  expect(screen.getByText('Saved')).toBeTruthy();
+  expect(
+    screen
+      .getByRole('option', { name: /Created locally/ })
+      .getAttribute('aria-selected'),
+  ).toBe('true');
+  expect(host.hide).not.toHaveBeenCalled();
+});
+test('deduplicates a pending create and preserves a failed draft for retry', async () => {
+  const { client } = setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+  let rejectCreate!: (error: Error) => void;
+  client.create.mockImplementationOnce(
+    () =>
+      new Promise((_, reject) => {
+        rejectCreate = reject;
+      }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Keep failed draft' } });
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+  expect(client.create).toHaveBeenCalledTimes(1);
+
+  await act(async () => rejectCreate(new Error('private database detail')));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    'Clip could not be saved.',
+  );
+  expect(content).toHaveProperty('value', 'Keep failed draft');
+});
+test('Cancel discards create draft and focus loss preserves an active draft', async () => {
+  const { host } = setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  let content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Discard me' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  content = screen.getByRole('textbox', { name: 'Content' });
+  expect(content).toHaveProperty('value', '');
+
+  fireEvent.change(content, { target: { value: 'Survive focus loss' } });
+  fireEvent.blur(window);
+  fireEvent.focus(window);
+  expect(content).toHaveProperty('value', 'Survive focus loss');
+  expect(host.hide).not.toHaveBeenCalled();
+});
+test('edits the current stored clip by id and preserves hidden metadata', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit selected clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Updated guide' } });
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+
+  await waitFor(() =>
+    expect(client.update).toHaveBeenCalledWith('newer', {
+      content: 'Updated guide',
+      contentType: 'text',
+      title: newer.title,
+      sourceApp: newer.sourceApp,
+      sourceUrl: newer.sourceUrl,
+      sourcePageTitle: newer.sourcePageTitle,
+    }),
+  );
+  expect(client.list).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('Saved')).toBeTruthy();
+  expect(screen.getByText('Updated guide')).toBeTruthy();
+  expect(
+    screen
+      .getByRole('option', { name: /Recent note/ })
+      .getAttribute('aria-selected'),
+  ).toBe('true');
+});
+test('shows one isolated pencil in the selected result title row', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  const options = await screen.findAllByRole('option');
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+
+  const selected = options[0]!;
+  const unselected = options[1]!;
+  const edit = within(selected).getByRole('button', {
+    name: 'Edit selected clip',
+  });
+  const titleRow = edit.closest('.launcher-title-row');
+  expect(titleRow).not.toBeNull();
+  expect(within(titleRow as HTMLElement).getByText('Recent note')).toBeTruthy();
+  expect(
+    within(unselected).queryByRole('button', { name: 'Edit selected clip' }),
+  ).toBeNull();
+
+  fireEvent.mouseDown(edit);
+  fireEvent.click(edit);
+  expect(client.copyContent).not.toHaveBeenCalled();
+  expect(screen.getByRole('form', { name: 'Edit clip' })).toBeTruthy();
+});
+test('keeps an edit draft and exposes a safe retryable error when the clip disappeared', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit selected clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Keep this edit' } });
+  client.list.mockResolvedValueOnce([]);
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toBe('This clip is no longer available.');
+  expect(content).toHaveProperty('value', 'Keep this edit');
+  expect(client.update).not.toHaveBeenCalled();
 });
 test('focuses search, orders recent clips, uses existing multi-term rules and keeps typing during navigation', async () => {
   const { client } = setup();

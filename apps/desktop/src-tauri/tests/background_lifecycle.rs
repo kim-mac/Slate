@@ -99,6 +99,19 @@ fn launcher_open_tin_reuses_main_presentation_before_hiding_the_launcher() {
 }
 
 #[test]
+fn launcher_focus_loss_does_not_dismiss_the_window_but_close_requests_still_hide_it() {
+    let source = include_str!("../src/platform/windows.rs");
+    let initialization = source
+        .split("pub fn initialize_launcher")
+        .nth(1)
+        .expect("launcher initialization");
+
+    assert!(!initialization.contains("WindowEvent::Focused(false)"));
+    assert!(initialization.contains("WindowEvent::CloseRequested"));
+    assert!(initialization.contains("launcher::dismiss_window(&handle, false)"));
+}
+
+#[test]
 fn similar_arguments_do_not_trigger_hidden_startup() {
     assert!(!startup_plan(["tin.exe", "--autostart=true"]).start_hidden);
     assert!(!startup_plan(["tin.exe", "autostart"]).start_hidden);

@@ -75,8 +75,16 @@
   white-space: nowrap;
 }
 .launcher-title {
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
   font-size: 14px;
+}
+.launcher-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
 }
 .launcher-preview {
   font-size: 13px;
@@ -99,6 +107,47 @@
   font-size: 11px;
   margin-top: 4px;
   color: var(--muted-foreground);
+}
+.launcher-editor {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+.launcher-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.launcher-editor-scroll {
+  flex: 1;
+  min-height: 0;
+}
+.launcher-editor-scroll-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 12px;
+}
+.launcher-editor-content {
+  min-height: 12rem;
+  overflow: hidden;
+  resize: none;
+  color: var(--foreground);
+}
+.launcher-editor-error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 12px;
+}
+.launcher-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
 .launcher-footer {
   display: flex;

@@ -429,12 +429,14 @@ mod tests {
     }
 
     #[test]
-    fn repeated_press_is_latched_and_visible_activation_reuses_session() {
+    fn repeated_press_is_latched_and_released_shortcut_reuses_visible_session() {
         let mut policy = available();
         policy.ready();
         let first = policy.shortcut(true).unwrap();
         assert_eq!(first.session, 1);
         assert_eq!(policy.shortcut(true), None);
+        assert_eq!(policy.shortcut(false), None);
+        assert_eq!(policy.shortcut(true), Some(first));
         assert_eq!(policy.shortcut(false), None);
         assert_eq!(policy.shortcut(true), Some(first));
     }
