@@ -103,6 +103,36 @@ test('limits dragging to the header and opens Tin through the launcher host', as
   fireEvent.click(screen.getByRole('button', { name: 'Open Tin' }));
   await waitFor(() => expect(host.openTin).toHaveBeenCalledWith(1));
 });
+
+test('shows a drag affordance and closes through the existing hide path', async () => {
+  const { host, client } = setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+
+  const handle = document.querySelector('.launcher-drag-handle');
+  expect(handle).not.toBeNull();
+  expect(handle?.getAttribute('aria-hidden')).toBe('true');
+  expect(handle?.hasAttribute('data-tauri-drag-region')).toBe(true);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Close Quick Search' }));
+
+  await waitFor(() => expect(host.hide).toHaveBeenCalledWith(1));
+  expect(client.copyContent).not.toHaveBeenCalled();
+});
+
+test('removes the Local only footer copy and uses shared scroll areas', async () => {
+  setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' });
+
+  expect(screen.queryByText(/Local only/)).toBeNull();
+  expect(document.querySelector('.launcher-results-content')).not.toBeNull();
+  expect(
+    document.querySelectorAll('[data-slot="scroll-area"]').length,
+  ).toBeGreaterThanOrEqual(2);
+  expect(
+    document.querySelectorAll('[data-slot="scroll-area-viewport"]').length,
+  ).toBeGreaterThanOrEqual(2);
+});
 test('restores search focus when the native webview receives focus after rendering', async () => {
   setup();
   const search = await screen.findByRole('searchbox');
@@ -133,10 +163,56 @@ test('ignores a stale load from a dismissed session and preserves IME compositio
   fireEvent.keyDown(search, { key: 'Enter' });
   fireEvent.keyDown(search, { key: 'ArrowDown' });
   expect(client.copyContent).not.toHaveBeenCalled();
+  expect(
+    screen
+      .getAllByRole('option')
+      .every((option) => option.getAttribute('aria-selected') === 'false'),
+  ).toBe(true);
+  fireEvent.compositionEnd(search);
+});
+test('starts unselected and enters results explicitly from either direction', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  const options = await screen.findAllByRole('option');
+
+  expect(
+    options.every((option) => option.getAttribute('aria-selected') === 'false'),
+  ).toBe(true);
+  expect(search.getAttribute('aria-activedescendant')).toBeNull();
+  fireEvent.keyDown(search, { key: 'Enter' });
+  expect(client.copyContent).not.toHaveBeenCalled();
+
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  expect(options[0]?.getAttribute('aria-selected')).toBe('true');
+
+  fireEvent.change(search, { target: { value: ' ' } });
+  fireEvent.keyDown(search, { key: 'ArrowUp' });
+  expect(options.at(-1)?.getAttribute('aria-selected')).toBe('true');
+});
+test('focuses search, orders recent clips, uses existing multi-term rules and keeps typing during navigation', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  expect(document.activeElement).toBe(search);
+  expect(screen.getAllByRole('option')[0]!.textContent).toContain(
+    'Recent note',
+  );
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
   expect(screen.getAllByRole('option')[0]!.getAttribute('aria-selected')).toBe(
     'true',
   );
-  fireEvent.compositionEnd(search);
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  expect(screen.getAllByRole('option')[1]!.getAttribute('aria-selected')).toBe(
+    'true',
+  );
+  expect(document.activeElement).toBe(search);
+  fireEvent.change(search, { target: { value: 'CLAUDE local' } });
+  expect(screen.getAllByRole('option')).toHaveLength(1);
+  fireEvent.keyDown(search, { key: 'Enter' });
+  expect(client.copyContent).not.toHaveBeenCalled();
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.keyDown(search, { key: 'Enter' });
+  await waitFor(() => expect(client.copyContent).toHaveBeenCalledWith('older'));
 });
 test('a failed hide can be retried without copying again', async () => {
   const { client, host } = setup();
@@ -149,24 +225,6 @@ test('a failed hide can be retried without copying again', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Retry closing' }));
   await waitFor(() => expect(host.hide).toHaveBeenCalledTimes(2));
   expect(client.copyContent).not.toHaveBeenCalled();
-});
-test('focuses search, orders recent clips, uses existing multi-term rules and keeps typing during navigation', async () => {
-  const { client } = setup();
-  const search = await screen.findByRole('searchbox');
-  await screen.findByRole('option', { name: /Recent note/ });
-  expect(document.activeElement).toBe(search);
-  expect(screen.getAllByRole('option')[0]!.textContent).toContain(
-    'Recent note',
-  );
-  fireEvent.keyDown(search, { key: 'ArrowDown' });
-  expect(screen.getAllByRole('option')[1]!.getAttribute('aria-selected')).toBe(
-    'true',
-  );
-  expect(document.activeElement).toBe(search);
-  fireEvent.change(search, { target: { value: 'CLAUDE local' } });
-  expect(screen.getAllByRole('option')).toHaveLength(1);
-  fireEvent.keyDown(search, { key: 'Enter' });
-  await waitFor(() => expect(client.copyContent).toHaveBeenCalledWith('older'));
 });
 test('deduplicates Enter, stays open, and supports repeated copies', async () => {
   const { client, host } = setup();
@@ -183,6 +241,7 @@ test('deduplicates Enter, stays open, and supports repeated copies', async () =>
   fireEvent.keyDown(search, { key: 'Enter', isComposing: true });
   fireEvent.keyDown(search, { key: 'Enter', shiftKey: true });
   expect(client.copyContent).not.toHaveBeenCalled();
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
   fireEvent.keyDown(search, { key: 'Enter' });
   fireEvent.keyDown(search, { key: 'Enter' });
   expect(client.copyContent).toHaveBeenCalledTimes(1);
@@ -222,6 +281,7 @@ test('copy failure stays open, hides raw errors and supports retry', async () =>
   client.copyContent.mockRejectedValueOnce(
     new Error('sensitive database details'),
   );
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' });
   fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' });
   const error = await screen.findByRole('alert');
   expect(error.textContent).not.toContain('sensitive');
@@ -243,6 +303,7 @@ test('a copy error with no selected result cannot dismiss the launcher through r
   const { client, host } = setup();
   await screen.findByRole('option', { name: /Recent note/ });
   client.copyContent.mockRejectedValueOnce(new Error('copy failed'));
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' });
   fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' });
   await screen.findByRole('alert');
   fireEvent.change(screen.getByRole('searchbox'), {
@@ -261,6 +322,7 @@ test('dismissed sessions ignore stale copy completion', async () => {
         resolve = done;
       }),
   );
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' });
   fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' });
   emit({ session: 1, visible: false });
   emit({ session: 2, visible: true });

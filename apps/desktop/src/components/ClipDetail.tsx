@@ -51,17 +51,23 @@ export function ClipDetail({
         <article>
           <CardHeader className="clip-detail-header">
             <div className="clip-heading">
-              <Button
-                ref={backButtonRef}
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label="Back to calendar"
-                onClick={onBack}
-              >
-                <ArrowLeft aria-hidden="true" />
-                Back
-              </Button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      ref={backButtonRef}
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Back to calendar"
+                      onClick={onBack}
+                    />
+                  }
+                >
+                  <ArrowLeft aria-hidden="true" />
+                </TooltipTrigger>
+                <TooltipContent>Back to calendar</TooltipContent>
+              </Tooltip>
               <Badge variant="secondary">
                 {formatContentType(clip.contentType)}
               </Badge>

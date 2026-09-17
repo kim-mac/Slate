@@ -23,16 +23,33 @@
 .launcher-heading {
   min-width: 0;
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   font-weight: 600;
   color: var(--muted-foreground);
   cursor: grab;
 }
+.launcher-drag-handle {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  pointer-events: none;
+  cursor: grab;
+}
+.launcher-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .launcher-results {
   flex: 1;
   min-height: 0;
-  overflow: auto;
   overscroll-behavior: contain;
+}
+.launcher-results-content {
+  padding-right: 12px;
 }
 .launcher-result {
   padding: 9px 10px;
@@ -44,6 +61,11 @@
 .launcher-result[aria-selected='true'] {
   background: var(--accent);
   border-color: var(--border);
+}
+@media (hover: hover) {
+  .launcher-result:not([aria-selected='true']):hover {
+    background: color-mix(in srgb, var(--accent) 60%, transparent);
+  }
 }
 .launcher-title,
 .launcher-preview,
@@ -63,10 +85,13 @@
   user-select: text;
   cursor: text;
 }
-.launcher-result[aria-selected='true'] .launcher-preview {
-  max-height: 5.25em;
-  overflow: auto;
+.launcher-preview-scroll {
+  height: 5.25em;
   text-overflow: clip;
+}
+.launcher-preview-content {
+  display: block;
+  padding-right: 10px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ClipFormDialogProps {
   clip?: Clip;
@@ -36,25 +37,29 @@ export function ClipFormDialog({
       }}
     >
       <DialogContent className="clip-form-dialog" showCloseButton={!isSaving}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {clip
-              ? 'Update this clip while keeping it stored locally.'
-              : 'Add something useful to your local clip library.'}
-          </DialogDescription>
-        </DialogHeader>
-        {error && (
-          <p role="alert" className="error-message dialog-error-message">
-            {error}
-          </p>
-        )}
-        <ClipForm
-          {...(clip ? { clip } : {})}
-          isSaving={isSaving}
-          onCancel={() => onOpenChange(false)}
-          onSubmit={onSubmit}
-        />
+        <ScrollArea className="clip-form-dialog-scroll">
+          <div className="clip-form-dialog-scroll-content">
+            <DialogHeader>
+              <DialogTitle>{title}</DialogTitle>
+              <DialogDescription>
+                {clip
+                  ? 'Update this clip while keeping it stored locally.'
+                  : 'Add something useful to your local clip library.'}
+              </DialogDescription>
+            </DialogHeader>
+            {error && (
+              <p role="alert" className="error-message dialog-error-message">
+                {error}
+              </p>
+            )}
+            <ClipForm
+              {...(clip ? { clip } : {})}
+              isSaving={isSaving}
+              onCancel={() => onOpenChange(false)}
+              onSubmit={onSubmit}
+            />
+          </div>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );

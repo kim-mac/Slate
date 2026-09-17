@@ -321,13 +321,6 @@
   max-width: 100%;
 }
 
-.sidebar-section-tools {
-  display: flex;
-  flex: 0 0 auto;
-  justify-content: flex-end;
-  padding: 0 0.125rem 0.2rem 0;
-}
-
 .sidebar-results-message {
   color: var(--muted-foreground);
   font-size: 0.75rem;
@@ -853,7 +846,6 @@
 }
 
 .clip-detail-header {
-  border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
@@ -916,7 +908,20 @@
 .clip-form-dialog {
   max-height: calc(100dvh - 2rem);
   max-width: min(42rem, calc(100vw - 2rem));
-  overflow-y: auto;
+  overflow: hidden;
+}
+
+.clip-form-dialog-scroll {
+  max-height: calc(100dvh - 4rem);
+  min-height: 0;
+  min-width: 0;
+}
+
+.clip-form-dialog-scroll-content {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding-right: 0.75rem;
 }
 
 .clip-form {
