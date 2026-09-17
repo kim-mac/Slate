@@ -10,7 +10,6 @@ import type { RefObject } from 'react';
 
 import { ClipList } from '@/components/ClipList';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
   Tooltip,
   TooltipContent,
@@ -42,7 +41,6 @@ interface AppSidebarProps {
   expandedSection: LibraryView | null;
   hasFilters: boolean;
   isLoading: boolean;
-  onClearFilters: () => void;
   onSelectClip: (id: string) => void;
   onToggleSection: (view: LibraryView) => void;
   pinnedCount: number;
@@ -58,7 +56,6 @@ export function AppSidebar({
   expandedSection,
   hasFilters,
   isLoading,
-  onClearFilters,
   onSelectClip,
   onToggleSection,
   pinnedCount,
@@ -123,17 +120,6 @@ export function AppSidebar({
                           aria-label={`${label} results`}
                           ref={clipListRef}
                         >
-                          {hasFilters && (
-                            <div className="sidebar-section-tools">
-                              <Button
-                                size="xs"
-                                variant="ghost"
-                                onClick={onClearFilters}
-                              >
-                                Clear filters
-                              </Button>
-                            </div>
-                          )}
                           {isLoading ? (
                             <p className="sidebar-results-message">
                               Loading clips…

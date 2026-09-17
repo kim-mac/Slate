@@ -70,10 +70,15 @@ function fakeStartupClient(enabled = false): StartupClient {
   };
 }
 
-const currentMonthLabel = new Intl.DateTimeFormat(undefined, {
+const currentDate = new Date();
+const currentDateParts = new Intl.DateTimeFormat(undefined, {
+  day: 'numeric',
   month: 'long',
   year: 'numeric',
-}).format(new Date());
+}).formatToParts(currentDate);
+const currentDatePart = (type: 'day' | 'month' | 'year') =>
+  currentDateParts.find((part) => part.type === type)?.value ?? '';
+const currentMonthLabel = `${currentDatePart('day')} ${currentDatePart('month')} ${currentDatePart('year')}`;
 const currentMonthClip: Clip = {
   ...firstClip,
   createdAt: new Date(
@@ -312,16 +317,19 @@ describe('App', () => {
     await waitForCalendar();
     fireEvent.click(screen.getByRole('button', { name: 'Previous month' }));
     await screen.findByRole('heading', { name: previousMonthLabel });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
+    fireEvent.keyDown(screen.getByRole('option', { name: 'Code' }), {
+      key: 'Enter',
+    });
+    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeTruthy();
     fireEvent.click(
       screen.getByRole('button', { name: `Open ${previousClip.title!}` }),
     );
+    expect(screen.queryByRole('combobox', { name: /Filter clips/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'does not match the open clip' },
     });
-    fireEvent.click(screen.getByRole('combobox', { name: 'Filter clips' }));
-    const textOption = screen.getByRole('option', { name: 'Text' });
-    fireEvent.keyDown(textOption, { key: 'Enter' });
-    fireEvent.keyDown(textOption, { key: 'Escape' });
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
 
     expect(
@@ -336,8 +344,9 @@ describe('App', () => {
       'does not match the open clip',
     );
     expect(
-      screen.getByRole('combobox', { name: 'Filter clips: Text' }),
+      screen.getByRole('combobox', { name: 'Filter clips: Code' }),
     ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeTruthy();
     expect(
       screen
         .getByRole('button', { name: 'Pinned' })
@@ -1001,8 +1010,16 @@ describe('App', () => {
     const trigger = screen.getByRole('combobox', {
       name: 'Filter clips',
     });
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
     expect(trigger.getAttribute('data-size')).toBe('sm');
     expect(trigger.classList.contains('size-7')).toBe(true);
+    expect(trigger.classList.contains('justify-center')).toBe(true);
+    expect(trigger.classList.contains('gap-0')).toBe(true);
+    expect(trigger.classList.contains('p-0')).toBe(true);
+    expect(trigger.classList.contains('justify-between')).toBe(false);
+    expect(trigger.classList.contains('gap-1.5')).toBe(false);
+    expect(trigger.classList.contains('pl-2.5')).toBe(false);
+    expect(trigger.classList.contains('pr-2')).toBe(false);
     expect(
       screen
         .getByRole('button', { name: 'Toggle Sidebar' })
@@ -1027,6 +1044,21 @@ describe('App', () => {
       name: 'Filter clips: Code',
     });
     expect(activeTrigger.getAttribute('data-active')).toBe('true');
+    const controls = document.querySelector<HTMLElement>(
+      '.memory-calendar-controls',
+    )!;
+    const clearFilters = within(controls).getByRole('button', {
+      name: 'Clear filters',
+    });
+    expect(
+      activeTrigger.compareDocumentPosition(clearFilters) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      within(screen.getByLabelText('All Clips results')).queryByRole('button', {
+        name: 'Clear filters',
+      }),
+    ).toBeNull();
 
     fireEvent.click(activeTrigger);
     fireEvent.keyDown(screen.getByRole('option', { name: 'All types' }), {
@@ -1037,6 +1069,7 @@ describe('App', () => {
         .getByRole('combobox', { name: 'Filter clips' })
         .getAttribute('data-active'),
     ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
   });
 
   test.each([
@@ -1165,11 +1198,22 @@ describe('App', () => {
   test('combines multi-term search and type filtering without changing counts', async () => {
     const fake = fakeClient([firstClip, pinnedClip]);
     render(<App client={fake.client} />);
-    expect(screen.getByRole('combobox', { name: 'Filter clips' })).toBeTruthy();
     await waitForCalendar();
+    expect(screen.getByRole('combobox', { name: 'Filter clips' })).toBeTruthy();
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'CHATGPT unions' },
     });
+    const calendarControls = document.querySelector<HTMLElement>(
+      '.memory-calendar-controls',
+    )!;
+    expect(
+      within(calendarControls).getByRole('button', { name: 'Clear filters' }),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByLabelText('All Clips results')).queryByRole('button', {
+        name: 'Clear filters',
+      }),
+    ).toBeNull();
     expect(
       screen.getByText(pinnedClip.title!, {
         selector: '.memory-calendar-clip-label',
@@ -1193,6 +1237,9 @@ describe('App', () => {
       screen.getByRole('heading', { name: currentMonthLabel }),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('');
+    expect(screen.getByRole('combobox', { name: 'Filter clips' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
     expect(
       screen
         .getByLabelText('All Clips results')
@@ -1384,9 +1431,9 @@ describe('App', () => {
 
     const toolbar = document.querySelector<HTMLElement>('.desktop-header');
     expect(toolbar).not.toBeNull();
-    const filter = within(toolbar!).getByRole('combobox', {
-      name: 'Filter clips',
-    });
+    expect(
+      within(toolbar!).queryByRole('combobox', { name: 'Filter clips' }),
+    ).toBeNull();
     const search = within(toolbar!).getByRole('searchbox', {
       name: 'Search clips',
     });
@@ -1396,7 +1443,6 @@ describe('App', () => {
     });
     const refresh = within(toolbar!).getByRole('button', { name: 'Refresh' });
     for (const [before, after] of [
-      [filter, search],
       [search, create],
       [create, theme],
       [theme, refresh],
@@ -1406,6 +1452,25 @@ describe('App', () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     }
+    const calendarControls = document.querySelector<HTMLElement>(
+      '.memory-calendar-controls',
+    );
+    expect(calendarControls).not.toBeNull();
+    const today = within(calendarControls!).getByRole('button', {
+      name: 'Today',
+    });
+    const separator = within(calendarControls!).getByRole('separator');
+    const filter = within(calendarControls!).getByRole('combobox', {
+      name: 'Filter clips',
+    });
+    expect(
+      today.compareDocumentPosition(separator) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      separator.compareDocumentPosition(filter) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(within(toolbar!).queryByText('Library')).toBeNull();
     expect(within(toolbar!).queryByText('0 results')).toBeNull();
     const sidebar = screen
@@ -1575,6 +1640,15 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
     const dialog = screen.getByRole('dialog', { name: 'Create clip' });
+    const contentTypeTrigger = within(dialog).getByRole('combobox', {
+      name: 'Content type',
+    });
+    expect(contentTypeTrigger.classList.contains('justify-between')).toBe(true);
+    expect(contentTypeTrigger.classList.contains('gap-1.5')).toBe(true);
+    expect(contentTypeTrigger.classList.contains('pl-2.5')).toBe(true);
+    expect(contentTypeTrigger.classList.contains('pr-2')).toBe(true);
+    expect(contentTypeTrigger.classList.contains('justify-center')).toBe(false);
+    expect(contentTypeTrigger.classList.contains('p-0')).toBe(false);
     expect(dialog.textContent).toContain(
       'Add something useful to your local clip library.',
     );
@@ -1796,5 +1870,8 @@ describe('App', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText('Ctrl+Shift+Space')).toBeTruthy();
+    const toolbar = document.querySelector<HTMLElement>('.desktop-header');
+    expect(toolbar).not.toBeNull();
+    expect(within(toolbar!).getByRole('separator')).toBeTruthy();
   });
 });

@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import { MemoryCalendar } from './MemoryCalendar';
@@ -77,7 +78,9 @@ test('renders the month shell, weekday labels, outside dates, and two-item overf
     />,
   );
 
-  expect(screen.getByRole('heading', { name: 'September 2026' })).toBeTruthy();
+  expect(
+    screen.getByRole('heading', { name: '11 September 2026' }),
+  ).toBeTruthy();
   expect(
     screen.getAllByRole('columnheader').map((item) => item.textContent),
   ).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
@@ -109,6 +112,66 @@ test('renders the month shell, weekday labels, outside dates, and two-item overf
     screen.getByRole('gridcell', { name: /Sunday, August 30, 2026/i }).dataset
       .outsideMonth,
   ).toBe('true');
+});
+
+function CalendarHeadingHarness() {
+  const [visibleMonth, setVisibleMonth] = useState({ year: 2026, month: 8 });
+
+  return (
+    <MemoryCalendar
+      clips={[]}
+      visibleMonth={visibleMonth}
+      onVisibleMonthChange={setVisibleMonth}
+      {...calendarActions()}
+      today={new Date(2026, 8, 16, 12)}
+    />
+  );
+}
+
+test('shows the full local date for the current month and month-year elsewhere', () => {
+  render(<CalendarHeadingHarness />);
+
+  expect(
+    screen.getByRole('heading', { name: '16 September 2026' }),
+  ).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+  expect(screen.getByRole('heading', { name: 'October 2026' })).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+  expect(
+    screen.getByRole('heading', { name: '16 September 2026' }),
+  ).toBeTruthy();
+});
+
+test('places the supplied Filter control after Today with a separator', () => {
+  const { container } = render(
+    <MemoryCalendar
+      clips={[]}
+      visibleMonth={{ year: 2026, month: 8 }}
+      onVisibleMonthChange={vi.fn()}
+      {...calendarActions()}
+      today={new Date(2026, 8, 16, 12)}
+      headerControl={<button aria-label="Filter clips">Filter</button>}
+    />,
+  );
+  const controls = container.querySelector<HTMLElement>(
+    '.memory-calendar-controls',
+  )!;
+  const today = within(controls).getByRole('button', { name: 'Today' });
+  const separator = within(controls).getByRole('separator');
+  const filter = within(controls).getByRole('button', { name: 'Filter clips' });
+
+  expect(separator.classList.contains('mx-1')).toBe(true);
+  expect(separator.classList.contains('data-vertical:self-center')).toBe(true);
+  expect(separator.classList.contains('data-vertical:self-auto')).toBe(false);
+  expect(
+    today.compareDocumentPosition(separator) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    separator.compareDocumentPosition(filter) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 });
 
 test('moves to previous, next, and current months through controlled callbacks', () => {

@@ -462,7 +462,6 @@ export function App({
             expandedSection={expandedSection}
             hasFilters={hasFilters}
             isLoading={isLoading}
-            onClearFilters={clearFilters}
             onSelectClip={(id) => {
               if (expandedSection) setActiveView(expandedSection);
               openClip(id, {
@@ -486,56 +485,16 @@ export function App({
           <SidebarInset className="desktop-main">
             <header className="desktop-header">
               <SidebarTrigger aria-expanded={sidebarOpen} />
-              <Separator
-                orientation="vertical"
-                className="data-vertical:h-4 data-vertical:self-auto"
-              />
               {activeView === 'settings' ? (
-                <span>Privacy & About</span>
+                <>
+                  <Separator
+                    orientation="vertical"
+                    className="data-vertical:h-4 data-vertical:self-auto"
+                  />
+                  <span>Privacy & About</span>
+                </>
               ) : (
                 <>
-                  <Select
-                    value={contentType}
-                    onValueChange={(value) => {
-                      if (
-                        value === 'all' ||
-                        CLIP_CONTENT_TYPES.includes(value as ClipContentType)
-                      )
-                        setContentType(value as ClipContentType | 'all');
-                    }}
-                  >
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <SelectTrigger
-                            size="sm"
-                            className="toolbar-icon-select size-7 data-[active=true]:bg-accent data-[active=true]:text-accent-foreground [&>svg:last-child]:hidden"
-                            aria-label={
-                              contentType === 'all'
-                                ? 'Filter clips'
-                                : `Filter clips: ${formatContentType(contentType)}`
-                            }
-                            data-active={hasTypeFilter ? 'true' : undefined}
-                          />
-                        }
-                      >
-                        <ListFilter aria-hidden="true" />
-                      </TooltipTrigger>
-                      <TooltipContent>Filter clips</TooltipContent>
-                    </Tooltip>
-                    <SelectContent
-                      align="start"
-                      alignItemWithTrigger={false}
-                      className="w-36"
-                    >
-                      <SelectItem value="all">All types</SelectItem>
-                      {CLIP_CONTENT_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {formatContentType(type)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                   <div className="desktop-header-center">
                     <label className="sr-only" htmlFor="clip-search">
                       Search clips
@@ -717,6 +676,68 @@ export function App({
                       onEditClip={editClip}
                       onSetPinned={(clip, isPinned) =>
                         void setPinned(clip, isPinned)
+                      }
+                      headerControl={
+                        <>
+                          <Select
+                            value={contentType}
+                            onValueChange={(value) => {
+                              if (
+                                value === 'all' ||
+                                CLIP_CONTENT_TYPES.includes(
+                                  value as ClipContentType,
+                                )
+                              )
+                                setContentType(
+                                  value as ClipContentType | 'all',
+                                );
+                            }}
+                          >
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <SelectTrigger
+                                    size="sm"
+                                    className="toolbar-icon-select size-7 justify-center gap-0 p-0 data-[active=true]:bg-accent data-[active=true]:text-accent-foreground [&>svg:last-child]:hidden"
+                                    aria-label={
+                                      contentType === 'all'
+                                        ? 'Filter clips'
+                                        : `Filter clips: ${formatContentType(contentType)}`
+                                    }
+                                    data-active={
+                                      hasTypeFilter ? 'true' : undefined
+                                    }
+                                  />
+                                }
+                              >
+                                <ListFilter aria-hidden="true" />
+                              </TooltipTrigger>
+                              <TooltipContent>Filter clips</TooltipContent>
+                            </Tooltip>
+                            <SelectContent
+                              align="start"
+                              alignItemWithTrigger={false}
+                              className="w-36"
+                            >
+                              <SelectItem value="all">All types</SelectItem>
+                              {CLIP_CONTENT_TYPES.map((type) => (
+                                <SelectItem key={type} value={type}>
+                                  {formatContentType(type)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {hasFilters && (
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="ghost"
+                              onClick={clearFilters}
+                            >
+                              Clear filters
+                            </Button>
+                          )}
+                        </>
                       }
                       visibleMonth={visibleMonth}
                       onVisibleMonthChange={setVisibleMonth}

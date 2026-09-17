@@ -19,6 +19,21 @@ test('delegates launcher scrolling to the shared custom ScrollArea', () => {
     /\.launcher-results\s*\{[^}]*overflow:\s*auto/s,
   );
   expect(stylesheet).toMatch(
-    /\.launcher-preview-scroll\s*\{[^}]*max-height:\s*5\.25em/s,
+    /\.launcher-results-content\s*\{[^}]*padding-right:\s*12px/s,
+  );
+  expect(stylesheet).toMatch(
+    /\.launcher-preview-scroll\s*\{[^}]*height:\s*5\.25em/s,
+  );
+});
+
+test('lets the drag-region heading receive pointer events over the decorative grip', () => {
+  expect(stylesheet).toMatch(
+    /\.launcher-drag-handle\s*\{[^}]*pointer-events:\s*none/s,
+  );
+});
+
+test('uses a background-only hover state for unselected pointer results', () => {
+  expect(stylesheet).toMatch(
+    /@media\s*\(hover:\s*hover\)[^{]*\{[\s\S]*\.launcher-result:not\(\[aria-selected='true'\]\):hover\s*\{[^}]*background:/,
   );
 });

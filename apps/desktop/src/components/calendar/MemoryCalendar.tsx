@@ -1,11 +1,12 @@
 import type { Clip } from '@ai-clip-memory/shared';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { CalendarClipCard, type CalendarClipActions } from './CalendarClipCard';
 import { CalendarDayDialog } from './CalendarDayDialog';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
+import { Separator } from '../ui/separator';
 import {
   addCalendarMonths,
   buildMonthGrid,
@@ -20,6 +21,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 interface MemoryCalendarProps extends CalendarClipActions {
   actionsDisabled?: boolean;
   clips: Clip[];
+  headerControl?: ReactNode;
   visibleMonth: CalendarMonth;
   onVisibleMonthChange: (month: CalendarMonth) => void;
   today?: Date;
@@ -29,6 +31,7 @@ interface MemoryCalendarProps extends CalendarClipActions {
 export function MemoryCalendar({
   actionsDisabled = false,
   clips,
+  headerControl,
   onActivateClip,
   onCopyClip,
   onDeleteClip,
@@ -55,10 +58,23 @@ export function MemoryCalendar({
     () => groupClipsByLocalDate(clips, timeZone),
     [clips, timeZone],
   );
-  const monthLabel = new Intl.DateTimeFormat(undefined, {
+  const currentMonth = calendarMonthFromDate(today);
+  const isCurrentMonth =
+    visibleMonth.year === currentMonth.year &&
+    visibleMonth.month === currentMonth.month;
+  const currentDateParts = new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
     month: 'long',
     year: 'numeric',
-  }).format(new Date(visibleMonth.year, visibleMonth.month, 1));
+  }).formatToParts(today);
+  const currentDatePart = (type: 'day' | 'month' | 'year') =>
+    currentDateParts.find((part) => part.type === type)?.value ?? '';
+  const monthLabel = isCurrentMonth
+    ? `${currentDatePart('day')} ${currentDatePart('month')} ${currentDatePart('year')}`
+    : new Intl.DateTimeFormat(undefined, {
+        month: 'long',
+        year: 'numeric',
+      }).format(new Date(visibleMonth.year, visibleMonth.month, 1));
   const fullDateFormatter = new Intl.DateTimeFormat(undefined, {
     weekday: 'long',
     year: 'numeric',
@@ -152,6 +168,15 @@ export function MemoryCalendar({
           >
             Today
           </Button>
+          {headerControl && (
+            <>
+              <Separator
+                orientation="vertical"
+                className="mx-1 data-vertical:h-4 data-vertical:self-center"
+              />
+              {headerControl}
+            </>
+          )}
         </div>
         <h1 id="calendar-month-heading" tabIndex={-1}>
           {monthLabel}

@@ -114,7 +114,9 @@ function LauncherSession({
   const results = recentClips(clips).filter((clip) =>
     matchesSearch(clip, query),
   );
-  const selected = results.find((clip) => clip.id === selectedId) ?? results[0];
+  const selected = selectedId
+    ? results.find((clip) => clip.id === selectedId)
+    : undefined;
 
   async function load() {
     const generation = ++loadingGeneration.current;
@@ -217,13 +219,18 @@ function LauncherSession({
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const index = results.findIndex((clip) => clip.id === selected?.id);
-      const next = Math.max(
-        0,
-        Math.min(
-          results.length - 1,
-          index + (event.key === 'ArrowDown' ? 1 : -1),
-        ),
-      );
+      const next =
+        index === -1
+          ? event.key === 'ArrowDown'
+            ? 0
+            : results.length - 1
+          : Math.max(
+              0,
+              Math.min(
+                results.length - 1,
+                index + (event.key === 'ArrowDown' ? 1 : -1),
+              ),
+            );
       setSelectedId(results[next]?.id ?? null);
     } else if (event.key === 'Enter' && !event.repeat && selected && !loading) {
       event.preventDefault();
@@ -320,69 +327,71 @@ function LauncherSession({
         aria-label="Clips"
         aria-busy={loading || busy}
       >
-        {error === 'load' ? (
-          <div className="launcher-state" role="alert">
-            <strong>Clips could not be loaded.</strong>
-            <span>Try loading your local clips again.</span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => void load()}
-            >
-              Retry loading
-            </Button>
-          </div>
-        ) : loading ? (
-          <div className="launcher-state" role="status">
-            <strong>Loading clips…</strong>
-          </div>
-        ) : results.length === 0 ? (
-          <div className="launcher-state">
-            <strong>
-              {clips.length ? 'No matching clips' : 'No clips yet'}
-            </strong>
-            <span>
-              {clips.length
-                ? 'Try a different search.'
-                : 'Create or capture a clip to find it here.'}
-            </span>
-          </div>
-        ) : (
-          results.map((clip) => (
-            <div
-              key={clip.id}
-              id={`result-${clip.id}`}
-              ref={clip.id === selected?.id ? selectedRef : undefined}
-              role="option"
-              aria-selected={clip.id === selected?.id}
-              className="launcher-result"
-              onMouseDown={() => setSelectedId(clip.id)}
-              onClick={() => {
-                setSelectedId(clip.id);
-                if (window.getSelection()?.isCollapsed !== false)
-                  searchRef.current?.focus();
-              }}
-            >
-              <div className="launcher-title">{displayTitle(clip)}</div>
-              {clip.id === selected?.id ? (
-                <ScrollArea className="launcher-preview launcher-preview-scroll">
-                  <span className="launcher-preview-content">
-                    {clip.content}
-                  </span>
-                </ScrollArea>
-              ) : (
-                <div className="launcher-preview">
-                  {clipPreview(clip.content)}
-                </div>
-              )}
-              <div className="launcher-meta">
-                {clip.sourceApp || 'Local clip'} ·{' '}
-                {formatContentType(clip.contentType)}
-              </div>
+        <div className="launcher-results-content">
+          {error === 'load' ? (
+            <div className="launcher-state" role="alert">
+              <strong>Clips could not be loaded.</strong>
+              <span>Try loading your local clips again.</span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => void load()}
+              >
+                Retry loading
+              </Button>
             </div>
-          ))
-        )}
+          ) : loading ? (
+            <div className="launcher-state" role="status">
+              <strong>Loading clips…</strong>
+            </div>
+          ) : results.length === 0 ? (
+            <div className="launcher-state">
+              <strong>
+                {clips.length ? 'No matching clips' : 'No clips yet'}
+              </strong>
+              <span>
+                {clips.length
+                  ? 'Try a different search.'
+                  : 'Create or capture a clip to find it here.'}
+              </span>
+            </div>
+          ) : (
+            results.map((clip) => (
+              <div
+                key={clip.id}
+                id={`result-${clip.id}`}
+                ref={clip.id === selected?.id ? selectedRef : undefined}
+                role="option"
+                aria-selected={clip.id === selected?.id}
+                className="launcher-result"
+                onMouseDown={() => setSelectedId(clip.id)}
+                onClick={() => {
+                  setSelectedId(clip.id);
+                  if (window.getSelection()?.isCollapsed !== false)
+                    searchRef.current?.focus();
+                }}
+              >
+                <div className="launcher-title">{displayTitle(clip)}</div>
+                {clip.id === selected?.id ? (
+                  <ScrollArea className="launcher-preview launcher-preview-scroll">
+                    <span className="launcher-preview-content">
+                      {clip.content}
+                    </span>
+                  </ScrollArea>
+                ) : (
+                  <div className="launcher-preview">
+                    {clipPreview(clip.content)}
+                  </div>
+                )}
+                <div className="launcher-meta">
+                  {clip.sourceApp || 'Local clip'} ·{' '}
+                  {formatContentType(clip.contentType)}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </ScrollArea>
       <footer className="launcher-footer">
         <span aria-live="polite">
