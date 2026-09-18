@@ -99,7 +99,7 @@ pub fn decode_capture_request(body: &[u8]) -> Result<CreateClip, BridgeErrorCode
     if content.trim().is_empty() {
         return Err(BridgeErrorCode::InvalidContent);
     }
-    if content_type != "text" {
+    if !matches!(content_type, "text" | "link") {
         return Err(BridgeErrorCode::InvalidContentType);
     }
     if !matches!(source_app, "ChatGPT" | "Claude" | "Gemini" | "Other Web") {
@@ -107,19 +107,44 @@ pub fn decode_capture_request(body: &[u8]) -> Result<CreateClip, BridgeErrorCode
     }
     let parsed_source_url =
         Url::parse(source_url).map_err(|_| BridgeErrorCode::InvalidSourceUrl)?;
-    if !matches!(parsed_source_url.scheme(), "http" | "https") || !parsed_source_url.has_host() {
+    if !is_http_url_with_host(&parsed_source_url) {
         return Err(BridgeErrorCode::InvalidSourceUrl);
     }
+
+    if content_type == "link" {
+        if has_credentials(&parsed_source_url) {
+            return Err(BridgeErrorCode::InvalidSourceUrl);
+        }
+        if content != source_url {
+            return Err(BridgeErrorCode::InvalidContent);
+        }
+        let parsed_content = Url::parse(content).map_err(|_| BridgeErrorCode::InvalidSourceUrl)?;
+        if !is_http_url_with_host(&parsed_content) || has_credentials(&parsed_content) {
+            return Err(BridgeErrorCode::InvalidSourceUrl);
+        }
+    }
+
+    let normalized_page_title =
+        (!source_page_title.trim().is_empty()).then(|| source_page_title.to_owned());
 
     Ok(CreateClip {
         content: content.to_owned(),
         content_type: content_type.to_owned(),
-        title: None,
+        title: (content_type == "link")
+            .then(|| normalized_page_title.clone())
+            .flatten(),
         source_app: Some(source_app.to_owned()),
         source_url: Some(source_url.to_owned()),
-        source_page_title: (!source_page_title.trim().is_empty())
-            .then(|| source_page_title.to_owned()),
+        source_page_title: normalized_page_title,
     })
+}
+
+fn is_http_url_with_host(url: &Url) -> bool {
+    matches!(url.scheme(), "http" | "https") && url.has_host()
+}
+
+fn has_credentials(url: &Url) -> bool {
+    !url.username().is_empty() || url.password().is_some()
 }
 
 fn string_field<'a>(
@@ -161,6 +186,16 @@ mod tests {
         })
     }
 
+    fn link_payload(url: &str) -> Value {
+        json!({
+            "content": url,
+            "contentType": "link",
+            "sourceApp": "Other Web",
+            "sourceUrl": url,
+            "sourcePageTitle": "  Exact page title  ",
+        })
+    }
+
     #[test]
     fn decodes_and_maps_the_exact_capture_contract_without_mutating_content() {
         let input = decode_capture_request(&request(payload("  exact content\n")))
@@ -188,6 +223,59 @@ mod tests {
         let input = decode_capture_request(&request(value)).expect("the request should decode");
 
         assert_eq!(input.source_page_title, None);
+    }
+
+    #[test]
+    fn maps_a_valid_link_capture_without_mutating_url_or_title() {
+        let url = "https://example.com/Path?query=One#Section";
+        let input = decode_capture_request(&request(link_payload(url)))
+            .expect("the valid Link request should decode");
+
+        assert_eq!(input.content, url);
+        assert_eq!(input.content_type, "link");
+        assert_eq!(input.title.as_deref(), Some("  Exact page title  "));
+        assert_eq!(input.source_url.as_deref(), Some(url));
+        assert_eq!(
+            input.source_page_title.as_deref(),
+            Some("  Exact page title  ")
+        );
+    }
+
+    #[test]
+    fn maps_a_blank_link_page_title_to_none() {
+        let mut value = link_payload("https://example.com/");
+        value["sourcePageTitle"] = json!("  \n");
+
+        let input =
+            decode_capture_request(&request(value)).expect("the valid Link request should decode");
+
+        assert_eq!(input.title, None);
+        assert_eq!(input.source_page_title, None);
+    }
+
+    #[test]
+    fn rejects_link_content_that_is_not_the_exact_safe_source_url() {
+        for (content, source_url, expected) in [
+            (
+                "https://example.com/other",
+                "https://example.com/page",
+                BridgeErrorCode::InvalidContent,
+            ),
+            (
+                "file:///C:/private.txt",
+                "file:///C:/private.txt",
+                BridgeErrorCode::InvalidSourceUrl,
+            ),
+            (
+                "https://user:secret@example.com/private",
+                "https://user:secret@example.com/private",
+                BridgeErrorCode::InvalidSourceUrl,
+            ),
+        ] {
+            let mut value = link_payload(source_url);
+            value["content"] = json!(content);
+            assert_eq!(decode_capture_request(&request(value)), Err(expected),);
+        }
     }
 
     #[test]

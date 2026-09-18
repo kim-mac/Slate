@@ -21,6 +21,21 @@ fn request(content: &str) -> Vec<u8> {
     .expect("the test request should serialize")
 }
 
+fn link_request(url: &str, title: &str) -> Vec<u8> {
+    serde_json::to_vec(&json!({
+        "version": 1,
+        "type": "capture_clip",
+        "payload": {
+            "content": url,
+            "contentType": "link",
+            "sourceApp": "Other Web",
+            "sourceUrl": url,
+            "sourcePageTitle": title,
+        },
+    }))
+    .expect("the test request should serialize")
+}
+
 fn frame(body: &[u8]) -> Vec<u8> {
     let length = u32::try_from(body.len()).expect("the test body should fit in a frame");
     let mut framed = length.to_ne_bytes().to_vec();
@@ -78,6 +93,43 @@ fn persists_a_valid_capture_in_the_same_database_path_used_by_the_gui() {
         result,
         json!({ "version": 1, "ok": true, "clipId": clip_id })
     );
+}
+
+#[test]
+fn persists_a_valid_page_link_through_the_existing_clip_service() {
+    let directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let database_path = clip_database_path(directory.path());
+    fs::create_dir_all(
+        database_path
+            .parent()
+            .expect("the database should have a parent directory"),
+    )
+    .expect("the application data directory should be created");
+    let service = service_at(&database_path);
+    let url = "https://example.com/Path?query=One#Section";
+    let title = "Exact page title";
+    let mut output = Vec::new();
+
+    run_once(
+        &mut Cursor::new(frame(&link_request(url, title))),
+        &mut output,
+        &service,
+    )
+    .expect("the host should process a valid Link frame");
+
+    let result = response(&output);
+    let clip_id = result["clipId"]
+        .as_str()
+        .expect("success should return a clip ID");
+    let stored = service
+        .get(clip_id)
+        .expect("the existing database should be readable")
+        .expect("the page Link should be persisted through ClipService");
+    assert_eq!(stored.content, url);
+    assert_eq!(stored.content_type, "link");
+    assert_eq!(stored.title.as_deref(), Some(title));
+    assert_eq!(stored.source_url.as_deref(), Some(url));
+    assert_eq!(stored.source_page_title.as_deref(), Some(title));
 }
 
 #[test]

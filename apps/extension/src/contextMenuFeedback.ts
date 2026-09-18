@@ -7,6 +7,7 @@ type CreateNotification = (
   options: chrome.notifications.NotificationCreateOptions,
 ) => Promise<string> | void;
 type ClearNotification = (id: string) => Promise<boolean> | void;
+export type CaptureNotificationKind = 'selection' | 'page';
 
 export async function notifyCaptureResult(
   result: CaptureClipResponse,
@@ -14,14 +15,17 @@ export async function notifyCaptureResult(
     chrome.notifications.create(id, options),
   iconUrl = 'icons/notification.png',
   clear: ClearNotification = (id) => chrome.notifications.clear(id),
+  captureKind: CaptureNotificationKind = 'selection',
 ): Promise<void> {
   const message = result.ok
     ? 'Clip saved locally.'
-    : result.error === 'storage_unavailable'
-      ? 'Could not save locally. Make sure AI Clip Memory is installed, then try again.'
-      : result.error === 'message_too_large'
-        ? 'Selection is too large. Select less text and try again.'
-        : 'Could not save this selection. Try again.';
+    : captureKind === 'page'
+      ? 'Could not save this page.'
+      : result.error === 'storage_unavailable'
+        ? 'Could not save locally. Make sure AI Clip Memory is installed, then try again.'
+        : result.error === 'message_too_large'
+          ? 'Selection is too large. Select less text and try again.'
+          : 'Could not save this selection. Try again.';
   try {
     await clear(CAPTURE_NOTIFICATION_ID);
   } catch {

@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import manifest from '../public/manifest.json';
-import { CAPTURE_CONTEXT_MENU } from './contextMenu';
+import * as contextMenus from './contextMenu';
 
 const EXPECTED_CHROME_EXTENSION_ID = 'jjfaegknedfakmidhhdlmbebnjafcjfi';
 
@@ -91,11 +91,19 @@ describe('extension manifest', () => {
 });
 
 describe('capture context menu', () => {
-  test('is limited to selections on HTTP and HTTPS documents', () => {
-    expect(CAPTURE_CONTEXT_MENU).toEqual({
+  test('registers independent selection and page actions on HTTP and HTTPS documents', () => {
+    expect(contextMenus.CAPTURE_CONTEXT_MENU).toEqual({
       id: 'save-selection-to-ai-clip-memory',
-      title: 'Save to AI Clip Memory',
+      title: 'Save selection',
       contexts: ['selection'],
+      documentUrlPatterns: ['http://*/*', 'https://*/*'],
+    });
+    expect(
+      (contextMenus as Record<string, unknown>).SAVE_PAGE_CONTEXT_MENU,
+    ).toEqual({
+      id: 'save-page-to-ai-clip-memory',
+      title: 'Save this page',
+      contexts: ['page', 'selection', 'link', 'image', 'video', 'audio'],
       documentUrlPatterns: ['http://*/*', 'https://*/*'],
     });
   });
