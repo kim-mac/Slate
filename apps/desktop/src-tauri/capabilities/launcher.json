@@ -1,10 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "launcher",
-  "description": "The launcher can only list/copy clips and manage its own lifecycle.",
+  "description": "The launcher can create, edit, list, and copy clips and manage its own lifecycle.",
   "windows": ["launcher"],
   "permissions": [
     "allow-list-clips",
+    "allow-create-clip",
+    "allow-update-clip",
+    "allow-delete-clip",
     "allow-copy-clip-content",
     "allow-launcher-ready",
     "allow-hide-launcher",

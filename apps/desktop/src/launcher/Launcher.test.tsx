@@ -1,4 +1,4 @@
-import type { Clip } from '@ai-clip-memory/shared';
+import type { Clip, ClipInput } from '@ai-clip-memory/shared';
 import {
   act,
   cleanup,
@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Launcher } from './Launcher';
@@ -31,7 +32,7 @@ const newer: Clip = {
   sourceApp: 'ChatGPT',
   createdAt: '2026-09-02T00:00:00Z',
 };
-function setup() {
+function setup(initialClips: Clip[] = [older, newer]) {
   let deliver!: (state: LauncherState) => void;
   const host: LauncherHost = {
     listen: vi.fn(async (handler) => {
@@ -43,7 +44,23 @@ function setup() {
     openTin: vi.fn(async () => undefined),
   };
   const client = {
-    list: vi.fn(async () => [older, newer]),
+    list: vi.fn(async () => initialClips),
+    create: vi.fn(async () => ({
+      ...newer,
+      id: 'created',
+      title: null,
+      content: 'Created locally',
+      contentType: 'text' as const,
+      sourceApp: null,
+      sourceUrl: null,
+      sourcePageTitle: null,
+    })),
+    update: vi.fn(async (id: string, input: ClipInput) => ({
+      ...newer,
+      ...input,
+      id,
+    })),
+    delete: vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined),
     copyContent: vi
       .fn<(id: string) => Promise<void>>()
       .mockResolvedValue(undefined),
@@ -188,6 +205,312 @@ test('starts unselected and enters results explicitly from either direction', as
   fireEvent.change(search, { target: { value: ' ' } });
   fireEvent.keyDown(search, { key: 'ArrowUp' });
   expect(options.at(-1)?.getAttribute('aria-selected')).toBe('true');
+});
+test('opens compact create mode, focuses Content, and Escape returns to search before hiding', async () => {
+  const { host } = setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  await waitFor(() => expect(document.activeElement).toBe(content));
+  expect(screen.getByRole('combobox', { name: 'Content type' })).toBeTruthy();
+  expect(screen.queryByRole('searchbox')).toBeNull();
+
+  fireEvent.keyDown(content, { key: 'Escape' });
+  const search = await screen.findByRole('searchbox');
+  await waitFor(() => expect(document.activeElement).toBe(search));
+  expect(host.hide).not.toHaveBeenCalled();
+
+  fireEvent.keyDown(search, { key: 'Escape' });
+  await waitFor(() => expect(host.hide).toHaveBeenCalledWith(1));
+});
+test('creates through the existing client, clears search, and selects the local result', async () => {
+  const { client, host } = setup();
+  const search = await screen.findByRole('searchbox');
+  fireEvent.change(search, { target: { value: 'guide' } });
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, {
+    target: { value: '  https://example.com/new  ' },
+  });
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+
+  await waitFor(() =>
+    expect(client.create).toHaveBeenCalledWith({
+      content: '  https://example.com/new  ',
+      contentType: 'link',
+      title: null,
+      sourceApp: null,
+      sourceUrl: null,
+      sourcePageTitle: null,
+    }),
+  );
+  const returnedSearch = await screen.findByRole('searchbox');
+  expect(returnedSearch).toHaveProperty('value', '');
+  expect(screen.getByText('Saved')).toBeTruthy();
+  expect(
+    screen
+      .getByRole('option', { name: /Created locally/ })
+      .getAttribute('aria-selected'),
+  ).toBe('true');
+  expect(host.hide).not.toHaveBeenCalled();
+});
+test('deduplicates a pending create and preserves a failed draft for retry', async () => {
+  const { client } = setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+  let rejectCreate!: (error: Error) => void;
+  client.create.mockImplementationOnce(
+    () =>
+      new Promise((_, reject) => {
+        rejectCreate = reject;
+      }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Keep failed draft' } });
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+  expect(client.create).toHaveBeenCalledTimes(1);
+
+  await act(async () => rejectCreate(new Error('private database detail')));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    'Clip could not be saved.',
+  );
+  expect(content).toHaveProperty('value', 'Keep failed draft');
+});
+test('Cancel discards create draft and focus loss preserves an active draft', async () => {
+  const { host } = setup();
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  let content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Discard me' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  content = screen.getByRole('textbox', { name: 'Content' });
+  expect(content).toHaveProperty('value', '');
+
+  fireEvent.change(content, { target: { value: 'Survive focus loss' } });
+  fireEvent.blur(window);
+  fireEvent.focus(window);
+  expect(content).toHaveProperty('value', 'Survive focus loss');
+  expect(host.hide).not.toHaveBeenCalled();
+});
+test('edits the current stored clip by id and preserves hidden metadata', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit selected clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Updated guide' } });
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+
+  await waitFor(() =>
+    expect(client.update).toHaveBeenCalledWith('newer', {
+      content: 'Updated guide',
+      contentType: 'text',
+      title: newer.title,
+      sourceApp: newer.sourceApp,
+      sourceUrl: newer.sourceUrl,
+      sourcePageTitle: newer.sourcePageTitle,
+    }),
+  );
+  expect(client.list).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('Saved')).toBeTruthy();
+  expect(screen.getByText('Updated guide')).toBeTruthy();
+  expect(
+    screen
+      .getByRole('option', { name: /Recent note/ })
+      .getAttribute('aria-selected'),
+  ).toBe('true');
+});
+test('shows isolated Edit and Delete actions for only the selected result', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  const options = await screen.findAllByRole('option');
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+
+  const selected = options[0]!;
+  const unselected = options[1]!;
+  const edit = within(selected).getByRole('button', {
+    name: 'Edit selected clip',
+  });
+  const remove = within(selected).getByRole('button', {
+    name: 'Delete selected clip',
+  });
+  const titleRow = edit.closest('.launcher-title-row');
+  expect(titleRow).not.toBeNull();
+  expect(within(titleRow as HTMLElement).getByText('Recent note')).toBeTruthy();
+  expect(
+    within(titleRow as HTMLElement)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label')),
+  ).toEqual(['Edit selected clip', 'Delete selected clip']);
+  expect(
+    within(unselected).queryByRole('button', { name: 'Edit selected clip' }),
+  ).toBeNull();
+  expect(
+    within(unselected).queryByRole('button', {
+      name: 'Delete selected clip',
+    }),
+  ).toBeNull();
+
+  fireEvent.focus(remove);
+  expect(await screen.findByText('Delete clip')).toBeTruthy();
+
+  fireEvent.mouseDown(remove);
+  fireEvent.click(remove);
+  expect(client.copyContent).not.toHaveBeenCalled();
+  expect(client.delete).not.toHaveBeenCalled();
+  expect(selected.getAttribute('aria-selected')).toBe('true');
+  const confirmation = screen.getByRole('alertdialog', {
+    name: 'Delete this clip?',
+  });
+  expect(confirmation.textContent).toContain(
+    'This clip will be permanently deleted.',
+  );
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(remove));
+
+  fireEvent.mouseDown(edit);
+  fireEvent.click(edit);
+  expect(client.copyContent).not.toHaveBeenCalled();
+  expect(client.delete).not.toHaveBeenCalled();
+  expect(screen.getByRole('form', { name: 'Edit clip' })).toBeTruthy();
+});
+
+test('Escape dismisses delete confirmation without hiding or deleting', async () => {
+  const { client, host } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+
+  const confirmation = screen.getByRole('alertdialog', {
+    name: 'Delete this clip?',
+  });
+  fireEvent.keyDown(confirmation, { key: 'Escape' });
+
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+  expect(client.delete).not.toHaveBeenCalled();
+  expect(host.hide).not.toHaveBeenCalled();
+  expect(screen.getByRole('option', { name: /Recent note/ })).toBeTruthy();
+});
+
+test('confirmed delete removes the clip, preserves query, selects the next result and focuses search', async () => {
+  const { client, host } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.change(search, { target: { value: 'note' } });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+  fireEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', {
+      name: 'Delete',
+    }),
+  );
+
+  await waitFor(() => expect(client.delete).toHaveBeenCalledWith('newer'));
+  expect(screen.queryByRole('option', { name: /Recent note/ })).toBeNull();
+  expect(screen.queryByText('TypeScript guide')).toBeNull();
+  expect(
+    screen
+      .getByRole('option', { name: /Older note/ })
+      .getAttribute('aria-selected'),
+  ).toBe('true');
+  expect(search).toHaveProperty('value', 'note');
+  expect(screen.getByText('Deleted')).toBeTruthy();
+  await waitFor(() => expect(document.activeElement).toBe(search));
+  expect(host.hide).not.toHaveBeenCalled();
+});
+
+test('delete selects the previous result when no next result remains', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+  fireEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', {
+      name: 'Delete',
+    }),
+  );
+
+  await waitFor(() => expect(client.delete).toHaveBeenCalledWith('older'));
+  expect(
+    screen
+      .getByRole('option', { name: /Recent note/ })
+      .getAttribute('aria-selected'),
+  ).toBe('true');
+});
+
+test('delete leaves no selection and reuses the empty state when no clips remain', async () => {
+  const { client } = setup([newer]);
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+  fireEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', {
+      name: 'Delete',
+    }),
+  );
+
+  await waitFor(() => expect(client.delete).toHaveBeenCalledWith('newer'));
+  expect(screen.queryByRole('option')).toBeNull();
+  expect(screen.getByText('No clips yet')).toBeTruthy();
+});
+
+test('pending and failed deletion stays local, safe, retryable and deduplicated', async () => {
+  const { client, host } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  let rejectDelete!: (error: Error) => void;
+  client.delete.mockImplementationOnce(
+    () =>
+      new Promise((_, reject) => {
+        rejectDelete = reject;
+      }),
+  );
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+  const confirmation = screen.getByRole('alertdialog');
+  const confirm = within(confirmation).getByRole('button', { name: 'Delete' });
+  fireEvent.click(confirm);
+  fireEvent.click(confirm);
+  expect(client.delete).toHaveBeenCalledTimes(1);
+  expect(document.getElementById('result-newer')).not.toBeNull();
+
+  await act(async () => rejectDelete(new Error('private database details')));
+  const error = await within(confirmation).findByRole('alert');
+  expect(error.textContent).toBe('Clip could not be deleted.');
+  expect(error.textContent).not.toContain('private');
+  expect(document.getElementById('result-newer')).not.toBeNull();
+  expect(host.hide).not.toHaveBeenCalled();
+
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Delete' }));
+  await waitFor(() => expect(client.delete).toHaveBeenCalledTimes(2));
+  await waitFor(() =>
+    expect(screen.queryByRole('option', { name: /Recent note/ })).toBeNull(),
+  );
+});
+test('keeps an edit draft and exposes a safe retryable error when the clip disappeared', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit selected clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Keep this edit' } });
+  client.list.mockResolvedValueOnce([]);
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toBe('This clip is no longer available.');
+  expect(content).toHaveProperty('value', 'Keep this edit');
+  expect(client.update).not.toHaveBeenCalled();
 });
 test('focuses search, orders recent clips, uses existing multi-term rules and keeps typing during navigation', async () => {
   const { client } = setup();
