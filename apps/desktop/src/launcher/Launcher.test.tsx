@@ -32,7 +32,7 @@ const newer: Clip = {
   sourceApp: 'ChatGPT',
   createdAt: '2026-09-02T00:00:00Z',
 };
-function setup() {
+function setup(initialClips: Clip[] = [older, newer]) {
   let deliver!: (state: LauncherState) => void;
   const host: LauncherHost = {
     listen: vi.fn(async (handler) => {
@@ -44,7 +44,7 @@ function setup() {
     openTin: vi.fn(async () => undefined),
   };
   const client = {
-    list: vi.fn(async () => [older, newer]),
+    list: vi.fn(async () => initialClips),
     create: vi.fn(async () => ({
       ...newer,
       id: 'created',
@@ -60,6 +60,7 @@ function setup() {
       ...input,
       id,
     })),
+    delete: vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined),
     copyContent: vi
       .fn<(id: string) => Promise<void>>()
       .mockResolvedValue(undefined),
@@ -323,7 +324,7 @@ test('edits the current stored clip by id and preserves hidden metadata', async 
       .getAttribute('aria-selected'),
   ).toBe('true');
 });
-test('shows one isolated pencil in the selected result title row', async () => {
+test('shows isolated Edit and Delete actions for only the selected result', async () => {
   const { client } = setup();
   const search = await screen.findByRole('searchbox');
   const options = await screen.findAllByRole('option');
@@ -334,17 +335,166 @@ test('shows one isolated pencil in the selected result title row', async () => {
   const edit = within(selected).getByRole('button', {
     name: 'Edit selected clip',
   });
+  const remove = within(selected).getByRole('button', {
+    name: 'Delete selected clip',
+  });
   const titleRow = edit.closest('.launcher-title-row');
   expect(titleRow).not.toBeNull();
   expect(within(titleRow as HTMLElement).getByText('Recent note')).toBeTruthy();
   expect(
+    within(titleRow as HTMLElement)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label')),
+  ).toEqual(['Edit selected clip', 'Delete selected clip']);
+  expect(
     within(unselected).queryByRole('button', { name: 'Edit selected clip' }),
   ).toBeNull();
+  expect(
+    within(unselected).queryByRole('button', {
+      name: 'Delete selected clip',
+    }),
+  ).toBeNull();
+
+  fireEvent.focus(remove);
+  expect(await screen.findByText('Delete clip')).toBeTruthy();
+
+  fireEvent.mouseDown(remove);
+  fireEvent.click(remove);
+  expect(client.copyContent).not.toHaveBeenCalled();
+  expect(client.delete).not.toHaveBeenCalled();
+  expect(selected.getAttribute('aria-selected')).toBe('true');
+  const confirmation = screen.getByRole('alertdialog', {
+    name: 'Delete this clip?',
+  });
+  expect(confirmation.textContent).toContain(
+    'This clip will be permanently deleted.',
+  );
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(remove));
 
   fireEvent.mouseDown(edit);
   fireEvent.click(edit);
   expect(client.copyContent).not.toHaveBeenCalled();
+  expect(client.delete).not.toHaveBeenCalled();
   expect(screen.getByRole('form', { name: 'Edit clip' })).toBeTruthy();
+});
+
+test('Escape dismisses delete confirmation without hiding or deleting', async () => {
+  const { client, host } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+
+  const confirmation = screen.getByRole('alertdialog', {
+    name: 'Delete this clip?',
+  });
+  fireEvent.keyDown(confirmation, { key: 'Escape' });
+
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+  expect(client.delete).not.toHaveBeenCalled();
+  expect(host.hide).not.toHaveBeenCalled();
+  expect(screen.getByRole('option', { name: /Recent note/ })).toBeTruthy();
+});
+
+test('confirmed delete removes the clip, preserves query, selects the next result and focuses search', async () => {
+  const { client, host } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.change(search, { target: { value: 'note' } });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+  fireEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', {
+      name: 'Delete',
+    }),
+  );
+
+  await waitFor(() => expect(client.delete).toHaveBeenCalledWith('newer'));
+  expect(screen.queryByRole('option', { name: /Recent note/ })).toBeNull();
+  expect(screen.queryByText('TypeScript guide')).toBeNull();
+  expect(
+    screen
+      .getByRole('option', { name: /Older note/ })
+      .getAttribute('aria-selected'),
+  ).toBe('true');
+  expect(search).toHaveProperty('value', 'note');
+  expect(screen.getByText('Deleted')).toBeTruthy();
+  await waitFor(() => expect(document.activeElement).toBe(search));
+  expect(host.hide).not.toHaveBeenCalled();
+});
+
+test('delete selects the previous result when no next result remains', async () => {
+  const { client } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+  fireEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', {
+      name: 'Delete',
+    }),
+  );
+
+  await waitFor(() => expect(client.delete).toHaveBeenCalledWith('older'));
+  expect(
+    screen
+      .getByRole('option', { name: /Recent note/ })
+      .getAttribute('aria-selected'),
+  ).toBe('true');
+});
+
+test('delete leaves no selection and reuses the empty state when no clips remain', async () => {
+  const { client } = setup([newer]);
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+  fireEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', {
+      name: 'Delete',
+    }),
+  );
+
+  await waitFor(() => expect(client.delete).toHaveBeenCalledWith('newer'));
+  expect(screen.queryByRole('option')).toBeNull();
+  expect(screen.getByText('No clips yet')).toBeTruthy();
+});
+
+test('pending and failed deletion stays local, safe, retryable and deduplicated', async () => {
+  const { client, host } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  let rejectDelete!: (error: Error) => void;
+  client.delete.mockImplementationOnce(
+    () =>
+      new Promise((_, reject) => {
+        rejectDelete = reject;
+      }),
+  );
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+  const confirmation = screen.getByRole('alertdialog');
+  const confirm = within(confirmation).getByRole('button', { name: 'Delete' });
+  fireEvent.click(confirm);
+  fireEvent.click(confirm);
+  expect(client.delete).toHaveBeenCalledTimes(1);
+  expect(document.getElementById('result-newer')).not.toBeNull();
+
+  await act(async () => rejectDelete(new Error('private database details')));
+  const error = await within(confirmation).findByRole('alert');
+  expect(error.textContent).toBe('Clip could not be deleted.');
+  expect(error.textContent).not.toContain('private');
+  expect(document.getElementById('result-newer')).not.toBeNull();
+  expect(host.hide).not.toHaveBeenCalled();
+
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Delete' }));
+  await waitFor(() => expect(client.delete).toHaveBeenCalledTimes(2));
+  await waitFor(() =>
+    expect(screen.queryByRole('option', { name: /Recent note/ })).toBeNull(),
+  );
 });
 test('keeps an edit draft and exposes a safe retryable error when the clip disappeared', async () => {
   const { client } = setup();

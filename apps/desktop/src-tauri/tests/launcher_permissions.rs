@@ -40,7 +40,7 @@ fn main_has_only_library_launcher_status_and_autostart_commands() {
 }
 
 #[test]
-fn launcher_has_only_create_update_read_copy_lifecycle_and_event_subscriptions() {
+fn launcher_has_only_create_update_delete_read_copy_lifecycle_and_event_subscriptions() {
     let launcher = config("capabilities/launcher.json");
     assert_eq!(launcher["windows"], json!(["launcher"]));
     assert_eq!(
@@ -50,6 +50,7 @@ fn launcher_has_only_create_update_read_copy_lifecycle_and_event_subscriptions()
                 "allow-list-clips",
                 "allow-create-clip",
                 "allow-update-clip",
+                "allow-delete-clip",
                 "allow-copy-clip-content",
                 "allow-launcher-ready",
                 "allow-hide-launcher",

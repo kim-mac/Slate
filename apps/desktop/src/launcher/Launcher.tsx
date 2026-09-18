@@ -1,7 +1,17 @@
 import type { Clip, ClipInput } from '@ai-clip-memory/shared';
-import { AppWindow, GripVertical, Pencil, Plus, X } from 'lucide-react';
+import { AppWindow, GripVertical, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { tauriClipClient, type ClipClient } from '../clipClient';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { ScrollArea } from '../components/ui/scroll-area';
@@ -32,7 +42,7 @@ import { observeThemePreference } from '../themePreference';
 
 type LauncherClient = Pick<
   ClipClient,
-  'list' | 'copyContent' | 'create' | 'update'
+  'list' | 'copyContent' | 'create' | 'update' | 'delete'
 >;
 type LauncherMode =
   { kind: 'search' } | { kind: 'create' } | { kind: 'edit'; clipId: string };
@@ -120,6 +130,9 @@ function LauncherSession({
   const copying = useRef(false);
   const openingTin = useRef(false);
   const saving = useRef(false);
+  const deleting = useRef(false);
+  const focusSearchAfterDelete = useRef(false);
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const composing = useRef(false);
   const modeRef = useRef<LauncherMode>({ kind: 'search' });
   const [clips, setClips] = useState<Clip[]>([]);
@@ -129,8 +142,13 @@ function LauncherSession({
   const [busy, setBusy] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [mode, setModeState] = useState<LauncherMode>({ kind: 'search' });
-  const [feedback, setFeedback] = useState<'copied' | 'saved' | null>(null);
+  const [feedback, setFeedback] = useState<
+    'copied' | 'saved' | 'deleted' | null
+  >(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Clip | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<'load' | 'copy' | 'hide' | 'open' | null>(
     null,
   );
@@ -254,6 +272,36 @@ function LauncherSession({
     setSaveError(null);
     setMode({ kind: 'search' });
   }
+  function openDelete(clip: Clip) {
+    focusSearchAfterDelete.current = false;
+    setDeleteError(null);
+    setFeedback(null);
+    setDeleteTarget(clip);
+  }
+  async function deleteClip() {
+    if (!deleteTarget || deleting.current) return;
+    const deletedId = deleteTarget.id;
+    const deletedIndex = results.findIndex((clip) => clip.id === deletedId);
+    const nextSelection =
+      results[deletedIndex + 1] ?? results[deletedIndex - 1] ?? null;
+    deleting.current = true;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await client.delete(deletedId);
+      if (!active.current) return;
+      setClips((current) => current.filter((clip) => clip.id !== deletedId));
+      setSelectedId(nextSelection?.id ?? null);
+      setFeedback('deleted');
+      focusSearchAfterDelete.current = true;
+      setDeleteTarget(null);
+    } catch {
+      if (active.current) setDeleteError('Clip could not be deleted.');
+    } finally {
+      deleting.current = false;
+      if (active.current) setIsDeleting(false);
+    }
+  }
   async function saveDraft(draft: LauncherClipDraft) {
     if (saving.current) return;
     saving.current = true;
@@ -314,6 +362,7 @@ function LauncherSession({
     )
       return;
     if (event.key === 'Escape') {
+      if (deleteTarget) return;
       event.preventDefault();
       if (modeRef.current.kind !== 'search') cancelEditor();
       else void hide();
@@ -498,26 +547,53 @@ function LauncherSession({
                     <div className="launcher-title-row">
                       <div className="launcher-title">{displayTitle(clip)}</div>
                       {clip.id === selected?.id && (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label="Edit selected clip"
-                                onMouseDown={(event) => event.stopPropagation()}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openEdit(clip.id);
-                                }}
-                              />
-                            }
-                          >
-                            <Pencil aria-hidden="true" />
-                          </TooltipTrigger>
-                          <TooltipContent>Edit clip</TooltipContent>
-                        </Tooltip>
+                        <div className="launcher-title-actions">
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label="Edit selected clip"
+                                  onMouseDown={(event) =>
+                                    event.stopPropagation()
+                                  }
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openEdit(clip.id);
+                                  }}
+                                />
+                              }
+                            >
+                              <Pencil aria-hidden="true" />
+                            </TooltipTrigger>
+                            <TooltipContent>Edit clip</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  ref={deleteTriggerRef}
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label="Delete selected clip"
+                                  onMouseDown={(event) =>
+                                    event.stopPropagation()
+                                  }
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openDelete(clip);
+                                  }}
+                                />
+                              }
+                            >
+                              <Trash2 aria-hidden="true" />
+                            </TooltipTrigger>
+                            <TooltipContent>Delete clip</TooltipContent>
+                          </Tooltip>
+                        </div>
                       )}
                     </div>
                     {clip.id === selected?.id ? (
@@ -548,7 +624,9 @@ function LauncherSession({
                   ? 'Copied'
                   : feedback === 'saved'
                     ? 'Saved'
-                    : `${results.length} ${results.length === 1 ? 'clip' : 'clips'}`}
+                    : feedback === 'deleted'
+                      ? 'Deleted'
+                      : `${results.length} ${results.length === 1 ? 'clip' : 'clips'}`}
             </span>
             <span>
               ↑↓ Select · Enter Copy all · Ctrl+C Copy selection · Esc Close
@@ -577,6 +655,45 @@ function LauncherSession({
           onSave={(draft) => void saveDraft(draft)}
         />
       )}
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting.current) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <AlertDialogContent
+          finalFocus={() =>
+            focusSearchAfterDelete.current
+              ? searchRef.current
+              : deleteTriggerRef.current
+          }
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this clip?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This clip will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <p className="launcher-delete-error" role="alert">
+              {deleteError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isDeleting}
+              onClick={() => void deleteClip()}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

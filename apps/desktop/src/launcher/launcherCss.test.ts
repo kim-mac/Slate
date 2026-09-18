@@ -38,6 +38,15 @@ test('uses a background-only hover state for unselected pointer results', () => 
   );
 });
 
+test('keeps long selected titles bounded beside a fixed launcher action cluster', () => {
+  expect(stylesheet).toMatch(
+    /\.launcher-title\s*\{[^}]*flex:\s*1[^}]*min-width:\s*0/s,
+  );
+  expect(stylesheet).toMatch(
+    /\.launcher-title-actions\s*\{[^}]*display:\s*flex[^}]*flex-shrink:\s*0/s,
+  );
+});
+
 test('keeps the compact clip editor bounded inside the fixed launcher', () => {
   expect(stylesheet).toMatch(
     /\.launcher-editor\s*\{[^}]*display:\s*flex[^}]*flex:\s*1[^}]*min-height:\s*0/s,

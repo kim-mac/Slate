@@ -99,3 +99,21 @@
 - [ ] Run the focused launcher policy test and confirm it fails because the current policy hides an already-visible launcher.
 - [ ] Change only `LauncherPolicy::shortcut` so a valid press opens a hidden launcher or returns the current visible snapshot for presentation/focus.
 - [ ] Run focused launcher tests, the full Rust/integration suite, Rust formatting, Cargo check, desktop React tests, workspace typecheck, ESLint, Prettier, desktop frontend build, and `git diff --check`; do not commit or push.
+
+### Task 8: Confirmed deletion from the selected result
+
+**Files:**
+- Modify: `apps/desktop/src/launcher/Launcher.tsx`
+- Modify: `apps/desktop/src/launcher/Launcher.test.tsx`
+- Modify: `apps/desktop/src/launcher/launcher.css`
+- Modify: `apps/desktop/src/launcher/launcherCss.test.ts`
+- Modify: `apps/desktop/src-tauri/capabilities/launcher.json`
+- Modify: `apps/desktop/src-tauri/tests/launcher_permissions.rs`
+
+- [ ] Add failing tests for selected-only Edit/Delete ordering, tooltip and event isolation, confirmation cancellation/Escape, pending deduplication, success selection/focus/feedback, safe retry, bounded actions, and the exact delete permission.
+- [ ] Run the focused React and capability tests and confirm they fail because launcher deletion is absent.
+- [ ] Add the existing AlertDialog around a selected clip target and call the existing `ClipClient.delete` only after confirmation.
+- [ ] On success, preserve query, remove the clip locally, select next then previous, show Deleted, close the dialog, and use supported final focus to return to Search.
+- [ ] On failure, retain the dialog and clip, expose only a generic retryable error, and deduplicate pending calls.
+- [ ] Add only `allow-delete-clip` to the launcher capability and rerun focused tests until green.
+- [ ] Run all desktop, Rust/integration, formatting, lint, typecheck, Cargo, frontend build, and diff checks; do not commit or push.
