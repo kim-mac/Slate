@@ -30,6 +30,18 @@ describe('context-menu capture feedback', () => {
     expect(create.mock.calls[1]![1].message).toContain('too large');
   });
 
+  test('uses a generic content-free failure for page capture', async () => {
+    const create = vi.fn().mockResolvedValue('capture-result');
+    await notifyCaptureResult(
+      { version: 1, ok: false, error: 'invalid_source_url' },
+      create,
+      'icons/notification.png',
+      undefined,
+      'page',
+    );
+    expect(create.mock.calls[0]![1].message).toBe('Could not save this page.');
+  });
+
   test('clears the owned notification before recreating it', async () => {
     const order: string[] = [];
     const clear = vi.fn(async (id: string) => {

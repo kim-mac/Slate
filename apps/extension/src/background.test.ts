@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { CAPTURE_CONTEXT_MENU } from './contextMenu';
+import { CAPTURE_CONTEXT_MENU, SAVE_PAGE_CONTEXT_MENU } from './contextMenu';
 import type { SendNativeMessage } from './bridge';
 
 type ClickListener = (
@@ -15,9 +15,10 @@ interface FakeChromeState {
     respond: (response: unknown) => void,
   ) => boolean | undefined;
   clickListener?: ClickListener;
-  createdMenu?: chrome.contextMenus.CreateProperties;
+  createdMenus?: chrome.contextMenus.CreateProperties[];
   installListener?: () => void;
   removedMenus: boolean;
+  menuEvents?: string[];
   clearedNotifications?: string[];
   notifications?: Array<{
     id: string;
@@ -44,7 +45,10 @@ function installFakeChrome(state: FakeChromeState) {
     },
     contextMenus: {
       create(properties: chrome.contextMenus.CreateProperties) {
-        state.createdMenu = properties;
+        state.menuEvents ??= [];
+        state.menuEvents.push(`create:${String(properties.id)}`);
+        state.createdMenus ??= [];
+        state.createdMenus.push(properties);
       },
       onClicked: {
         addListener(listener: ClickListener) {
@@ -52,6 +56,8 @@ function installFakeChrome(state: FakeChromeState) {
         },
       },
       removeAll(callback: () => void) {
+        state.menuEvents ??= [];
+        state.menuEvents.push('removeAll');
         state.removedMenus = true;
         callback();
       },
@@ -117,7 +123,7 @@ describe('Manifest V3 background service worker', () => {
     vi.unstubAllGlobals();
   });
 
-  test('replaces stale context menus with the capture menu on installation', async () => {
+  test('replaces stale context menus with independent selection and page actions', async () => {
     const state: FakeChromeState = { removedMenus: false };
     installFakeChrome(state);
 
@@ -125,7 +131,15 @@ describe('Manifest V3 background service worker', () => {
     state.installListener?.();
 
     expect(state.removedMenus).toBe(true);
-    expect(state.createdMenu).toEqual(CAPTURE_CONTEXT_MENU);
+    expect(state.createdMenus).toEqual([
+      CAPTURE_CONTEXT_MENU,
+      SAVE_PAGE_CONTEXT_MENU,
+    ]);
+    expect(state.menuEvents).toEqual([
+      'removeAll',
+      'create:save-selection-to-ai-clip-memory',
+      'create:save-page-to-ai-clip-memory',
+    ]);
     expect(state.clickListener).toBeTypeOf('function');
   });
 
@@ -190,6 +204,95 @@ describe('Manifest V3 background service worker', () => {
     ).toMatchObject({ sourcePageTitle: '' });
   });
 
+  test('maps a page action to an exact Link capture without requiring a selection', async () => {
+    const state: FakeChromeState = { removedMenus: false };
+    installFakeChrome(state);
+    const { createCapturePayloadFromContextMenu } =
+      await import('./background');
+
+    expect(
+      createCapturePayloadFromContextMenu(
+        {
+          menuItemId: SAVE_PAGE_CONTEXT_MENU.id!,
+          pageUrl: 'https://example.com/path?one=two#three',
+          selectionText: 'must be ignored',
+          linkUrl: 'https://different.example/link',
+          frameUrl: 'https://different.example/frame',
+        },
+        {
+          url: 'https://example.com/path?one=two#three',
+          title: 'Exact page title',
+        },
+      ),
+    ).toEqual({
+      content: 'https://example.com/path?one=two#three',
+      contentType: 'link',
+      sourceApp: 'Other Web',
+      sourceUrl: 'https://example.com/path?one=two#three',
+      sourcePageTitle: 'Exact page title',
+    });
+  });
+
+  test('rejects stale or unsupported page actions before contacting the bridge', async () => {
+    const state: FakeChromeState = { removedMenus: false };
+    installFakeChrome(state);
+    const { handleCaptureClick } = await import('./background');
+    const sendNativeMessage = vi.fn<SendNativeMessage>();
+
+    await expect(
+      handleCaptureClick(
+        {
+          menuItemId: SAVE_PAGE_CONTEXT_MENU.id!,
+          pageUrl: 'https://example.com/old',
+        },
+        { url: 'https://example.com/new', title: 'Page' },
+        sendNativeMessage,
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      handleCaptureClick(
+        { menuItemId: SAVE_PAGE_CONTEXT_MENU.id! },
+        { url: 'chrome://extensions/', title: 'Extensions' },
+        sendNativeMessage,
+      ),
+    ).resolves.toBeNull();
+    expect(sendNativeMessage).not.toHaveBeenCalled();
+  });
+
+  test('sends a valid page action through native messaging exactly once', async () => {
+    const state: FakeChromeState = { removedMenus: false };
+    installFakeChrome(state);
+    const { handleCaptureClick } = await import('./background');
+    const sendNativeMessage = vi.fn<SendNativeMessage>().mockResolvedValue({
+      version: 1,
+      ok: true,
+      clipId: 'f7a6c48d-bfd5-4f13-b54d-e238f7cd7842',
+    });
+
+    await expect(
+      handleCaptureClick(
+        {
+          menuItemId: SAVE_PAGE_CONTEXT_MENU.id!,
+          pageUrl: 'https://claude.ai/chat/example',
+        },
+        { url: 'https://claude.ai/chat/example', title: 'Claude chat' },
+        sendNativeMessage,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(sendNativeMessage).toHaveBeenCalledTimes(1);
+    expect(sendNativeMessage).toHaveBeenCalledWith('com.aiclipmemory.bridge', {
+      version: 1,
+      type: 'capture_clip',
+      payload: {
+        content: 'https://claude.ai/chat/example',
+        contentType: 'link',
+        sourceApp: 'Claude',
+        sourceUrl: 'https://claude.ai/chat/example',
+        sourcePageTitle: 'Claude chat',
+      },
+    });
+  });
+
   test('sends a valid capture through native messaging exactly once', async () => {
     const state: FakeChromeState = { removedMenus: false };
     installFakeChrome(state);
@@ -250,6 +353,27 @@ describe('Manifest V3 background service worker', () => {
     );
   });
 
+  test('shows generic content-free feedback when a page action is rejected locally', async () => {
+    const state: FakeChromeState = { removedMenus: false };
+    installFakeChrome(state);
+    await import('./background');
+    state.clickListener?.(
+      {
+        menuItemId: SAVE_PAGE_CONTEXT_MENU.id!,
+        pageUrl: 'https://example.com/stale-private-path',
+      } as chrome.contextMenus.OnClickData,
+      {
+        url: 'https://example.com/current-private-path',
+        title: 'Private title',
+      } as chrome.tabs.Tab,
+    );
+    await vi.waitFor(() => expect(state.notifications).toHaveLength(1));
+    expect(state.notifications?.[0]?.options.message).toBe(
+      'Could not save this page.',
+    );
+    expect(JSON.stringify(state.notifications)).not.toContain('private');
+  });
+
   test('does not contact the bridge for invalid capture input', async () => {
     const state: FakeChromeState = { removedMenus: false };
     installFakeChrome(state);
@@ -301,6 +425,6 @@ describe('Manifest V3 background service worker', () => {
     });
     expect(consoleLog).not.toHaveBeenCalled();
     expect(consoleError).not.toHaveBeenCalled();
-    expect(state.createdMenu).toBeUndefined();
+    expect(state.createdMenus).toBeUndefined();
   });
 });

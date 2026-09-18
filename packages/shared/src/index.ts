@@ -15,7 +15,7 @@ export type BrowserSourceApp = (typeof BROWSER_SOURCE_APPS)[number];
 
 export interface BrowserCapturePayload {
   content: string;
-  contentType: 'text';
+  contentType: 'text' | 'link';
   sourceApp: BrowserSourceApp;
   sourceUrl: string;
   sourcePageTitle: string;

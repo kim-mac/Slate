@@ -25,6 +25,22 @@ describe('native messaging bridge client', () => {
     });
   });
 
+  test('uses the unchanged envelope for a Link page capture', () => {
+    const pagePayload: BrowserCapturePayload = {
+      content: 'https://example.com/path?one=two#three',
+      contentType: 'link',
+      sourceApp: 'Other Web',
+      sourceUrl: 'https://example.com/path?one=two#three',
+      sourcePageTitle: 'Example page',
+    };
+
+    expect(createCaptureRequest(pagePayload)).toEqual({
+      version: 1,
+      type: 'capture_clip',
+      payload: pagePayload,
+    });
+  });
+
   test('accepts a minimal successful response', async () => {
     const sendNativeMessage = vi.fn<SendNativeMessage>().mockResolvedValue({
       version: 1,
