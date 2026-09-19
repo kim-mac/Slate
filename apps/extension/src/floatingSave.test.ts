@@ -92,7 +92,7 @@ describe('floating Save', () => {
     selection();
     expect(control()?.textContent).toBe('Save');
     expect(control()?.getAttribute('aria-label')).toBe(
-      'Save selection to AI Clip Memory',
+      'Save selection to Slate',
     );
     expect(document.activeElement).toBe(document.body);
     expect(send).not.toHaveBeenCalled();

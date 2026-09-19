@@ -102,7 +102,7 @@ test('updates an open launcher when the shared desktop theme preference changes'
   expect(document.documentElement.dataset.theme).toBe('dark');
 });
 
-test('limits dragging to the header and opens Tin through the launcher host', async () => {
+test('limits dragging to the header and opens Slate through the launcher host', async () => {
   const { host } = setup();
   await screen.findByRole('option', { name: /Recent note/ });
 
@@ -117,7 +117,7 @@ test('limits dragging to the header and opens Tin through the launcher host', as
       ?.hasAttribute('data-tauri-drag-region'),
   ).toBe(false);
 
-  fireEvent.click(screen.getByRole('button', { name: 'Open Tin' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open Slate' }));
   await waitFor(() => expect(host.openTin).toHaveBeenCalledWith(1));
 });
 

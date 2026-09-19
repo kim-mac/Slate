@@ -33,7 +33,7 @@ and describe reproduction steps without disclosing user content.
 
 ## Known limitations
 
-- The SQLite database is plaintext at rest. AI Clip Memory does not currently
+- The SQLite database is plaintext at rest. Slate does not currently
   provide application-level encryption.
 - Private Phase 1 installers and executables are unsigned. Windows may show an
   unknown-publisher or SmartScreen reputation warning.

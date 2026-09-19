@@ -33,6 +33,7 @@ fn main_has_only_library_launcher_status_and_autostart_commands() {
                 "allow-get-launcher-status",
                 "allow-get-autostart-enabled",
                 "allow-set-autostart-enabled",
+                "core:app:allow-version",
             ]
             .map(str::to_owned)
         )

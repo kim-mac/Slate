@@ -73,5 +73,5 @@ pub fn run() {
             commands::set_autostart_enabled,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running AI Clip Memory");
+        .expect("error while running Slate");
 }

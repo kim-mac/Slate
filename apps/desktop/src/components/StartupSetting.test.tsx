@@ -32,7 +32,7 @@ test('renders the actual Windows autostart state', async () => {
   render(<StartupSetting client={client} />);
 
   const control = await screen.findByRole('switch', {
-    name: 'Start Tin when I sign in to Windows',
+    name: 'Start Slate when I sign in to Windows',
   });
   expect(control.getAttribute('aria-checked')).toBe('true');
   expect(getEnabled).toHaveBeenCalledTimes(1);
@@ -43,7 +43,7 @@ test('enables autostart and re-reads the actual state', async () => {
   render(<StartupSetting client={client} />);
 
   const control = await screen.findByRole('switch', {
-    name: 'Start Tin when I sign in to Windows',
+    name: 'Start Slate when I sign in to Windows',
   });
   fireEvent.click(control);
 
@@ -61,7 +61,7 @@ test('re-reads OS state after an update fails and shows a safe retryable error',
   render(<StartupSetting client={client} />);
 
   const control = await screen.findByRole('switch', {
-    name: 'Start Tin when I sign in to Windows',
+    name: 'Start Slate when I sign in to Windows',
   });
   fireEvent.click(control);
 
@@ -84,7 +84,7 @@ test('handles an initial state read failure without showing a fake boolean', asy
   ).toBeTruthy();
   expect(
     screen.queryByRole('switch', {
-      name: 'Start Tin when I sign in to Windows',
+      name: 'Start Slate when I sign in to Windows',
     }),
   ).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));

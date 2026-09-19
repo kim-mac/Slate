@@ -144,7 +144,7 @@ afterEach(() => {
 });
 
 describe('App', () => {
-  test('shows the real Windows startup setting in Privacy & About', async () => {
+  test('shows the real Windows startup setting in Settings', async () => {
     render(
       <App
         client={fakeClient().client}
@@ -152,10 +152,10 @@ describe('App', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Privacy & About' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
 
     const startup = await screen.findByRole('switch', {
-      name: 'Start Tin when I sign in to Windows',
+      name: 'Start Slate when I sign in to Windows',
     });
     expect(startup.getAttribute('aria-checked')).toBe('true');
   });
@@ -893,8 +893,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(toggle);
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Privacy & About' }));
-    expect(screen.getByText(/Your clips are stored locally/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByText(/stored locally on this device/)).toBeTruthy();
     fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true });
     expect(screen.getByRole('region', { name: 'All Clips' })).toBeTruthy();
     expect(screen.getByLabelText('All Clips results')).toBeTruthy();
@@ -1862,14 +1862,12 @@ describe('App', () => {
     const { client } = fakeClient();
     render(<App client={client} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Privacy & About' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
 
-    expect(
-      screen.getByText(
-        'Your clips are stored locally on this computer. No account or cloud connection is required.',
-      ),
-    ).toBeTruthy();
-    expect(screen.getByText('Ctrl+Shift+Space')).toBeTruthy();
+    expect(screen.getByText(/stored locally on this device/)).toBeTruthy();
+    expect(screen.getByLabelText('Keyboard shortcuts').textContent).toContain(
+      'CtrlShiftSpace',
+    );
     const toolbar = document.querySelector<HTMLElement>('.desktop-header');
     expect(toolbar).not.toBeNull();
     expect(within(toolbar!).getByRole('separator')).toBeTruthy();

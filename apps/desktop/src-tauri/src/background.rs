@@ -103,13 +103,13 @@ fn initialize_tray(app: &tauri::App) -> tauri::Result<()> {
         return Ok(());
     }
 
-    let open = MenuItem::with_id(app, OPEN_MENU_ID, "Open Tin", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, QUIT_MENU_ID, "Quit Tin", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, OPEN_MENU_ID, "Open Slate", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, QUIT_MENU_ID, "Quit Slate", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
     let mut tray = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .tooltip("Tin")
+        .tooltip("Slate")
         .on_menu_event(
             |app, event| match TrayMenuAction::from_id(event.id().as_ref()) {
                 TrayMenuAction::Open => {

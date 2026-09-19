@@ -87,13 +87,13 @@ fn launcher_open_tin_reuses_main_presentation_before_hiding_the_launcher() {
     let command = source
         .split("pub async fn open_tin_from_launcher")
         .nth(1)
-        .expect("launcher Open Tin command");
+        .expect("launcher Open Slate command");
     let show = command
         .find("background::show_main_window(app)")
         .expect("existing main-window presentation helper");
     let hide = command
         .find("hide_session(app, session)")
-        .expect("launcher hide after opening Tin");
+        .expect("launcher hide after opening Slate");
 
     assert!(show < hide);
 }

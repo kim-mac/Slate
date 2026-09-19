@@ -420,8 +420,8 @@ function LauncherSession({
           <Button
             variant="outline"
             size="icon-sm"
-            aria-label="Open Tin"
-            title="Open Tin"
+            aria-label="Open Slate"
+            title="Open Slate"
             disabled={busy}
             onClick={() => void openTin()}
           >
@@ -470,7 +470,7 @@ function LauncherSession({
                 {error === 'copy'
                   ? 'Clip could not be copied.'
                   : error === 'open'
-                    ? 'Tin could not be opened.'
+                    ? 'Slate could not be opened.'
                     : 'Quick search could not close.'}
               </span>
               <Button

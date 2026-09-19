@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "AI Clip Memory",
+        "title": "Slate",
         "width": 800,
         "height": 500,
         "visible": false
@@ -46,8 +46,8 @@
     "active": true,
     "targets": ["nsis"],
     "category": "Productivity",
-    "shortDescription": "Save and retrieve useful AI conversation clips locally.",
-    "longDescription": "A local-first desktop clip library with a Chromium browser extension and no account, cloud storage, or telemetry.",
+    "shortDescription": "Slate saves and retrieves useful clips locally.",
+    "longDescription": "Slate is a local-first desktop clip library with a Chromium browser extension and no account, cloud storage, or telemetry.",
     "icon": ["icons/icon.ico"],
     "windows": {
       "allowDowngrades": false,

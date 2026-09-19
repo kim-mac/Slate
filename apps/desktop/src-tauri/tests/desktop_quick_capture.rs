@@ -179,7 +179,7 @@ fn windows_snapshot_owns_duplicated_formats_instead_of_a_live_ole_reference() {
 
 #[test]
 fn feedback_is_generic_and_never_contains_captured_content() {
-    assert_eq!(capture_feedback_message(Ok(())), "Saved to Tin");
+    assert_eq!(capture_feedback_message(Ok(())), "Saved to Slate");
     assert_eq!(
         capture_feedback_message(Err(CaptureFailure::ClipboardEmptyText)),
         "No selected text found"

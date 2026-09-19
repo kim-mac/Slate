@@ -164,7 +164,7 @@ pub fn persist_capture(
 
 pub fn capture_feedback_message(result: Result<(), CaptureFailure>) -> &'static str {
     match result {
-        Ok(()) => "Saved to Tin",
+        Ok(()) => "Saved to Slate",
         Err(
             CaptureFailure::ClipboardRestoration | CaptureFailure::ClipboardEdpRestoreFailed { .. },
         ) => "Couldn't restore clipboard",
@@ -258,7 +258,7 @@ pub(crate) fn shortcut_event(app: &tauri::AppHandle, pressed: bool) {
         let _ = handle
             .notification()
             .builder()
-            .title("Tin")
+            .title("Slate")
             .body(capture_notification_body(result, cfg!(debug_assertions)))
             .show();
         handle.state::<CaptureController>().finish();

@@ -61,8 +61,8 @@ export function StartupSetting({
     <Card className="startup-setting">
       <CardContent className="startup-setting-content">
         <div className="startup-setting-copy">
-          <h2>Start Tin when I sign in to Windows</h2>
-          <p>Keep Tin ready for quick capture after you sign in.</p>
+          <h3>Start Slate when I sign in to Windows</h3>
+          <p>Keep Slate ready for quick capture after you sign in.</p>
         </div>
 
         {state.type === 'ready' ? (
@@ -71,7 +71,7 @@ export function StartupSetting({
             className="startup-switch"
             role="switch"
             aria-checked={state.enabled}
-            aria-label="Start Tin when I sign in to Windows"
+            aria-label="Start Slate when I sign in to Windows"
             disabled={isUpdating}
             onClick={() => void update(!state.enabled)}
           >
