@@ -13,6 +13,7 @@
     "allow-open-clip-source",
     "allow-get-launcher-status",
     "allow-get-autostart-enabled",
-    "allow-set-autostart-enabled"
+    "allow-set-autostart-enabled",
+    "core:app:allow-version"
   ]
 }

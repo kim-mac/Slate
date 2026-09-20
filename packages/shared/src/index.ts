@@ -1,4 +1,4 @@
-export const APP_NAME = 'AI Clip Memory';
+export const APP_NAME = 'Slate';
 
 export const CLIP_CONTENT_TYPES = ['text', 'code', 'prompt', 'link'] as const;
 

@@ -1,19 +1,10 @@
 import {
-  APP_NAME,
   CLIP_CONTENT_TYPES,
   type ClipContentType,
   type Clip,
   type ClipInput,
 } from '@ai-clip-memory/shared';
-import {
-  ListFilter,
-  Moon,
-  Plus,
-  RefreshCw,
-  Search,
-  ShieldCheck,
-  Sun,
-} from 'lucide-react';
+import { ListFilter, Moon, Plus, RefreshCw, Search, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useClipLibrary } from './hooks/useClipLibrary';
@@ -26,7 +17,7 @@ import {
 } from './lib/clipRetrieval';
 import { ClipFeedback } from './components/ClipFeedback';
 import { LauncherAvailability } from './components/LauncherAvailability';
-import { StartupSetting } from './components/StartupSetting';
+import { SettingsView } from './components/SettingsView';
 import {
   calendarClipElementId,
   MemoryCalendar,
@@ -56,7 +47,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './components/ui/alert-dialog';
-import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Separator } from './components/ui/separator';
 import {
   calendarMonthFromDate,
@@ -491,7 +481,7 @@ export function App({
                     orientation="vertical"
                     className="data-vertical:h-4 data-vertical:self-auto"
                   />
-                  <span>Privacy & About</span>
+                  <span>Settings</span>
                 </>
               ) : (
                 <>
@@ -747,53 +737,7 @@ export function App({
               )}
 
               {activeView === 'settings' && (
-                <section
-                  className="settings-view"
-                  aria-labelledby="settings-heading"
-                >
-                  <header className="section-header">
-                    <h1 id="settings-heading">Privacy &amp; About</h1>
-                    <p>Privacy and application information for local use.</p>
-                  </header>
-
-                  <Card
-                    className="privacy-note"
-                    aria-labelledby="privacy-heading"
-                  >
-                    <CardHeader>
-                      <div className="privacy-heading-row">
-                        <span className="privacy-mark" aria-hidden="true">
-                          <ShieldCheck />
-                        </span>
-                        <CardTitle>
-                          <h2 id="privacy-heading">Private by default</h2>
-                        </CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p>
-                        Your clips are stored locally on this computer. No
-                        account or cloud connection is required.
-                      </p>
-                      <Separator />
-                      <dl className="about-list">
-                        <div>
-                          <dt>Application</dt>
-                          <dd>{APP_NAME}</dd>
-                        </div>
-                        <div>
-                          <dt>Storage</dt>
-                          <dd>Local only</dd>
-                        </div>
-                        <div>
-                          <dt>Quick search</dt>
-                          <dd>Ctrl+Shift+Space</dd>
-                        </div>
-                      </dl>
-                    </CardContent>
-                  </Card>
-                  <StartupSetting client={startupClient} />
-                </section>
+                <SettingsView startupClient={startupClient} />
               )}
             </div>
           </SidebarInset>

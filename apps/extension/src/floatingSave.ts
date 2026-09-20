@@ -81,7 +81,7 @@ export function installFloatingSave(
     const button = doc.createElement('button');
     button.type = 'button';
     button.textContent = 'Save';
-    button.setAttribute('aria-label', 'Save selection to AI Clip Memory');
+    button.setAttribute('aria-label', 'Save selection to Slate');
     const status = doc.createElement('span');
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');

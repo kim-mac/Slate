@@ -82,6 +82,7 @@ fn windows_gui_subsystem_is_scoped_to_the_desktop_entry_point() {
 fn extension_access_remains_narrow_with_capture_feedback() {
     let manifest = read_json(repository_root().join("apps/extension/public/manifest.json"));
 
+    assert_eq!(manifest["name"], "Slate");
     assert_eq!(
         manifest["permissions"],
         serde_json::json!([
@@ -101,6 +102,33 @@ fn extension_access_remains_narrow_with_capture_feedback() {
             "https://gemini.google.com/*"
         ])
     );
+}
+
+#[test]
+fn visible_branding_changes_without_replacing_compatibility_identity() {
+    let root = repository_root();
+    let configuration = read_json(root.join("apps/desktop/src-tauri/tauri.conf.json"));
+    let extension = read_json(root.join("apps/extension/public/manifest.json"));
+
+    assert_eq!(configuration["productName"], "AI Clip Memory");
+    assert_eq!(configuration["identifier"], "com.aiclipmemory.desktop");
+    assert_eq!(configuration["app"]["windows"][0]["title"], "Slate");
+    assert_eq!(extension["name"], "Slate");
+    assert!(extension["description"].as_str().unwrap().contains("Slate"));
+    assert_eq!(extension["key"].as_str().map(str::is_empty), Some(false));
+
+    assert!(read(root.join("apps/desktop/index.html")).contains("<title>Slate</title>"));
+    assert!(read(root.join("apps/desktop/launcher.html"))
+        .contains("<title>Quick Search — Slate</title>"));
+
+    let background = read(root.join("apps/desktop/src-tauri/src/background.rs"));
+    assert!(background.contains("AUTOSTART_APP_NAME: &str = \"AI Clip Memory\""));
+    assert!(background.contains("\"Open Slate\""));
+    assert!(background.contains("\"Quit Slate\""));
+
+    let registration = read(root.join("scripts/windows/Register-NativeMessagingHost.ps1"));
+    assert!(registration.contains("AI Clip Memory\\NativeMessaging"));
+    assert!(registration.contains("Slate local capture bridge"));
 }
 
 #[test]

@@ -1,7 +1,7 @@
 # Slate
 
-AI Clip Memory is a local-first Windows desktop application and Chromium
-extension for saving and reusing useful pieces of AI conversations. The MVP
+Slate is a local-first Windows desktop application and Chromium extension for
+saving and reusing useful text and pages. The MVP
 includes the desktop clip library, local SQLite persistence, browser capture,
 Native Messaging, retrieval shortcuts, a quick-search launcher, and floating
 Save controls on supported AI sites.
@@ -51,15 +51,17 @@ to run a private test build.
 
 ## Use the MVP
 
-- Highlight text and choose **Save to AI Clip Memory** from the browser context
-  menu on an HTTP/HTTPS page.
+- Highlight text and choose **Save selection** from the browser context menu on
+  an HTTP/HTTPS page, or choose **Save this page** to keep its URL as a Link.
 - On ChatGPT, Claude, and Gemini, highlighting non-editable page text also shows
   the floating **Save** control.
 - Press **Refresh** in the desktop library after a browser capture. Browser
   captures are local, but the library does not poll for changes.
-- Press **Ctrl+Shift+Space** for quick search while the desktop application is
-  running. The shortcut is released when the application exits; there is no tray
-  process, autostart, or background service.
+- Press **Ctrl+Shift+Space** for Quick Search. Closing the main window keeps Slate
+  available in the Windows notification area so global shortcuts continue to
+  work. Use the tray menu to reopen or fully quit Slate.
+- In **Settings**, optionally enable **Start Slate when I sign in to Windows** to
+  start it hidden and ready for capture after sign-in.
 
 ## Local data and uninstall behavior
 

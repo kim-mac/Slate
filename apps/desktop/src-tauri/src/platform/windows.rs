@@ -256,7 +256,7 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
         let _ = app
             .notification()
             .builder()
-            .title("Tin")
+            .title("Slate")
             .body("Desktop capture shortcut is unavailable")
             .show();
     }
@@ -406,17 +406,17 @@ mod tests {
 
     #[test]
     fn expected_autostart_command_rejects_paths_that_cannot_be_safely_quoted() {
-        assert!(expected_autostart_command(Path::new(r#"C:\Apps\"Tin"\tin.exe"#)).is_err());
+        assert!(expected_autostart_command(Path::new(r#"C:\Apps\"Slate"\slate.exe"#)).is_err());
     }
 
     #[test]
     fn registration_validation_rejects_an_unquoted_or_malformed_command() {
-        let expected = r#""C:\Program Files\Tin\tin.exe" --autostart"#;
+        let expected = r#""C:\Program Files\Slate\slate.exe" --autostart"#;
 
         assert_eq!(
             validate_registration(
                 true,
-                Some(r"C:\Program Files\Tin\tin.exe --autostart"),
+                Some(r"C:\Program Files\Slate\slate.exe --autostart"),
                 expected
             ),
             Err("startup_registration_invalid")
@@ -424,7 +424,7 @@ mod tests {
         assert_eq!(
             validate_registration(
                 true,
-                Some(r#""C:\Program Files\Tin\tin.exe --autostart""#),
+                Some(r#""C:\Program Files\Slate\slate.exe --autostart""#),
                 expected
             ),
             Err("startup_registration_invalid")
@@ -433,7 +433,7 @@ mod tests {
 
     #[test]
     fn registration_validation_accepts_only_the_exact_expected_command() {
-        let expected = r#""C:\Program Files\Tin\tin.exe" --autostart"#;
+        let expected = r#""C:\Program Files\Slate\slate.exe" --autostart"#;
 
         assert_eq!(
             validate_registration(true, Some(expected), expected),
@@ -447,9 +447,9 @@ mod tests {
 
     #[test]
     fn normalization_is_idempotent_once_the_registration_is_correct() {
-        let expected = r#""C:\Program Files\Tin\tin.exe" --autostart"#;
+        let expected = r#""C:\Program Files\Slate\slate.exe" --autostart"#;
         let registration =
-            MemoryRegistration::with_command(r"C:\Program Files\Tin\tin.exe --autostart");
+            MemoryRegistration::with_command(r"C:\Program Files\Slate\slate.exe --autostart");
 
         assert_eq!(normalize_registration(&registration, expected), Ok(()));
         assert_eq!(normalize_registration(&registration, expected), Ok(()));

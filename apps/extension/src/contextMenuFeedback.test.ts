@@ -11,7 +11,10 @@ describe('context-menu capture feedback', () => {
     );
     expect(create).toHaveBeenCalledWith(
       'ai-clip-memory-capture-result',
-      expect.objectContaining({ message: 'Clip saved locally.' }),
+      expect.objectContaining({
+        title: 'Slate',
+        message: 'Clip saved locally.',
+      }),
     );
     expect(JSON.stringify(create.mock.calls)).not.toContain('private-id');
   });

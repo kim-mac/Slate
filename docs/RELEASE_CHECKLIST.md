@@ -131,7 +131,7 @@ tell users to disable SmartScreen.
 
 - [ ] Capture and retrieval work with the internet disconnected after required
       pages are locally available.
-- [ ] No capture content leaves the computer through AI Clip Memory.
+- [ ] No capture content leaves the computer through Slate.
 - [ ] No clip content or full payload appears in stdout, stderr, logs, installer
       output, or error messages.
 - [ ] Local plaintext storage limitation is visible to users.

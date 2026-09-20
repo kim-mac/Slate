@@ -180,14 +180,14 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton
               type="button"
-              aria-label="Privacy & About"
-              tooltip="Privacy & About · Local only"
+              aria-label="Settings"
+              tooltip="Settings · Local only"
               aria-pressed={activeView === 'settings'}
               isActive={activeView === 'settings'}
               onClick={() => onSelectView('settings')}
             >
               <Settings aria-hidden="true" />
-              {!collapsed && <span>Privacy &amp; About</span>}
+              {!collapsed && <span>Settings</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

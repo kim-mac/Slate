@@ -1,4 +1,4 @@
-# AI Clip Memory — Read Me First
+# Slate — Read Me First
 
 This folder is the source of truth for the project.
 

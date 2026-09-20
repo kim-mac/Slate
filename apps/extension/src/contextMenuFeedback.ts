@@ -22,7 +22,7 @@ export async function notifyCaptureResult(
     : captureKind === 'page'
       ? 'Could not save this page.'
       : result.error === 'storage_unavailable'
-        ? 'Could not save locally. Make sure AI Clip Memory is installed, then try again.'
+        ? 'Could not save locally. Make sure Slate is installed, then try again.'
         : result.error === 'message_too_large'
           ? 'Selection is too large. Select less text and try again.'
           : 'Could not save this selection. Try again.';
@@ -34,7 +34,7 @@ export async function notifyCaptureResult(
   await create(CAPTURE_NOTIFICATION_ID, {
     type: 'basic',
     iconUrl,
-    title: 'AI Clip Memory',
+    title: 'Slate',
     message,
   });
 }

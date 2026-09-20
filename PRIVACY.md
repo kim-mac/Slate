@@ -1,6 +1,6 @@
 # Privacy
 
-AI Clip Memory 0.1.0 is a local-first Windows application and Chromium browser
+Slate 0.1.0 is a local-first Windows application and Chromium browser
 extension. It does not require an account, login, cloud database, remote backend,
 or cloud sync.
 
@@ -19,12 +19,13 @@ responsibility.
 
 ## Browser capture
 
-The extension captures only text the user explicitly selects and saves. It sends
-that text and the current page metadata through Chromium Native Messaging to the
-local AI Clip Memory native host. The native host writes the clip to the local
-SQLite database.
+The extension captures text the user explicitly selects and saves. When the user
+chooses **Save this page**, it instead captures the current HTTP/HTTPS page URL
+and title as a Link clip. It sends only that requested capture and its source
+metadata through Chromium Native Messaging to the local Slate native host. The
+native host writes the clip to the local SQLite database.
 
-AI Clip Memory does not send captured content to an AI Clip Memory server. The
+Slate does not send captured content to a Slate server. The
 browser page itself may be provided by an online service, but the extension's
 capture transport remains local to the computer.
 
@@ -42,7 +43,7 @@ Other applications on the computer may be able to read the clipboard.
 
 Open Source opens a stored HTTP or HTTPS source URL only after the user invokes
 the action. The browser and destination website may then make their normal
-network requests; AI Clip Memory does not attach clip contents to the URL.
+network requests; Slate does not attach clip contents to the URL.
 
 ## Uninstall and data retention
 
@@ -52,7 +53,7 @@ database by default so clips can survive reinstall or upgrade.
 
 The interactive uninstaller may offer an explicit **Delete app data** choice.
 Selecting it deliberately removes the application-data directory. To remove data
-manually, first exit AI Clip Memory, then delete:
+manually, first fully quit Slate from its tray menu, then delete:
 
 ```text
 %APPDATA%\com.aiclipmemory.desktop
