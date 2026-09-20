@@ -1,165 +1,124 @@
 # Slate
 
-Slate is a local-first Windows desktop application and Chromium extension for
-saving and reusing useful text and pages. The MVP
-includes the desktop clip library, local SQLite persistence, browser capture,
-Native Messaging, retrieval shortcuts, a quick-search launcher, and floating
-Save controls on supported AI sites.
+Slate is a local-first memory tool for Windows. Save useful text and pages from
+your browser or desktop, find them quickly, and copy them back into whatever you
+are working on—without an account, cloud sync, telemetry, or a Slate backend.
 
-There is no account, cloud service, telemetry, analytics, or remote application
-backend. Clip content is stored locally on the user's computer.
+The core workflow is simple: **capture → find → reuse**. Clips are stored in a
+local SQLite database and remain available offline.
 
-## Repository structure
+Slate 0.1.0 is available for Windows 11 on x64 and ARM64 computers.
 
-- `apps/desktop` — Tauri 2, React, TypeScript, Vite, Tailwind CSS, shadcn/ui,
-  Rust, and SQLite desktop application
-- `apps/extension` — Chromium Manifest V3 browser extension
-- `packages/shared` — source-exported TypeScript contracts shared by the apps
-- `scripts/windows` — Windows development registration and release packaging
-- `docs` — product source-of-truth and release documentation
+## Install Slate on Windows
 
-## Install on Windows
+Download the installer that matches your computer from the Slate GitHub Release
+or, when available, the Slate website:
 
-Choose the installer matching the computer:
+- **Windows x64** — `Slate-0.1.0-Windows-x64.exe` for Intel and AMD Windows PCs.
+- **Windows ARM64** — `Slate-0.1.0-Windows-ARM64.exe` for Windows-on-ARM devices
+  such as Snapdragon PCs.
 
-- `x64-setup.exe` for ordinary Intel or AMD 64-bit Windows computers
-- `arm64-setup.exe` for Windows on ARM computers
+Slate does not provide an x86/32-bit installer. Windows 10 support has not been
+verified for this release.
 
-The NSIS installer runs for the current user and normally does not require
-administrator privileges. It installs the desktop application, the local Native
-Messaging host, and the exact Chrome and Edge registrations needed by the
-matching extension build. Users do not need Node.js, pnpm, Rust, Cargo, Visual
-Studio Build Tools, or a source checkout.
+The current-user installer normally does not require administrator privileges.
+It installs the desktop application and local browser bridge. Microsoft Edge
+WebView2 is required for the desktop UI; if it is missing, the installer uses
+Microsoft's WebView2 bootstrapper, which requires an internet connection for
+that one-time download.
 
-The browser extension is installed separately. Production extension builds carry
-a public manifest key so unpacked Chrome installs keep the deterministic ID
-`jjfaegknedfakmidhhdlmbebnjafcjfi`, regardless of the directory from which they
-are loaded. Windows packages derive that Chrome ID from the same manifest key and
-also allow the intended Edge release ID configured in
-`apps/extension/release-identity.json`. Public Chrome Web Store and Edge Add-ons
-packages are a later release phase.
+Some Windows surfaces may display **AI Clip Memory**. Slate 0.1.0 intentionally
+preserves that earlier internal Windows installation identity so existing users
+can upgrade without moving their application data or creating a second app.
 
-The installer uses Microsoft's WebView2 download bootstrapper when WebView2 is
-missing. Installation may therefore require internet access on a machine that
-does not already have WebView2. Once installed, saving and retrieving clips does
-not require an internet connection.
+### Unsigned installer notice
 
-These Phase 1 builds are unsigned. Windows SmartScreen may identify the publisher
-as unknown or show a reputation warning. Do not disable SmartScreen globally;
-verify that the installer came from the expected project release before choosing
-to run a private test build.
+The initial Slate 0.1.0 direct-download installers are unsigned. Windows
+SmartScreen may show **Windows protected your PC**, and the publisher may appear
+as **Unknown publisher**. If you downloaded the installer from the official
+Slate GitHub Release or website and verified its published SHA-256 checksum, use
+**More info → Run anyway** to continue. Do not disable SmartScreen, antivirus, or
+other Windows security features globally.
 
-## Use the MVP
+## Install the browser extension
 
-- Highlight text and choose **Save selection** from the browser context menu on
-  an HTTP/HTTPS page, or choose **Save this page** to keep its URL as a Link.
-- On ChatGPT, Claude, and Gemini, highlighting non-editable page text also shows
-  the floating **Save** control.
-- Press **Refresh** in the desktop library after a browser capture. Browser
-  captures are local, but the library does not poll for changes.
-- Press **Ctrl+Shift+Space** for Quick Search. Closing the main window keeps Slate
-  available in the Windows notification area so global shortcuts continue to
-  work. Use the tray menu to reopen or fully quit Slate.
-- In **Settings**, optionally enable **Start Slate when I sign in to Windows** to
-  start it hidden and ready for capture after sign-in.
+- **Google Chrome:** install Slate from the Chrome Web Store. The listing URL
+  will be added to the release page before V1 is published.
+- **Microsoft Edge:** for V1, install the same Chrome Web Store extension in
+  Edge. Edge may ask you to allow extensions from other stores.
+
+The desktop app must be installed for browser captures to reach the local Slate
+library. Unpacked extension installation is only for development and testing;
+those instructions live in [the developer guide](docs/DEVELOPMENT.md).
+
+## Quick start
+
+Slate 0.1.0 includes:
+
+- **Browser capture:** save selected text with **Save selection**, save an
+  HTTP/HTTPS page as a Link with **Save this page**, or use the floating **Save**
+  control on supported ChatGPT, Claude, and Gemini pages.
+- **Desktop capture:** select text in a Windows application and press
+  **Ctrl+Alt+Shift+C**.
+- **Quick Search:** press **Ctrl+Shift+Space** while Slate is running, search or
+  browse recent clips, then press **Enter** to copy the selected clip.
+- **Quick Capture and Edit:** create or edit from Quick Search and press
+  **Ctrl+Enter** to save.
+- **Desktop library:** create, edit, delete, pin, search, filter, browse by
+  Calendar, copy content, and open stored HTTP/HTTPS sources.
+- **Background availability:** closing the main window keeps Slate in the
+  Windows notification area. Use the tray menu to reopen or fully quit it.
+- **Optional startup:** enable **Start Slate when I sign in to Windows** in
+  Settings.
+
+Important shortcuts:
+
+| Area            | Action                                 | Shortcut           |
+| --------------- | -------------------------------------- | ------------------ |
+| Global          | Open or focus Quick Search             | `Ctrl+Shift+Space` |
+| Global          | Save selected text from the active app | `Ctrl+Alt+Shift+C` |
+| Quick Search    | Move through results                   | `↑` / `↓`          |
+| Quick Search    | Copy selected clip                     | `Enter`            |
+| Quick Search    | Save Quick Capture / Quick Edit        | `Ctrl+Enter`       |
+| Quick Search    | Go back or close                       | `Esc`              |
+| Desktop library | Focus search                           | `Ctrl+F`           |
+| Desktop library | Copy open clip                         | `Ctrl+Shift+C`     |
+| Desktop library | Show or hide sidebar                   | `Ctrl+B`           |
+
+Use **Refresh** in the desktop library after a browser capture. Browser capture
+is local, but the open library does not poll the database automatically.
 
 ## Local data and uninstall behavior
 
-The SQLite database is stored at:
+Slate stores clips in a plaintext SQLite database at:
 
 ```text
 %APPDATA%\com.aiclipmemory.desktop\clips.sqlite3
 ```
 
-The database is currently plaintext. Ordinary uninstall leaves this application
-data in place so clips survive reinstall or upgrade. Tauri's interactive
-uninstaller may offer an explicit **Delete app data** option; selecting it
+Ordinary uninstall keeps this data so clips can survive reinstall or upgrade.
+The interactive uninstaller may offer **Delete app data**; selecting it
 deliberately removes the application-data directory. See [PRIVACY.md](PRIVACY.md)
-before removing retained data manually.
+before deleting retained data manually.
 
-Uninstall removes the installed Native Messaging host, its owned manifest, and
-only the Chrome/Edge registration values that still point to that installation.
-It does not remove the browser extension or unrelated browser state.
+Uninstall removes Slate's installed local browser bridge and its owned Chrome
+and Edge registration values. It does not remove the browser extension or
+unrelated browser state.
 
-## Developer setup
+## Privacy and security
 
-Requirements:
+Slate has no account, Slate cloud sync, remote application backend, telemetry,
+or analytics. Browser-to-desktop capture uses Chromium Native Messaging on the
+same computer rather than a network service. See [PRIVACY.md](PRIVACY.md) for
+data-handling details and [SECURITY.md](SECURITY.md) for security boundaries and
+reporting guidance.
 
-- Node.js 22.13 or newer in the 22.x line, or Node.js 24+
-- Corepack with pnpm 11.19.0
-- Rust stable MSVC toolchain
-- Windows Tauri prerequisites: Microsoft C++ Build Tools and WebView2
+## Development
 
-Install and verify:
+Repository setup, verification, unpacked-extension testing, and private package
+commands are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-```powershell
-corepack enable
-pnpm install
-pnpm format:check
-pnpm lint
-pnpm test
-pnpm typecheck
-pnpm build:extension
-pnpm build:desktop
-pnpm build:bridge
-pnpm check:rust
-```
+## License
 
-Run the desktop app:
-
-```powershell
-pnpm dev:desktop
-```
-
-### Unpacked extension and development Native Messaging
-
-1. Build both components:
-
-   ```powershell
-   pnpm build:extension
-   pnpm build:bridge
-   ```
-
-2. Load `apps/extension/dist` as unpacked in `chrome://extensions` or
-   `edge://extensions`, then copy its exact 32-character ID.
-
-3. Register the development host for that exact ID:
-
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/windows/Register-NativeMessagingHost.ps1 `
-     -Browser Chrome `
-     -ExtensionId <extension-id> `
-     -HostPath "$(Resolve-Path apps/desktop/src-tauri/target/debug/ai-clip-memory-native-host.exe)"
-   ```
-
-   Use `-Browser Edge` for Edge. Use `-Browser Both` with all exact unpacked IDs
-   when both browsers should share the development manifest.
-
-4. Remove only the development registration when finished:
-
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts/windows/Unregister-NativeMessagingHost.ps1 -Browser Both
-   ```
-
-These scripts remain development tools. Normal users receive registration from
-the installer.
-
-## Build private Windows installers
-
-The packaging script derives the stable Chrome origin from the extension
-manifest key and reads the intended Edge origin from the extension release
-identity configuration. It rejects malformed configuration before Tauri runs;
-extension IDs cannot be overridden at the command line.
-
-```powershell
-pnpm run package:windows:x64
-pnpm run package:windows:arm64
-```
-
-The relevant Rust target and Visual Studio C++ target tools must already be
-installed. The build script never installs machine-level tools silently. Output
-is written under the target-specific `apps/desktop/src-tauri/target/<triple>/`
-NSIS bundle directory and is clearly labelled `x64` or `arm64`.
-
-See [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) before distributing an
-installer.
+Slate is available under the [MIT License](LICENSE). Third-party notices are in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
