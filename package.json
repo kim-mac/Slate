@@ -1,6 +1,7 @@
 {
   "name": "ai-clip-memory",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.19.0",
@@ -21,6 +22,8 @@
     "lint": "eslint .",
     "package:windows:arm64": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/Build-WindowsInstaller.ps1 -Architecture arm64",
     "package:windows:x64": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/Build-WindowsInstaller.ps1 -Architecture x64",
+    "release:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/Build-ExtensionRelease.ps1",
+    "release:stage:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/Stage-WindowsRelease.ps1",
     "test": "pnpm --recursive --if-present test && pnpm test:rust",
     "test:desktop": "pnpm --filter @ai-clip-memory/desktop test",
     "test:rust": "pnpm --filter @ai-clip-memory/desktop test:rust",

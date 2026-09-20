@@ -1,155 +1,105 @@
-# MVP Release Checklist
+# Slate 0.1.0 Release Checklist
 
-This checklist separates private Phase 1 package validation from the later gates
-required for public distribution. Completing it does not authorize post-MVP
-product work.
+This checklist gates the first public Slate release. Completing source changes
+does not authorize publishing until the applicable manual gates are recorded.
 
-## Phase 1 verification record — 2026-09-05
-
-Local ARM64 installer verification passed using the exact unpacked-extension IDs
-`adbglhgegppmfcndhonckgfjehkadaca` for Chrome and
-`jcfcmapapjlgpbkcgcaeggeblgpidkoo` for Edge. The generated and installed Native
-Messaging manifest contained exactly those two origins. Current-user install,
-same-version reinstall, default uninstall with **Delete app data** left unchecked,
-and reinstall after uninstall all completed without elevation. No SmartScreen
-warning appeared on the verification machine.
-
-Chrome and Edge floating Save and context-menu capture reached the existing local
-SQLite database. Desktop Refresh, CRUD, pin/unpin, copy, launcher search/copy,
-Escape, browser restart, and desktop restart passed. Uninstall removed the owned
-application files, shared manifest, and both owned HKCU registrations while
-preserving unrelated Native Messaging registrations and
-`%APPDATA%\com.aiclipmemory.desktop\clips.sqlite3`. Reinstall restored access to
-the retained `PHASE1_PRESERVATION_TEST_2026` clip and browser integration.
-
-The x64 desktop release and NSIS installer were successfully packaged for
-`x86_64-pc-windows-msvc`. This records packaging only: x64 installation, runtime,
-Native Messaging, launcher, restart, and uninstall behavior have not yet been
-verified. Neither architecture has completed the clean-machine gates below.
-
-The Phase 1 IDs above were path-derived unpacked-extension IDs. Current dogfood
-builds instead use the public key in the production extension manifest to keep
-Chrome ID `jjfaegknedfakmidhhdlmbebnjafcjfi` deterministic across build and load
-directories. Installer packaging derives that origin from the same key and keeps
-the intended Edge release ID in `apps/extension/release-identity.json`.
-
-## Version and source state
+## Release source and version
 
 - [ ] Root, desktop, extension, shared package, Cargo, Tauri, and extension
-      manifest versions match the intended release.
-- [ ] Release commit is identified and the worktree is clean.
-- [ ] Formatting, lint, TypeScript, Rust, frontend, extension, native-host, and
-      Tauri checks pass.
-- [ ] No SQLite schema, command capability, Native Messaging protocol, extension
-      permission, or content-script match changed unintentionally.
+      manifest versions are exactly `0.1.0`.
+- [ ] Release commit is recorded and the worktree is clean.
+- [ ] Full tests, formatting, lint, typecheck, frontend, extension, native-host,
+      and Tauri production builds pass.
+- [ ] No schema, persistence, Tauri command, Native Messaging protocol,
+      extension permission, or content-script match changed unintentionally.
+- [ ] MIT license and third-party notices are present and reviewed.
 
-## Extension release gates
+## Browser extension
 
-- [ ] Chrome Web Store listing has a stable extension ID.
-- [ ] Edge Add-ons listing has a stable extension ID.
-- [ ] Icons satisfy both stores' required sizes and formats.
-- [ ] Listing screenshots and descriptions accurately represent the MVP.
-- [ ] Store privacy disclosures match `PRIVACY.md` and actual permissions.
-- [ ] Store packages contain no source maps, test files, debug buffers, remote
-      code, or development-only files.
-- [ ] Context-menu and floating-Save flows pass store-package verification.
+- [ ] Production extension output is deleted and rebuilt from source.
+- [ ] `Slate-Extension-0.1.0.zip` passes package validation.
+- [ ] ZIP root contains `manifest.json` directly, not a wrapping directory.
+- [ ] ZIP contains the stable manifest key and derives Chrome ID
+      `jjfaegknedfakmidhhdlmbebnjafcjfi`.
+- [ ] Permissions are exactly `activeTab`, `contextMenus`, `nativeMessaging`,
+      and `notifications`.
+- [ ] Content-script matches are exactly the four approved ChatGPT, Claude, and
+      Gemini HTTPS patterns.
+- [ ] ZIP contains the required 16, 32, 48, and 128 pixel icons.
+- [ ] ZIP contains no source maps, tests, TypeScript source, debug files, or
+      development-only manifests.
+- [ ] Chrome Web Store package validation passes.
+- [ ] Chrome Web Store listing, privacy fields, screenshots, and descriptions
+      match the shipped product.
+- [ ] Chrome Web Store publication/listing URL is recorded in release materials.
+- [ ] Microsoft Edge installation from the Chrome Web Store is verified.
+- [ ] Save selection, Save this page, and floating Save pass using the store
+      package in Chrome and Edge.
 
-## Windows package generation
+Edge Add-ons publication is deferred. Unpacked installation is development and
+testing only.
 
-- [x] Build script derives the Chrome ID from the packaged manifest key and reads
-      the intended Edge ID from release configuration.
-- [x] Generated `allowed_origins` contains both exact origins and no wildcard,
-      placeholder, or development ID intended only for another package.
-- [x] x64 installer is built for `x86_64-pc-windows-msvc`.
-- [x] ARM64 installer is built for `aarch64-pc-windows-msvc`.
-- [x] Installer filenames clearly distinguish x64 and ARM64.
-- [x] Each installer contains `ai-clip-memory-desktop.exe`,
+## Windows packages
+
+- [ ] Final x64 package is built for `x86_64-pc-windows-msvc`.
+- [ ] Final ARM64 package is built for `aarch64-pc-windows-msvc`.
+- [ ] Public artifacts are named `Slate-0.1.0-Windows-x64.exe` and
+      `Slate-0.1.0-Windows-ARM64.exe`.
+- [ ] Each public installer is byte-for-byte identical to its generated
+      compatibility-named NSIS installer.
+- [ ] Each package includes `ai-clip-memory-desktop.exe`,
       `ai-clip-memory-native-host.exe`, and `com.aiclipmemory.bridge.json`.
-- [x] Native-host PE architecture matches its installer architecture.
-- [x] Manifest relative path launches the installed host from a path containing
-      spaces.
-- [x] WebView2 `downloadBootstrapper` behavior is documented and verified on the
-      ARM64 verification machine.
-
-## Signing gate for public distribution
-
-- [ ] Windows code-signing identity and certificate custody are approved.
-- [ ] Desktop executable, native-host executable, uninstaller, and final NSIS
-      installer are signed as applicable.
-- [ ] Signatures use SHA-256 and an approved timestamp service.
-- [ ] Signature verification passes on x64 and ARM64 artifacts.
-- [ ] SmartScreen behavior is tested after signing.
-
-Unsigned packages may be used only for clearly labelled private testing. Do not
-tell users to disable SmartScreen.
-
-## Clean-machine x64 verification
-
-- [ ] Test account/machine has no Node.js, pnpm, Rust, Cargo, source checkout, or
-      Visual Studio Build Tools.
+- [ ] Native-host architecture matches the installer architecture.
+- [ ] The installed host manifest contains only the approved Chrome and Edge
+      origins and resolves its relative host path correctly.
 - [ ] Current-user installation succeeds without elevation.
-- [ ] Desktop launches and CRUD, pin, copy, search, Refresh, and source opening
-      work.
-- [ ] Ctrl+Shift+Space launcher opens while the app is running.
-- [ ] Chrome Native Messaging capture persists locally.
-- [ ] Edge Native Messaging capture persists locally.
-- [ ] Floating Save works on supported sites.
-- [ ] Context-menu capture works as fallback.
-- [ ] Browser restart and desktop restart preserve functionality.
+- [ ] WebView2 bootstrapper behavior is verified on a machine without WebView2,
+      where practical.
 
-## Clean-machine ARM64 verification
+## Manual compatibility verification
 
-- [ ] Test account/machine has no developer toolchain or source checkout.
-- [ ] Current-user installation succeeds without elevation.
-- [ ] Desktop, launcher, Chrome/Edge Native Messaging, floating Save, context menu,
-      restart, and persistence checks match the x64 results.
-- [ ] Windows scaling and monitor placement remain usable where available.
+- [ ] x64 clean-machine verification passes.
+- [ ] ARM64 clean-profile verification passes.
+- [ ] Real-data upgrade from the current dogfood build preserves clips and
+      browser integration.
+- [ ] Default uninstall and reinstall retain clips.
+- [ ] The explicit **Delete app data** option removes the application database
+      only when selected.
+- [ ] Browser capture, desktop selected-text capture, Quick Search, Quick
+      Capture/Edit/Delete, Calendar, tray, autostart, and restart behavior pass.
+- [ ] Offline desktop CRUD, retrieval, launcher, and desktop capture pass.
+- [ ] No clip content, full payload, clipboard snapshot, personal URL, or
+      database path appears in logs or installer output.
 
-## Install, upgrade, and uninstall lifecycle
+## Unsigned release decision
 
-- [x] Install path under `%LOCALAPPDATA%` contains only expected owned files on the
-      ARM64 verification machine.
-- [x] Chrome and Edge HKCU keys point to the same owned host manifest.
-- [x] Same-version reinstall preserves clips and refreshes installed files.
-- [ ] Upgrade from the prior release preserves clips and replaces host/manifest.
-- [ ] Downgrade is rejected.
-- [x] Default uninstall retains
-      `%APPDATA%\com.aiclipmemory.desktop\clips.sqlite3`.
-- [ ] Explicit **Delete app data** behavior is separately verified and documented.
-- [x] Uninstall removes the owned Chrome and Edge host keys when they still point
-      to this installation.
-- [ ] Uninstall leaves a host key untouched if its value was changed to another
-      manifest after installation.
-- [x] Uninstall removes the owned host manifest and executable.
-- [x] Unrelated registry keys, browser extensions, profiles, and settings remain
-      untouched.
-- [x] Reinstall after default uninstall reopens the retained clips.
-- [x] A path containing spaces works.
-- [ ] A non-ASCII Windows user/profile path works where practical.
+- [x] Code signing is **not required for the initial V1 direct-download release
+      by project decision**.
+- [ ] Final x64 and ARM64 binaries are recorded as unsigned.
+- [ ] README, SECURITY.md, release notes, GitHub Release, and website clearly
+      explain the SmartScreen/unknown-publisher warning.
+- [ ] Guidance tells users to verify the official source and SHA-256 checksum and
+      does not tell them to disable Windows security features.
 
-## Data and privacy
+## Artifact and publication record
 
-- [ ] Capture and retrieval work with the internet disconnected after required
-      pages are locally available.
-- [ ] No capture content leaves the computer through Slate.
-- [ ] No clip content or full payload appears in stdout, stderr, logs, installer
-      output, or error messages.
-- [ ] Local plaintext storage limitation is visible to users.
-- [ ] Clipboard and Open Source behavior is accurately disclosed.
-- [ ] Default uninstall retention and deliberate deletion steps are accurate.
+- [ ] `SHA256SUMS.txt` is generated from the final staged artifacts.
+- [ ] Final x64 package SHA-256 is recorded.
+- [ ] Final ARM64 package SHA-256 is recorded.
+- [ ] Final extension ZIP SHA-256 is recorded.
+- [ ] Commit SHA, build date, Rust targets, Node/pnpm/Rust/Tauri versions, and
+      build machine details are recorded.
+- [ ] README download links point to the final artifacts.
+- [ ] Release notes are finalized from `docs/RELEASE_NOTES_0.1.0.md`.
+- [ ] Annotated `v0.1.0` tag is created from the approved release commit.
+- [ ] GitHub Release is created from `v0.1.0` with all artifacts and checksums.
+- [ ] Slate website download links point to the same verified artifacts.
 
-## Artifact record
+## Post-V1 distribution work
 
-- [ ] Record commit SHA, version, build date, Rust target, Node/pnpm versions, and
-      Tauri version.
-- [ ] Record SHA-256 checksums for extension packages and both installers.
-- [ ] Record clean-machine test results and known limitations.
-- [ ] Publish only artifacts that use production store IDs and completed signing
-      gates.
-
-## Later automation
-
-A future release workflow should build x64 and ARM64 in separate Windows jobs,
-run the same tests, inject stable store IDs, sign artifacts, verify signatures,
-and publish checksums. Phase 1 deliberately does not add CI, signing, store
-publication, or automatic updates.
+- [ ] Evaluate code signing for future direct downloads.
+- [ ] Evaluate Microsoft Store packaging and policies as a separate distribution
+      project; Store requirements differ from the current NSIS release.
+- [ ] Evaluate Edge Add-ons publication.
+- [ ] Evaluate automated release builds only after the manual V1 process is
+      stable and documented.

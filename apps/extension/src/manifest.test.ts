@@ -20,6 +20,26 @@ function extensionIdFromManifestKey(key: string): string {
 }
 
 describe('extension manifest', () => {
+  test('declares valid packaged Chromium icons at the standard sizes', () => {
+    expect(manifest.icons).toEqual({
+      '16': 'icons/icon-16.png',
+      '32': 'icons/icon-32.png',
+      '48': 'icons/icon-48.png',
+      '128': 'icons/icon-128.png',
+    });
+
+    for (const [size, relativePath] of Object.entries(manifest.icons)) {
+      const png = readFileSync(
+        resolve(import.meta.dirname, '../public', relativePath),
+      );
+      expect([...png.subarray(0, 8)]).toEqual([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      ]);
+      expect(png.readUInt32BE(16)).toBe(Number(size));
+      expect(png.readUInt32BE(20)).toBe(Number(size));
+    }
+  });
+
   test('packages a Chromium-compatible PNG notification icon', () => {
     const icons = resolve(import.meta.dirname, '../public/icons');
     const png = readFileSync(resolve(icons, 'notification.png'));

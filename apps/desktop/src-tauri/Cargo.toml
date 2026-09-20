@@ -1,6 +1,7 @@
 [package]
 name = "ai-clip-memory-desktop"
 version = "0.1.0"
+license = "MIT"
 description = "Slate local-first desktop capture application"
 authors = ["Slate contributors"]
 edition = "2021"

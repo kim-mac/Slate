@@ -3,6 +3,12 @@
   "name": "Slate",
   "description": "Save selected text and pages to your local Slate library.",
   "version": "0.1.0",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtv3koGv/K4pluV4fr5enY/H3ducBdfkpBNKTrzOukz2BXsBLE1g5zH0DGIvOMA3GjBA0A8/y+IHfHLZApX5vJ/hGdTj26aPKRyUIADJ3zogVzzZj/RMyV8pVSu1eAhfpjVEbwaaQenrdaJzkfvKr1QO5iK6hg6B4akYijwdNSvRxFWpX9Zx+M4F3GzbIMNSF0ZsPsDi+FxAU2dcsjerq7+KFOYhEbWs1PmIfhuybcqXm55hvYuzzaW3Xq6bL29gueVamVfgk0Lag4uau9ssz+UPXujAGZnXL6E46eYXiKedLwwfQQyn1Mepl92D6r1B95njz/Q+1VM1ZOMRKv/qs6QIDAQAB",
   "permissions": [
     "activeTab",
