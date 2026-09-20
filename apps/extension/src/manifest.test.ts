@@ -2,11 +2,92 @@ import { describe, expect, test } from 'vitest';
 import { createHash, createPublicKey } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
 
 import manifest from '../public/manifest.json';
 import * as contextMenus from './contextMenu';
 
 const EXPECTED_CHROME_EXTENSION_ID = 'jjfaegknedfakmidhhdlmbebnjafcjfi';
+
+function paethPredictor(
+  left: number,
+  above: number,
+  upperLeft: number,
+): number {
+  const estimate = left + above - upperLeft;
+  const leftDistance = Math.abs(estimate - left);
+  const aboveDistance = Math.abs(estimate - above);
+  const upperLeftDistance = Math.abs(estimate - upperLeft);
+
+  if (leftDistance <= aboveDistance && leftDistance <= upperLeftDistance)
+    return left;
+  return aboveDistance <= upperLeftDistance ? above : upperLeft;
+}
+
+function rgbaAlphaBounds(png: Buffer) {
+  const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
+  expect(png[24]).toBe(8);
+  expect(png[25]).toBe(6);
+
+  const idatChunks: Buffer[] = [];
+  for (let offset = 8; offset < png.length;) {
+    const length = png.readUInt32BE(offset);
+    const type = png.toString('ascii', offset + 4, offset + 8);
+    if (type === 'IDAT') {
+      idatChunks.push(png.subarray(offset + 8, offset + 8 + length));
+    }
+    offset += length + 12;
+  }
+
+  const bytesPerPixel = 4;
+  const rowLength = width * bytesPerPixel;
+  const filtered = inflateSync(Buffer.concat(idatChunks));
+  const pixels = Buffer.alloc(rowLength * height);
+
+  for (let y = 0; y < height; y += 1) {
+    const filter = filtered[y * (rowLength + 1)];
+    const sourceOffset = y * (rowLength + 1) + 1;
+    const targetOffset = y * rowLength;
+
+    for (let x = 0; x < rowLength; x += 1) {
+      const raw = filtered[sourceOffset + x]!;
+      const left = x >= bytesPerPixel ? pixels[targetOffset + x - 4]! : 0;
+      const above = y > 0 ? pixels[targetOffset + x - rowLength]! : 0;
+      const upperLeft =
+        y > 0 && x >= bytesPerPixel
+          ? pixels[targetOffset + x - rowLength - bytesPerPixel]!
+          : 0;
+      const reconstructed =
+        filter === 0
+          ? raw
+          : filter === 1
+            ? raw + left
+            : filter === 2
+              ? raw + above
+              : filter === 3
+                ? raw + Math.floor((left + above) / 2)
+                : raw + paethPredictor(left, above, upperLeft);
+      pixels[targetOffset + x] = reconstructed & 0xff;
+    }
+  }
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (pixels[y * rowLength + x * bytesPerPixel + 3] === 0) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  return { minX, minY, maxX, maxY };
+}
 
 function extensionIdFromManifestKey(key: string): string {
   const digest = createHash('sha256')
@@ -38,6 +119,19 @@ describe('extension manifest', () => {
       expect(png.readUInt32BE(16)).toBe(Number(size));
       expect(png.readUInt32BE(20)).toBe(Number(size));
     }
+  });
+
+  test('centers the 128 pixel store artwork with 16 pixels of transparent padding', () => {
+    const icon = readFileSync(
+      resolve(import.meta.dirname, '../public/icons/icon-128.png'),
+    );
+
+    expect(rgbaAlphaBounds(icon)).toEqual({
+      minX: 16,
+      minY: 16,
+      maxX: 111,
+      maxY: 111,
+    });
   });
 
   test('packages a Chromium-compatible PNG notification icon', () => {
