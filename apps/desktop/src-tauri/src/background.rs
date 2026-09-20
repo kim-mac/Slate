@@ -86,6 +86,9 @@ impl RuntimePolicy {
 
 pub fn initialize(app: &mut tauri::App, start_hidden: bool) -> tauri::Result<()> {
     app.manage(RuntimePolicy::default());
+    if let Some(window) = app.get_webview_window("main") {
+        window.set_icon(tauri::include_image!("icons/runtime-window.png"))?;
+    }
     initialize_tray(app)?;
 
     if should_show_main_window(start_hidden) {
@@ -106,7 +109,8 @@ fn initialize_tray(app: &tauri::App) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, OPEN_MENU_ID, "Open Slate", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, QUIT_MENU_ID, "Quit Slate", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
-    let mut tray = TrayIconBuilder::with_id(TRAY_ID)
+    let tray = TrayIconBuilder::with_id(TRAY_ID)
+        .icon(tauri::include_image!("icons/runtime-tray.png"))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .tooltip("Slate")
@@ -119,10 +123,6 @@ fn initialize_tray(app: &tauri::App) -> tauri::Result<()> {
                 TrayMenuAction::Ignore => {}
             },
         );
-
-    if let Some(icon) = app.default_window_icon() {
-        tray = tray.icon(icon.clone());
-    }
 
     tray.build(app)?;
     Ok(())

@@ -4,7 +4,8 @@ use ai_clip_memory_desktop_lib::clips::CreateClip;
 use ai_clip_memory_desktop_lib::desktop_capture::{
     capture_clipboard_selection, capture_failure_code, capture_feedback_message,
     capture_notification_body, persist_capture, CaptureController, CaptureFailure,
-    CapturedSelection, ClipSink, ClipboardCaptureBackend, SourceMetadata, CAPTURE_SHORTCUT_LABEL,
+    CapturedSelection, ClipSink, ClipboardCaptureBackend, SourceMetadata,
+    CAPTURE_NOTIFICATION_TITLE, CAPTURE_SHORTCUT_LABEL,
 };
 use ai_clip_memory_desktop_lib::{clips::ClipService, storage::StorageState};
 
@@ -179,6 +180,7 @@ fn windows_snapshot_owns_duplicated_formats_instead_of_a_live_ole_reference() {
 
 #[test]
 fn feedback_is_generic_and_never_contains_captured_content() {
+    assert_eq!(CAPTURE_NOTIFICATION_TITLE, "");
     assert_eq!(capture_feedback_message(Ok(())), "Saved to Slate");
     assert_eq!(
         capture_feedback_message(Err(CaptureFailure::ClipboardEmptyText)),
