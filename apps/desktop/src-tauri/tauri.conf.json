@@ -57,7 +57,8 @@
       },
       "nsis": {
         "installMode": "currentUser",
-        "installerHooks": "windows/installer-hooks.nsh"
+        "installerHooks": "windows/installer-hooks.nsh",
+        "template": "windows/installer.nsi"
       }
     }
   }

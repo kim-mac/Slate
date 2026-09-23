@@ -1,0 +1,11 @@
+{
+  "brand": "Slate",
+  "version": "1.0",
+  "direction": "Solid Angular Fold S",
+  "palette": {
+    "black": "#000000",
+    "white": "#FFFFFF"
+  },
+  "canonical_visual_reference": "slate-icon-master-1024.png",
+  "note": "Raster-derived asset package; SVG master intentionally not fabricated from an image-generation raster."
+}

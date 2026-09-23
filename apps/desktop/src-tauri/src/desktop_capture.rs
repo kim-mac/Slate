@@ -5,6 +5,9 @@ use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
 
 pub const CAPTURE_SHORTCUT_LABEL: &str = "Ctrl+Alt+Shift+C";
+// An explicit empty title avoids the notification plugin's product-name fallback.
+// Windows supplies the installed application's Slate attribution above the body.
+pub const CAPTURE_NOTIFICATION_TITLE: &str = "";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CapturedSelection {
@@ -258,7 +261,7 @@ pub(crate) fn shortcut_event(app: &tauri::AppHandle, pressed: bool) {
         let _ = handle
             .notification()
             .builder()
-            .title("Slate")
+            .title(CAPTURE_NOTIFICATION_TITLE)
             .body(capture_notification_body(result, cfg!(debug_assertions)))
             .show();
         handle.state::<CaptureController>().finish();

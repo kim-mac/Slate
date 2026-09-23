@@ -21,6 +21,25 @@ fn tray_initialization_can_only_be_claimed_once_per_process() {
 }
 
 #[test]
+fn main_window_and_single_tray_use_dedicated_slate_runtime_icons() {
+    let source = include_str!("../src/background.rs");
+    let window_icon = source
+        .find("tauri::include_image!(\"icons/runtime-window.png\")")
+        .expect("the main window should use the approved runtime PNG");
+    let tray_icon = source
+        .find("tauri::include_image!(\"icons/runtime-tray.png\")")
+        .expect("the tray should use its dedicated runtime PNG");
+    let tray_guard = source
+        .find("claim_tray_initialization()")
+        .expect("the existing one-tray-per-process guard should remain");
+
+    assert!(window_icon < source.find("initialize_tray(app)?").unwrap());
+    assert!(tray_guard < tray_icon);
+    assert!(!source.contains("app.default_window_icon()"));
+    assert_eq!(source.matches("tray.build(app)?").count(), 1);
+}
+
+#[test]
 fn tray_menu_ids_map_only_to_the_two_approved_actions() {
     assert_eq!(TrayMenuAction::from_id("open"), TrayMenuAction::Open);
     assert_eq!(TrayMenuAction::from_id("quit"), TrayMenuAction::Quit);
