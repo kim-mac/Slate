@@ -19,8 +19,11 @@ does not authorize publishing until the applicable manual gates are recorded.
 - [ ] Production extension output is deleted and rebuilt from source.
 - [ ] `Slate-Extension-0.1.0.zip` passes package validation.
 - [ ] ZIP root contains `manifest.json` directly, not a wrapping directory.
-- [ ] ZIP contains the stable manifest key and derives Chrome ID
-      `jjfaegknedfakmidhhdlmbebnjafcjfi`.
+- [ ] Source/unpacked manifest retains its stable key and development Chrome ID
+      `jjfaegknedfakmidhhdlmbebnjafcjfi`; the Chrome Web Store ZIP omits `key`.
+- [ ] Chrome Web Store item ID is `hgbfaclkpmcecikjepoejgjccddjbekh`
+      (draft created; review/submission and publication remain separate gates).
+- [ ] Configured Edge ID remains `jcfcmapapjlgpbkcgcaeggeblgpidkoo`.
 - [ ] Permissions are exactly `activeTab`, `contextMenus`, `nativeMessaging`,
       and `notifications`.
 - [ ] Content-script matches are exactly the four approved ChatGPT, Claude, and
@@ -50,8 +53,9 @@ testing only.
 - [ ] Each package includes `ai-clip-memory-desktop.exe`,
       `ai-clip-memory-native-host.exe`, and `com.aiclipmemory.bridge.json`.
 - [ ] Native-host architecture matches the installer architecture.
-- [ ] The installed host manifest contains only the approved Chrome and Edge
-      origins and resolves its relative host path correctly.
+- [ ] The installed host manifest contains exactly the development Chrome,
+      Chrome Web Store, and configured Edge origins above and resolves its
+      relative host path correctly.
 - [ ] Current-user installation succeeds without elevation.
 - [ ] WebView2 bootstrapper behavior is verified on a machine without WebView2,
       where practical.

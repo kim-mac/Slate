@@ -8,6 +8,7 @@ const RELEASE_VERSION: &str = "0.1.0";
 const HOST_NAME: &str = "com.aiclipmemory.bridge";
 const HOST_EXECUTABLE: &str = "ai-clip-memory-native-host.exe";
 const CHROME_ID: &str = "jjfaegknedfakmidhhdlmbebnjafcjfi";
+const CHROME_WEB_STORE_ID: &str = "hgbfaclkpmcecikjepoejgjccddjbekh";
 const EDGE_ID: &str = "jcfcmapapjlgpbkcgcaeggeblgpidkoo";
 
 fn repository_root() -> PathBuf {
@@ -424,6 +425,9 @@ fn installer_hooks_register_both_browsers_and_remove_only_owned_values() {
         hooks.contains("!define AI_CLIP_MEMORY_MANIFEST_FILE \"${AI_CLIP_MEMORY_HOST_NAME}.json\"")
     );
     assert!(hooks.contains("$INSTDIR\\${AI_CLIP_MEMORY_MANIFEST_FILE}"));
+    assert!(hooks.contains("File /a \"/oname=${AI_CLIP_MEMORY_MANIFEST_FILE}\" \"${AI_CLIP_MEMORY_HOOK_DIR}\\generated\\${AI_CLIP_MEMORY_MANIFEST_FILE}\""));
+    assert!(hooks.contains("WriteRegStr HKCU \"${AI_CLIP_MEMORY_CHROME_KEY}\" \"\" \"$INSTDIR\\${AI_CLIP_MEMORY_MANIFEST_FILE}\""));
+    assert!(hooks.contains("WriteRegStr HKCU \"${AI_CLIP_MEMORY_EDGE_KEY}\" \"\" \"$INSTDIR\\${AI_CLIP_MEMORY_MANIFEST_FILE}\""));
     assert!(!lowercase.contains("clips.sqlite3"));
     assert!(!lowercase.contains("$appdata"));
     assert!(!lowercase.contains("rmdir /r"));
@@ -896,7 +900,7 @@ fn release_script_rejects_arbitrary_extension_identity_overrides() {
 
 #[cfg(windows)]
 #[test]
-fn release_script_generates_both_exact_origins_without_placeholders() {
+fn release_script_generates_all_three_exact_origins_without_placeholders() {
     let output_directory = tempfile::tempdir().expect("a temporary output directory should exist");
     let output_path = output_directory.path().to_string_lossy().into_owned();
     let output = run_manifest_generation(&[
@@ -917,6 +921,7 @@ fn release_script_generates_both_exact_origins_without_placeholders() {
         manifest["allowed_origins"],
         serde_json::json!([
             format!("chrome-extension://{CHROME_ID}/"),
+            format!("chrome-extension://{CHROME_WEB_STORE_ID}/"),
             format!("chrome-extension://{EDGE_ID}/")
         ])
     );
@@ -927,11 +932,12 @@ fn release_script_generates_both_exact_origins_without_placeholders() {
 
 #[cfg(windows)]
 #[test]
-fn release_identity_keeps_the_intended_edge_origin() {
+fn release_identity_keeps_the_intended_store_and_edge_origins() {
     let identity = read_json(repository_root().join("apps/extension/release-identity.json"));
 
+    assert_eq!(identity["chromeWebStoreExtensionId"], CHROME_WEB_STORE_ID);
     assert_eq!(identity["edgeExtensionId"], EDGE_ID);
-    assert_eq!(identity.as_object().map(serde_json::Map::len), Some(1));
+    assert_eq!(identity.as_object().map(serde_json::Map::len), Some(2));
 }
 
 #[test]
@@ -980,6 +986,97 @@ fn extension_release_script_requires_a_fresh_validated_production_build() {
     ] {
         assert!(script.contains(required_check));
     }
+}
+
+#[cfg(windows)]
+fn release_zip_manifest(path: &Path) -> Value {
+    let output = Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            r#"
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::OpenRead($env:SLATE_RELEASE_ZIP)
+try {
+    $entry = $archive.GetEntry('manifest.json')
+    if ($null -eq $entry) { throw 'Release ZIP is missing its root manifest.' }
+    $reader = [System.IO.StreamReader]::new($entry.Open())
+    try { [Console]::Out.Write($reader.ReadToEnd()) }
+    finally { $reader.Dispose() }
+}
+finally { $archive.Dispose() }
+"#,
+        ])
+        .env("SLATE_RELEASE_ZIP", path)
+        .output()
+        .expect("PowerShell should read the release ZIP");
+    assert!(
+        output.status.success(),
+        "could not inspect release ZIP: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).expect("release ZIP manifest should be valid JSON")
+}
+
+#[cfg(windows)]
+#[test]
+fn chrome_web_store_zip_omits_only_the_development_key_and_is_reproducible() {
+    let root = repository_root();
+    let source_manifest = read_json(root.join("apps/extension/public/manifest.json"));
+    let source_key = source_manifest["key"]
+        .as_str()
+        .expect("development manifest should retain its public key");
+    assert!(!source_key.is_empty());
+
+    let output_directory = tempfile::tempdir().expect("release output directory should exist");
+    let zip_path = output_directory.path().join("Slate-Extension-0.1.0.zip");
+    let release_script = root.join("scripts/windows/Build-ExtensionRelease.ps1");
+    let build = || {
+        let output = Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+            ])
+            .arg(&release_script)
+            .arg("-OutputDirectory")
+            .arg(output_directory.path())
+            .output()
+            .expect("PowerShell should run extension release packaging");
+        assert!(
+            output.status.success(),
+            "extension release packaging failed: {} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    build();
+    let built_manifest = read_json(root.join("apps/extension/dist/manifest.json"));
+    assert_eq!(built_manifest, source_manifest);
+
+    let packaged_manifest = release_zip_manifest(&zip_path);
+    assert!(
+        packaged_manifest.get("key").is_none(),
+        "Chrome Web Store ZIP must omit the development-only manifest key"
+    );
+    let mut expected_manifest = source_manifest;
+    expected_manifest
+        .as_object_mut()
+        .expect("source manifest should be an object")
+        .remove("key");
+    assert_eq!(packaged_manifest, expected_manifest);
+
+    let first_zip = fs::read(&zip_path).expect("first ZIP should exist");
+    build();
+    assert_eq!(
+        fs::read(&zip_path).expect("second ZIP should exist"),
+        first_zip,
+        "release ZIP must be byte-for-byte reproducible"
+    );
 }
 
 #[cfg(windows)]
