@@ -94,7 +94,8 @@ function Assert-ExactArray {
 function New-DeterministicZip {
     param(
         [string]$SourceDirectory,
-        [string]$DestinationPath
+        [string]$DestinationPath,
+        [string]$UploadManifestJson
     )
 
     Add-Type -AssemblyName System.IO.Compression
@@ -117,12 +118,22 @@ function New-DeterministicZip {
                 $entry = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
                 $entry.LastWriteTime = [System.DateTimeOffset]::new(1980, 1, 1, 0, 0, 0, [System.TimeSpan]::Zero)
                 $entryStream = $entry.Open()
-                $fileStream = [System.IO.File]::OpenRead($file.FullName)
                 try {
-                    $fileStream.CopyTo($entryStream)
+                    if ($entryName -ceq 'manifest.json') {
+                        $manifestBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($UploadManifestJson)
+                        $entryStream.Write($manifestBytes, 0, $manifestBytes.Length)
+                    }
+                    else {
+                        $fileStream = [System.IO.File]::OpenRead($file.FullName)
+                        try {
+                            $fileStream.CopyTo($entryStream)
+                        }
+                        finally {
+                            $fileStream.Dispose()
+                        }
+                    }
                 }
                 finally {
-                    $fileStream.Dispose()
                     $entryStream.Dispose()
                 }
             }
@@ -233,7 +244,9 @@ foreach ($pattern in $forbiddenReleasePatterns) {
 }
 
 $zipPath = Join-Path $OutputDirectory "Slate-Extension-$releaseVersion.zip"
-New-DeterministicZip -SourceDirectory $extensionOutputDirectory -DestinationPath $zipPath
+$manifest.PSObject.Properties.Remove('key')
+$uploadManifestJson = $manifest | ConvertTo-Json -Depth 10
+New-DeterministicZip -SourceDirectory $extensionOutputDirectory -DestinationPath $zipPath -UploadManifestJson $uploadManifestJson
 & (Join-Path $PSScriptRoot 'Write-ReleaseChecksums.ps1') -ReleaseDirectory $OutputDirectory | Out-Null
 
 Write-Output $zipPath
