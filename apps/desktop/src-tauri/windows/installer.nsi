@@ -2,7 +2,9 @@
 ; Upstream: https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi
 ; This project owns a full template because Tauri's Finish-page Desktop shortcut
 ; action runs after the supported post-install hook. Changes are intentionally
-; limited to Desktop-shortcut branding and lifecycle, marked SLATE DESKTOP below.
+; limited to Desktop-shortcut branding/lifecycle (marked SLATE DESKTOP below)
+; and public display naming (marked SLATE DISPLAY below). PRODUCTNAME remains
+; the compatibility-sensitive technical identity for paths and registry keys.
 ; This template MUST be diff-reviewed against upstream whenever Tauri CLI/bundler is upgraded.
 Unicode true
 ManifestDPIAware true
@@ -42,6 +44,8 @@ ${StrLoc}
 !define WEBVIEW2APPGUID "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 !define MANUFACTURER "{{manufacturer}}"
 !define PRODUCTNAME "{{product_name}}"
+; SLATE DISPLAY: public installer/uninstaller name, separate from PRODUCTNAME.
+!define PUBLICNAME "Slate"
 !define VERSION "{{version}}"
 !define VERSIONWITHBUILD "{{version_with_build}}"
 !define HOMEPAGE "{{homepage}}"
@@ -82,7 +86,7 @@ Var SlateDesktopPreviousInstallDir
 Var SlateDesktopPreviousMainBinaryName
 Var SlateDesktopShortcutBlocked
 
-Name "${PRODUCTNAME}"
+Name "${PUBLICNAME}"
 BrandingText "${COPYRIGHT}"
 OutFile "${OUTFILE}"
 
@@ -92,8 +96,8 @@ OutFile "${OUTFILE}"
 !define PLACEHOLDER_INSTALL_DIR "placeholder\${PRODUCTNAME}"
 InstallDir "${PLACEHOLDER_INSTALL_DIR}"
 VIProductVersion "${VERSIONWITHBUILD}"
-VIAddVersionKey "ProductName" "${PRODUCTNAME}"
-VIAddVersionKey "FileDescription" "${PRODUCTNAME}"
+VIAddVersionKey "ProductName" "${PUBLICNAME}"
+VIAddVersionKey "FileDescription" "${PUBLICNAME}"
 VIAddVersionKey "LegalCopyright" "${COPYRIGHT}"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
@@ -699,7 +703,7 @@ Section Install
     !insertmacro NSIS_HOOK_PREINSTALL
   !endif
 
-  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PUBLICNAME}"
 
   ; Copy main executable
   File "${MAINBINARYSRCPATH}"
@@ -719,7 +723,7 @@ Section Install
   ; Create file associations
   {{#each file_associations as |association| ~}}
     {{#each association.ext as |ext| ~}}
-       !insertmacro APP_ASSOCIATE "{{ext}}" "{{or association.name ext}}" "{{association-description association.description ext}}" "$INSTDIR\${MAINBINARYNAME}.exe,0" "Open with ${PRODUCTNAME}" "$INSTDIR\${MAINBINARYNAME}.exe $\"%1$\""
+       !insertmacro APP_ASSOCIATE "{{ext}}" "{{or association.name ext}}" "{{association-description association.description ext}}" "$INSTDIR\${MAINBINARYNAME}.exe,0" "Open with ${PUBLICNAME}" "$INSTDIR\${MAINBINARYNAME}.exe $\"%1$\""
     {{/each}}
   {{/each}}
   ; Register deep links
@@ -750,7 +754,7 @@ Section Install
   ; Save current MAINBINARYNAME for future updates
   WriteRegStr SHCTX "${UNINSTKEY}" "MainBinaryName" "${MAINBINARYNAME}.exe"
   ; Registry information for add/remove programs
-  WriteRegStr SHCTX "${UNINSTKEY}" "DisplayName" "${PRODUCTNAME}"
+  WriteRegStr SHCTX "${UNINSTKEY}" "DisplayName" "${PUBLICNAME}"
   WriteRegStr SHCTX "${UNINSTKEY}" "DisplayIcon" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\""
   WriteRegStr SHCTX "${UNINSTKEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr SHCTX "${UNINSTKEY}" "Publisher" "${MANUFACTURER}"
@@ -829,7 +833,7 @@ Section Uninstall
   !ifmacrodef NSIS_HOOK_PREUNINSTALL
     !insertmacro NSIS_HOOK_PREUNINSTALL
   !endif
-  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PUBLICNAME}"
 
   ; Delete the app directory and its content from disk
   ; Copy main executable

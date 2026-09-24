@@ -332,6 +332,81 @@ fn tauri_is_configured_for_current_user_nsis_only() {
 }
 
 #[test]
+fn nsis_public_presentation_uses_slate_without_renaming_installed_identity() {
+    let root = repository_root();
+    let configuration = read_json(root.join("apps/desktop/src-tauri/tauri.conf.json"));
+    let template = read(root.join("apps/desktop/src-tauri/windows/installer.nsi"));
+
+    assert_eq!(configuration["productName"], "AI Clip Memory");
+    assert_eq!(configuration["identifier"], "com.aiclipmemory.desktop");
+    assert_eq!(configuration["version"], "0.1.0");
+    assert_eq!(
+        configuration["bundle"]["windows"]["nsis"]["customLanguageFiles"]["English"],
+        "windows/installer-english.nsh"
+    );
+    assert!(template.contains("!define PRODUCTNAME \"{{product_name}}\""));
+    assert!(template.contains("!define PUBLICNAME \"Slate\""));
+    assert!(template.contains("Name \"${PUBLICNAME}\""));
+    assert!(template.contains("VIAddVersionKey \"ProductName\" \"${PUBLICNAME}\""));
+    assert!(template.contains("VIAddVersionKey \"FileDescription\" \"${PUBLICNAME}\""));
+    assert!(
+        template.contains("WriteRegStr SHCTX \"${UNINSTKEY}\" \"DisplayName\" \"${PUBLICNAME}\"")
+    );
+    assert_eq!(
+        template
+            .matches("!insertmacro CheckIfAppIsRunning \"${MAINBINARYNAME}.exe\" \"${PUBLICNAME}\"")
+            .count(),
+        2
+    );
+    assert!(template.contains("\"Open with ${PUBLICNAME}\""));
+
+    assert!(template.contains("!define UNINSTKEY \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${PRODUCTNAME}\""));
+    assert!(template.contains("!define MANUPRODUCTKEY \"${MANUKEY}\\${PRODUCTNAME}\""));
+    assert!(template.contains("StrCpy $INSTDIR \"$LOCALAPPDATA\\${PRODUCTNAME}\""));
+    assert!(template.contains("StrCmp \"$R0$R1\" \"${PRODUCTNAME}${MANUFACTURER}\""));
+    assert!(template.contains("DeleteRegValue HKCU \"Software\\Microsoft\\Windows\\CurrentVersion\\Run\" \"${PRODUCTNAME}\""));
+    assert!(template.contains("!define MAINBINARYNAME \"{{main_binary_name}}\""));
+    assert!(template.contains(
+        "CreateShortcut \"$SMPROGRAMS\\${PRODUCTNAME}.lnk\" \"$INSTDIR\\${MAINBINARYNAME}.exe\""
+    ));
+    assert!(template
+        .contains("CreateShortcut \"$DESKTOP\\Slate.lnk\" \"$INSTDIR\\${MAINBINARYNAME}.exe\""));
+}
+
+#[test]
+fn nsis_english_installer_messages_use_the_public_slate_name() {
+    let language =
+        read(repository_root().join("apps/desktop/src-tauri/windows/installer-english.nsh"));
+
+    for message in [
+        "alreadyInstalledLong",
+        "appRunning",
+        "appRunningOkKill",
+        "choowHowToInstall",
+        "failedToKillApp",
+        "newerVersionInstalled",
+        "olderOrUnknownVersionInstalled",
+        "uninstallApp",
+    ] {
+        let line = language
+            .lines()
+            .find(|line| line.starts_with(&format!("LangString {message} ")))
+            .unwrap_or_else(|| panic!("missing public installer message {message}"));
+        assert!(line.contains("${PUBLICNAME}"), "{message} must say Slate");
+    }
+    assert!(!language.contains("${PRODUCTNAME}"));
+    assert!(!language.contains("{{product_name}}"));
+    assert!(!language.contains("AI Clip Memory"));
+    assert_eq!(
+        language
+            .lines()
+            .filter(|line| line.starts_with("LangString "))
+            .count(),
+        27
+    );
+}
+
+#[test]
 fn installer_hooks_register_both_browsers_and_remove_only_owned_values() {
     let hooks = read(repository_root().join("apps/desktop/src-tauri/windows/installer-hooks.nsh"));
     let lowercase = hooks.to_ascii_lowercase();
