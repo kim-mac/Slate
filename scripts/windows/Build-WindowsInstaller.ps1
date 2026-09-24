@@ -89,11 +89,15 @@ $releaseIdentityPath = Join-Path $repositoryRoot 'apps\extension\release-identit
 $extensionManifest = Get-Content -Raw -LiteralPath $extensionManifestPath | ConvertFrom-Json
 $releaseIdentity = Get-Content -Raw -LiteralPath $releaseIdentityPath | ConvertFrom-Json
 $chromeExtensionId = ConvertTo-ChromiumExtensionId -PublicKey $extensionManifest.key
+$chromeWebStoreExtensionId = $releaseIdentity.chromeWebStoreExtensionId
 $edgeExtensionId = $releaseIdentity.edgeExtensionId
 Assert-ExtensionId -Name 'Derived Chrome extension ID' -Value $chromeExtensionId
+Assert-ExtensionId -Name 'Configured Chrome Web Store extension ID' -Value $chromeWebStoreExtensionId
 Assert-ExtensionId -Name 'Configured Edge extension ID' -Value $edgeExtensionId
-if ($chromeExtensionId -ceq $edgeExtensionId) {
-    throw 'Chrome and Edge release extension IDs must be distinct.'
+if ($chromeExtensionId -ceq $chromeWebStoreExtensionId -or
+    $chromeExtensionId -ceq $edgeExtensionId -or
+    $chromeWebStoreExtensionId -ceq $edgeExtensionId) {
+    throw 'Development Chrome, Chrome Web Store, and Edge release extension IDs must be distinct.'
 }
 
 if (-not [string]::IsNullOrWhiteSpace($OutputDirectory) -and -not $ManifestOnly) {
@@ -105,6 +109,7 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 
 $allowedOrigins = @(
     "chrome-extension://$chromeExtensionId/"
+    "chrome-extension://$chromeWebStoreExtensionId/"
     "chrome-extension://$edgeExtensionId/"
 )
 

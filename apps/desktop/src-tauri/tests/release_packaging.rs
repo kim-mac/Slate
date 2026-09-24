@@ -8,6 +8,7 @@ const RELEASE_VERSION: &str = "0.1.0";
 const HOST_NAME: &str = "com.aiclipmemory.bridge";
 const HOST_EXECUTABLE: &str = "ai-clip-memory-native-host.exe";
 const CHROME_ID: &str = "jjfaegknedfakmidhhdlmbebnjafcjfi";
+const CHROME_WEB_STORE_ID: &str = "hgbfaclkpmcecikjepoejgjccddjbekh";
 const EDGE_ID: &str = "jcfcmapapjlgpbkcgcaeggeblgpidkoo";
 
 fn repository_root() -> PathBuf {
@@ -424,6 +425,9 @@ fn installer_hooks_register_both_browsers_and_remove_only_owned_values() {
         hooks.contains("!define AI_CLIP_MEMORY_MANIFEST_FILE \"${AI_CLIP_MEMORY_HOST_NAME}.json\"")
     );
     assert!(hooks.contains("$INSTDIR\\${AI_CLIP_MEMORY_MANIFEST_FILE}"));
+    assert!(hooks.contains("File /a \"/oname=${AI_CLIP_MEMORY_MANIFEST_FILE}\" \"${AI_CLIP_MEMORY_HOOK_DIR}\\generated\\${AI_CLIP_MEMORY_MANIFEST_FILE}\""));
+    assert!(hooks.contains("WriteRegStr HKCU \"${AI_CLIP_MEMORY_CHROME_KEY}\" \"\" \"$INSTDIR\\${AI_CLIP_MEMORY_MANIFEST_FILE}\""));
+    assert!(hooks.contains("WriteRegStr HKCU \"${AI_CLIP_MEMORY_EDGE_KEY}\" \"\" \"$INSTDIR\\${AI_CLIP_MEMORY_MANIFEST_FILE}\""));
     assert!(!lowercase.contains("clips.sqlite3"));
     assert!(!lowercase.contains("$appdata"));
     assert!(!lowercase.contains("rmdir /r"));
@@ -896,7 +900,7 @@ fn release_script_rejects_arbitrary_extension_identity_overrides() {
 
 #[cfg(windows)]
 #[test]
-fn release_script_generates_both_exact_origins_without_placeholders() {
+fn release_script_generates_all_three_exact_origins_without_placeholders() {
     let output_directory = tempfile::tempdir().expect("a temporary output directory should exist");
     let output_path = output_directory.path().to_string_lossy().into_owned();
     let output = run_manifest_generation(&[
@@ -917,6 +921,7 @@ fn release_script_generates_both_exact_origins_without_placeholders() {
         manifest["allowed_origins"],
         serde_json::json!([
             format!("chrome-extension://{CHROME_ID}/"),
+            format!("chrome-extension://{CHROME_WEB_STORE_ID}/"),
             format!("chrome-extension://{EDGE_ID}/")
         ])
     );
@@ -927,11 +932,12 @@ fn release_script_generates_both_exact_origins_without_placeholders() {
 
 #[cfg(windows)]
 #[test]
-fn release_identity_keeps_the_intended_edge_origin() {
+fn release_identity_keeps_the_intended_store_and_edge_origins() {
     let identity = read_json(repository_root().join("apps/extension/release-identity.json"));
 
+    assert_eq!(identity["chromeWebStoreExtensionId"], CHROME_WEB_STORE_ID);
     assert_eq!(identity["edgeExtensionId"], EDGE_ID);
-    assert_eq!(identity.as_object().map(serde_json::Map::len), Some(1));
+    assert_eq!(identity.as_object().map(serde_json::Map::len), Some(2));
 }
 
 #[test]

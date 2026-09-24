@@ -91,6 +91,13 @@ Build and validate a clean Chrome Web Store ZIP:
 pnpm release:extension
 ```
 
+The source/unpacked manifest retains its key and development Chrome ID
+`jjfaegknedfakmidhhdlmbebnjafcjfi`; the Chrome Web Store upload ZIP omits
+the key. The Chrome Web Store draft has the distinct production ID
+`hgbfaclkpmcecikjepoejgjccddjbekh`. Windows installer manifest generation
+allows both Chrome origins and the configured Edge origin
+`jcfcmapapjlgpbkcgcaeggeblgpidkoo`.
+
 After both NSIS packages exist, copy them to friendly public filenames and
 regenerate `SHA256SUMS.txt`:
 
