@@ -58,7 +58,10 @@
       "nsis": {
         "installMode": "currentUser",
         "installerHooks": "windows/installer-hooks.nsh",
-        "template": "windows/installer.nsi"
+        "template": "windows/installer.nsi",
+        "customLanguageFiles": {
+          "English": "windows/installer-english.nsh"
+        }
       }
     }
   }

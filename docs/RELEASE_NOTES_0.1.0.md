@@ -31,7 +31,7 @@ Download only from the official Slate GitHub Release or website, verify the
 published SHA-256 checksum, then use **More info → Run anyway** if you choose to
 continue.
 
-Some Windows installation, uninstall, or process surfaces may display **AI Clip
+Technical Windows paths and executable names may still contain **AI Clip
 Memory**. Slate preserves this earlier internal Windows identity in 0.1.0 so
 existing users can upgrade without moving data or installing a second app.
 

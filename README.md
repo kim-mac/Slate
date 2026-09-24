@@ -27,8 +27,8 @@ WebView2 is required for the desktop UI; if it is missing, the installer uses
 Microsoft's WebView2 bootstrapper, which requires an internet connection for
 that one-time download.
 
-Some Windows surfaces may display **AI Clip Memory**. Slate 0.1.0 intentionally
-preserves that earlier internal Windows installation identity so existing users
+Technical Windows paths and executable names may still contain **AI Clip Memory**.
+Slate 0.1.0 preserves those internal installation identities so existing users
 can upgrade without moving their application data or creating a second app.
 
 ### Unsigned installer notice
