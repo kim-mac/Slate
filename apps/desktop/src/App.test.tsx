@@ -783,6 +783,85 @@ describe('App', () => {
     );
   });
 
+  test('refocus discovers an externally saved clip without changing search or selection', async () => {
+    const captured = {
+      ...currentMonthClip,
+      id: 'external-focus-capture',
+      title: 'External focus capture',
+      content: 'External focus content',
+    };
+    const fake = fakeClient([currentMonthClip]);
+    fake.list
+      .mockResolvedValueOnce([currentMonthClip])
+      .mockResolvedValueOnce([captured, currentMonthClip]);
+    render(<App client={fake.client} />);
+    await openClipFromSidebar(currentMonthClip);
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'focus' },
+    });
+
+    fireEvent.focus(window);
+
+    await waitFor(() => expect(fake.list).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('External focus capture')).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { name: currentMonthClip.title! }),
+    ).toBeTruthy();
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe(
+      'focus',
+    );
+  });
+
+  test('refocus leaves Create, Edit and destructive confirmation undisturbed', async () => {
+    const fake = fakeClient([currentMonthClip]);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    expect(fake.list).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+    const create = screen.getByRole('dialog', { name: 'Create clip' });
+    const draft = within(create).getByLabelText('Content');
+    fireEvent.change(draft, { target: { value: 'Keep this draft' } });
+    fireEvent.focus(window);
+    expect(fake.list).toHaveBeenCalledTimes(1);
+    expect(draft).toHaveProperty('value', 'Keep this draft');
+    fireEvent.click(within(create).getByRole('button', { name: 'Cancel' }));
+
+    await openCalendarActions(currentMonthClip.title!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    const edit = screen.getByRole('dialog', { name: 'Edit clip' });
+    fireEvent.focus(window);
+    expect(fake.list).toHaveBeenCalledTimes(1);
+    expect(edit).toBeTruthy();
+    fireEvent.click(within(edit).getByRole('button', { name: 'Cancel' }));
+
+    await openCalendarActions(currentMonthClip.title!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    const confirmation = screen.getByRole('alertdialog', {
+      name: 'Delete clip?',
+    });
+    fireEvent.focus(window);
+    expect(fake.list).toHaveBeenCalledTimes(1);
+    expect(confirmation).toBeTruthy();
+  });
+
+  test('refocus does not begin a read during a local mutation', async () => {
+    const fake = fakeClient([firstClip]);
+    let finish!: () => void;
+    fake.copyContent.mockReturnValue(
+      new Promise<void>((done) => {
+        finish = done;
+      }),
+    );
+    render(<App client={fake.client} />);
+    await openClipFromSidebar(firstClip);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    fireEvent.focus(window);
+    expect(fake.list).toHaveBeenCalledTimes(1);
+    finish();
+    await screen.findByText('Clip copied.');
+  });
+
   test('blocks every form dismissal while save is pending and preserves a failed draft', async () => {
     const fake = fakeClient();
     let reject!: (error: unknown) => void;

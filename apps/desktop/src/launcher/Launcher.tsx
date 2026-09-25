@@ -46,6 +46,7 @@ type LauncherClient = Pick<
 >;
 type LauncherMode =
   { kind: 'search' } | { kind: 'create' } | { kind: 'edit'; clipId: string };
+const VISIBLE_REFRESH_INTERVAL_MS = 2_000;
 interface Props {
   client?: LauncherClient;
   host?: LauncherHost;
@@ -61,7 +62,7 @@ export function Launcher({
   });
   const [connectionError, setConnectionError] = useState(false);
   const [connectionAttempt, setConnectionAttempt] = useState(0);
-  const focusActive = useRef<(() => void) | null>(null);
+  const focusActive = useRef<((session: number) => void) | null>(null);
   useEffect(() => observeThemePreference(), []);
   useEffect(
     () =>
@@ -71,7 +72,7 @@ export function Launcher({
           setState((current) =>
             next.session < current.session ? current : next,
           );
-          if (next.visible) focusActive.current?.();
+          if (next.visible) focusActive.current?.(next.session);
         },
         () => setConnectionError(true),
       ),
@@ -120,13 +121,15 @@ function LauncherSession({
   session: number;
   client: LauncherClient;
   host: LauncherHost;
-  focusActive: React.RefObject<(() => void) | null>;
+  focusActive: React.RefObject<((session: number) => void) | null>;
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
   const editorContentRef = useRef<HTMLTextAreaElement>(null);
   const selectedRef = useRef<HTMLDivElement>(null);
   const active = useRef(true);
   const loadingGeneration = useRef(0);
+  const hasLoaded = useRef(false);
+  const refreshInFlight = useRef(false);
   const copying = useRef(false);
   const openingTin = useRef(false);
   const saving = useRef(false);
@@ -170,14 +173,44 @@ function LauncherSession({
     setError(null);
     try {
       const next = await client.list();
-      if (active.current && generation === loadingGeneration.current)
+      if (active.current && generation === loadingGeneration.current) {
+        hasLoaded.current = true;
         setClips(next);
+      }
     } catch {
       if (active.current && generation === loadingGeneration.current)
         setError('load');
     } finally {
       if (active.current && generation === loadingGeneration.current)
         setLoading(false);
+    }
+  }
+  async function refreshVisibleClips() {
+    if (
+      !active.current ||
+      !hasLoaded.current ||
+      refreshInFlight.current ||
+      modeRef.current.kind !== 'search' ||
+      saving.current ||
+      deleting.current
+    )
+      return;
+    refreshInFlight.current = true;
+    const generation = ++loadingGeneration.current;
+    try {
+      const next = await client.list();
+      if (
+        active.current &&
+        generation === loadingGeneration.current &&
+        modeRef.current.kind === 'search' &&
+        !saving.current &&
+        !deleting.current
+      )
+        setClips(next);
+    } catch {
+      // Keep the last usable list and current feedback on a silent refresh error.
+    } finally {
+      refreshInFlight.current = false;
     }
   }
   useEffect(() => {
@@ -189,18 +222,26 @@ function LauncherSession({
         else editorContentRef.current?.focus();
       };
       focusCurrent();
+      void refreshVisibleClips();
       cancelAnimationFrame(focusFrame);
       focusFrame = requestAnimationFrame(() => {
         if (active.current) focusCurrent();
       });
     };
-    focusActive.current = focus;
+    focusActive.current = (requestedSession) => {
+      if (requestedSession === session) focus();
+    };
     window.addEventListener('focus', focus);
+    const refreshTimer = window.setInterval(
+      () => void refreshVisibleClips(),
+      VISIBLE_REFRESH_INTERVAL_MS,
+    );
     focus();
     void load();
     return () => {
       active.current = false;
       window.removeEventListener('focus', focus);
+      window.clearInterval(refreshTimer);
       cancelAnimationFrame(focusFrame);
       loadingGeneration.current++;
       focusActive.current = null;
@@ -285,6 +326,7 @@ function LauncherSession({
     const nextSelection =
       results[deletedIndex + 1] ?? results[deletedIndex - 1] ?? null;
     deleting.current = true;
+    loadingGeneration.current += 1;
     setIsDeleting(true);
     setDeleteError(null);
     try {
@@ -305,6 +347,7 @@ function LauncherSession({
   async function saveDraft(draft: LauncherClipDraft) {
     if (saving.current) return;
     saving.current = true;
+    loadingGeneration.current += 1;
     setIsSaving(true);
     setSaveError(null);
     try {

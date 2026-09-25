@@ -390,6 +390,22 @@ export function App({
   }, [clips, isLoading, isRefreshing, selectedId, workspaceMode]);
 
   useEffect(() => {
+    const refreshOnFocus = () => {
+      if (
+        isLoading ||
+        isRefreshing ||
+        formMode ||
+        deleteTarget ||
+        operationPending.current
+      )
+        return;
+      void refresh();
+    };
+    window.addEventListener('focus', refreshOnFocus);
+    return () => window.removeEventListener('focus', refreshOnFocus);
+  }, [deleteTarget, formMode, isLoading, isRefreshing, refresh]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (
         event.defaultPrevented ||

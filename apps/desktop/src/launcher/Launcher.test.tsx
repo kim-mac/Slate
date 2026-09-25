@@ -32,6 +32,13 @@ const newer: Clip = {
   sourceApp: 'ChatGPT',
   createdAt: '2026-09-02T00:00:00Z',
 };
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 function setup(initialClips: Clip[] = [older, newer]) {
   let deliver!: (state: LauncherState) => void;
   const host: LauncherHost = {
@@ -74,8 +81,170 @@ function setup(initialClips: Clip[] = [older, newer]) {
 }
 afterEach(cleanup);
 afterEach(() => {
+  vi.useRealTimers();
   window.localStorage.clear();
   delete document.documentElement.dataset.theme;
+});
+
+test('silently discovers an external clip while the same launcher session stays visible', async () => {
+  const captured = { ...newer, id: 'external', title: 'External capture' };
+  vi.useFakeTimers();
+  const { client } = setup();
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  const search = screen.getByRole('searchbox');
+  screen.getByRole('option', { name: /Recent note/ });
+  fireEvent.change(search, { target: { value: 'capture' } });
+  client.list.mockResolvedValue([captured, older, newer]);
+
+  await act(async () => vi.advanceTimersByTimeAsync(2_000));
+
+  expect(client.list).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole('option', { name: /External capture/ })).toBeTruthy();
+  expect((search as HTMLInputElement).value).toBe('capture');
+  expect(screen.queryByText('Loading clips…')).toBeNull();
+});
+
+test('refocusing an existing session silently refreshes without changing query, selection or feedback', async () => {
+  const { client, emit } = setup();
+  const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.keyDown(search, { key: 'Enter' });
+  await screen.findByText('Copied');
+  fireEvent.change(search, { target: { value: 'note' } });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  const external = { ...older, id: 'external', title: 'External note' };
+  client.list.mockResolvedValue([external, older, newer]);
+
+  emit({ session: 1, visible: true });
+
+  await screen.findByRole('option', { name: /External note/ });
+  expect(client.list).toHaveBeenCalledTimes(2);
+  expect(search).toHaveProperty('value', 'note');
+  expect(
+    screen
+      .getByRole('option', { name: /Recent note/ })
+      .getAttribute('aria-selected'),
+  ).toBe('true');
+  expect(screen.getByText('Copied')).toBeTruthy();
+  expect(screen.queryByText('Loading clips…')).toBeNull();
+});
+
+test('visible polling stops on hide and does not overlap an unfinished read', async () => {
+  vi.useFakeTimers();
+  const { client, emit } = setup();
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  const pending = deferred<Clip[]>();
+  client.list.mockReturnValueOnce(pending.promise);
+
+  await act(async () => vi.advanceTimersByTimeAsync(2_000));
+  expect(client.list).toHaveBeenCalledTimes(2);
+  await act(async () => vi.advanceTimersByTimeAsync(4_000));
+  expect(client.list).toHaveBeenCalledTimes(2);
+
+  emit({ session: 1, visible: false });
+  await act(async () => pending.resolve([older, newer]));
+  await act(async () => vi.advanceTimersByTimeAsync(6_000));
+  expect(client.list).toHaveBeenCalledTimes(2);
+});
+
+test('polling pauses in Create and Edit without clearing their unsaved drafts', async () => {
+  vi.useFakeTimers();
+  const { client } = setup();
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  let content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Unsaved create draft' } });
+  await act(async () => vi.advanceTimersByTimeAsync(6_000));
+  expect(client.list).toHaveBeenCalledTimes(1);
+  expect(content).toHaveProperty('value', 'Unsaved create draft');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit selected clip' }));
+  content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Unsaved edit draft' } });
+  await act(async () => vi.advanceTimersByTimeAsync(6_000));
+  expect(client.list).toHaveBeenCalledTimes(1);
+  expect(content).toHaveProperty('value', 'Unsaved edit draft');
+});
+
+test('an old poll cannot erase a locally created clip', async () => {
+  vi.useFakeTimers();
+  const { client } = setup();
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  const stale = deferred<Clip[]>();
+  client.list.mockReturnValueOnce(stale.promise);
+  await act(async () => vi.advanceTimersByTimeAsync(2_000));
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Created locally' } });
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  expect(screen.getByRole('option', { name: /Created locally/ })).toBeTruthy();
+
+  await act(async () => stale.resolve([older, newer]));
+  expect(screen.getByRole('option', { name: /Created locally/ })).toBeTruthy();
+});
+
+test('an old poll cannot restore the pre-edit version', async () => {
+  vi.useFakeTimers();
+  const { client } = setup();
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  const stale = deferred<Clip[]>();
+  client.list.mockReturnValueOnce(stale.promise);
+  await act(async () => vi.advanceTimersByTimeAsync(2_000));
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit selected clip' }));
+  const content = screen.getByRole('textbox', { name: 'Content' });
+  fireEvent.change(content, { target: { value: 'Updated guide' } });
+  fireEvent.keyDown(content, { key: 'Enter', ctrlKey: true });
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  expect(screen.getByText('Updated guide')).toBeTruthy();
+
+  await act(async () => stale.resolve([older, newer]));
+  expect(screen.getByText('Updated guide')).toBeTruthy();
+  expect(screen.queryByText('TypeScript guide')).toBeNull();
+});
+
+test('an old poll cannot resurrect a locally deleted clip', async () => {
+  vi.useFakeTimers();
+  const { client } = setup();
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  const stale = deferred<Clip[]>();
+  client.list.mockReturnValueOnce(stale.promise);
+  await act(async () => vi.advanceTimersByTimeAsync(2_000));
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete selected clip' }));
+  fireEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', {
+      name: 'Delete',
+    }),
+  );
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  expect(screen.queryByRole('option', { name: /Recent note/ })).toBeNull();
+
+  await act(async () => stale.resolve([older, newer]));
+  expect(screen.queryByRole('option', { name: /Recent note/ })).toBeNull();
+});
+
+test('a poll from a hidden session cannot overwrite the next session', async () => {
+  vi.useFakeTimers();
+  const { client, emit } = setup();
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  const stale = deferred<Clip[]>();
+  client.list.mockReturnValueOnce(stale.promise);
+  await act(async () => vi.advanceTimersByTimeAsync(2_000));
+  const replacement = { ...newer, id: 'replacement', title: 'Next session' };
+  client.list.mockResolvedValueOnce([replacement]);
+  emit({ session: 1, visible: false });
+  emit({ session: 2, visible: true });
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  expect(screen.getByRole('option', { name: /Next session/ })).toBeTruthy();
+
+  await act(async () => stale.resolve([older, newer]));
+  expect(screen.getByRole('option', { name: /Next session/ })).toBeTruthy();
+  expect(screen.queryByRole('option', { name: /Recent note/ })).toBeNull();
 });
 
 test.each(['light', 'dark'] as const)(
@@ -153,6 +322,7 @@ test('removes the Local only footer copy and uses shared scroll areas', async ()
 test('restores search focus when the native webview receives focus after rendering', async () => {
   setup();
   const search = await screen.findByRole('searchbox');
+  await screen.findByRole('option', { name: /Recent note/ });
   expect(search.getAttribute('placeholder')).toBe('Search clips…');
   (search as HTMLInputElement).blur();
   expect(document.activeElement).not.toBe(search);
@@ -589,13 +759,13 @@ test('Escape hides without copying; new sessions reload/reset, repeated invocati
   fireEvent.change(search, { target: { value: 'guide' } });
   emit({ session: 1, visible: true });
   expect((search as HTMLInputElement).value).toBe('guide');
-  expect(client.list).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(client.list).toHaveBeenCalledTimes(2));
   fireEvent.keyDown(search, { key: 'Escape' });
   expect(host.hide).toHaveBeenCalledWith(1);
   expect(client.copyContent).not.toHaveBeenCalled();
   emit({ session: 1, visible: false });
   emit({ session: 2, visible: true });
-  await waitFor(() => expect(client.list).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(client.list).toHaveBeenCalledTimes(3));
   expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('');
 });
 test('copy failure stays open, hides raw errors and supports retry', async () => {
