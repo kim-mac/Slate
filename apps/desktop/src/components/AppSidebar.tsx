@@ -1,4 +1,4 @@
-import type { Clip } from '@ai-clip-memory/shared';
+import type { LibraryItem } from '@ai-clip-memory/shared';
 import {
   Archive,
   ChevronRight,
@@ -36,7 +36,7 @@ type LibraryView = Exclude<AppView, 'settings'>;
 interface AppSidebarProps {
   activeView: AppView;
   allCount: number;
-  clips: Clip[];
+  clips: LibraryItem[];
   clipListRef: RefObject<HTMLDivElement | null>;
   expandedSection: LibraryView | null;
   hasFilters: boolean;
@@ -45,6 +45,9 @@ interface AppSidebarProps {
   onToggleSection: (view: LibraryView) => void;
   pinnedCount: number;
   selectedId: string | null;
+  selectionMode?: boolean;
+  selectedClipIds?: ReadonlySet<string>;
+  onToggleSelection?: (id: string) => void;
   onSelectView: (view: AppView) => void;
 }
 
@@ -60,6 +63,9 @@ export function AppSidebar({
   onToggleSection,
   pinnedCount,
   selectedId,
+  selectionMode = false,
+  selectedClipIds,
+  onToggleSelection,
   onSelectView,
 }: AppSidebarProps) {
   const { state } = useSidebar();
@@ -132,6 +138,9 @@ export function AppSidebar({
                               itemIdPrefix="sidebar-clip"
                               selectedId={selectedId}
                               onSelect={onSelectClip}
+                              selectionMode={selectionMode}
+                              selectedClipIds={selectedClipIds}
+                              onToggleSelection={onToggleSelection}
                             />
                           ) : (
                             <p className="sidebar-results-message">

@@ -9,6 +9,7 @@
     "allow-update-clip",
     "allow-delete-clip",
     "allow-copy-clip-content",
+    "allow-open-clip-source",
     "allow-launcher-ready",
     "allow-hide-launcher",
     "allow-open-tin-from-launcher",

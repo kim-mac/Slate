@@ -60,6 +60,28 @@ test('does not capture modified arrows or composition events', () => {
   expect(select).not.toHaveBeenCalled();
 });
 
+test('selection mode moves keyboard focus without selecting a row until activation', () => {
+  const toggle = vi.fn();
+  render(
+    <ClipList
+      clips={clips}
+      selectedId={null}
+      onSelect={vi.fn()}
+      selectionMode
+      selectedClipIds={new Set(['a'])}
+      onToggleSelection={toggle}
+    />,
+  );
+  const rows = screen.getAllByRole('button');
+  expect(rows[0]!.getAttribute('aria-pressed')).toBe('true');
+  rows[0]!.focus();
+  fireEvent.keyDown(rows[0]!, { key: 'ArrowDown' });
+  expect(document.activeElement).toBe(rows[1]);
+  expect(toggle).not.toHaveBeenCalled();
+  fireEvent.click(rows[1]!);
+  expect(toggle).toHaveBeenCalledWith('b');
+});
+
 test('renders a compact nested list without full metadata', () => {
   render(
     <ClipList

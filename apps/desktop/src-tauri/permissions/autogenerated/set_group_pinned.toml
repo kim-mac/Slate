@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-group-pinned"
+description = "Enables the set_group_pinned command without any pre-configured scope."
+commands.allow = ["set_group_pinned"]
+
+[[permission]]
+identifier = "deny-set-group-pinned"
+description = "Denies the set_group_pinned command without any pre-configured scope."
+commands.deny = ["set_group_pinned"]

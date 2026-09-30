@@ -2,7 +2,9 @@ use std::path::Path;
 use std::sync::{Arc, Barrier};
 use std::thread;
 
-use ai_clip_memory_desktop_lib::clips::{ClipService, CreateClip, UpdateClip};
+use ai_clip_memory_desktop_lib::clips::{
+    ClipService, CreateClip, LibraryItem, LibraryItemRef, UpdateClip,
+};
 use chrono::DateTime;
 use rusqlite::Connection;
 use tempfile::TempDir;
@@ -76,7 +78,7 @@ fn migration_creates_the_documented_schema_and_indexes_idempotently() {
     let user_version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("the migration version should be readable");
-    assert_eq!(user_version, 1);
+    assert_eq!(user_version, 2);
 
     let mut columns = connection
         .prepare("PRAGMA table_info(clips)")
@@ -114,6 +116,303 @@ fn migration_creates_the_documented_schema_and_indexes_idempotently() {
         .iter()
         .any(|name| name == "idx_clips_created_at"));
     assert!(index_names.iter().any(|name| name == "idx_clips_is_pinned"));
+}
+
+#[test]
+fn migration_from_populated_v1_preserves_every_clip_field_and_adds_group_schema() {
+    let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let path = database_path(&temp_directory);
+    let connection = Connection::open(&path).expect("the V1 database should open");
+    connection
+        .execute_batch(include_str!("../migrations/0001_create_clips.sql"))
+        .expect("the V1 schema should apply");
+    connection
+        .execute(
+            "INSERT INTO clips VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                "11111111-1111-4111-8111-111111111111",
+                " preserved content ",
+                "code",
+                "Original title",
+                "ChatGPT",
+                "https://chatgpt.com/c/original#section",
+                "Original page",
+                1,
+                "2026-01-02T03:04:05.006Z",
+                "2026-02-03T04:05:06.007Z",
+            ],
+        )
+        .expect("the V1 clip should be inserted");
+    connection
+        .pragma_update(None, "user_version", 1)
+        .expect("the V1 version should be recorded");
+    drop(connection);
+
+    let service = open_service(&path);
+    let clip = service
+        .get("11111111-1111-4111-8111-111111111111")
+        .expect("the migrated clip should be readable")
+        .expect("the migrated clip should remain present");
+    assert_eq!(clip.content, " preserved content ");
+    assert_eq!(clip.content_type, "code");
+    assert_eq!(clip.title.as_deref(), Some("Original title"));
+    assert_eq!(clip.source_app.as_deref(), Some("ChatGPT"));
+    assert_eq!(
+        clip.source_url.as_deref(),
+        Some("https://chatgpt.com/c/original#section")
+    );
+    assert_eq!(clip.source_page_title.as_deref(), Some("Original page"));
+    assert!(clip.is_pinned);
+    assert_eq!(clip.created_at, "2026-01-02T03:04:05.006Z");
+    assert_eq!(clip.updated_at, "2026-02-03T04:05:06.007Z");
+
+    let connection = Connection::open(&path).expect("the migrated database should reopen");
+    let version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .expect("the migration version should be readable");
+    assert_eq!(version, 2);
+    for table in ["clip_groups", "clip_group_members"] {
+        let exists: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                [table],
+                |row| row.get(0),
+            )
+            .expect("the group table should be queryable");
+        assert_eq!(exists, 1, "missing {table}");
+    }
+    drop(connection);
+    drop(open_service(&path));
+}
+
+#[test]
+fn every_service_connection_enforces_group_foreign_keys_and_unique_membership() {
+    let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let path = database_path(&temp_directory);
+    let service = open_service(&path);
+    let first = service.create(new_clip("First")).unwrap();
+    let second = service.create(new_clip("Second")).unwrap();
+    let group = service
+        .merge(&[
+            LibraryItemRef::clip(first.id.clone()),
+            LibraryItemRef::clip(second.id.clone()),
+        ])
+        .unwrap();
+
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .pragma_update(None, "foreign_keys", true)
+        .unwrap();
+    assert!(connection
+        .execute(
+            "INSERT INTO clip_group_members (group_id, clip_id, position) VALUES (?1, ?2, 2)",
+            rusqlite::params![group.id, "22222222-2222-4222-8222-222222222222"],
+        )
+        .is_err());
+    assert!(connection
+        .execute(
+            "INSERT INTO clip_groups (id, is_pinned, created_at, updated_at) VALUES (?1, 0, ?2, ?2)",
+            rusqlite::params!["33333333-3333-4333-8333-333333333333", "2026-01-01T00:00:00.000Z"],
+        )
+        .is_ok());
+    assert!(connection
+        .execute(
+            "INSERT INTO clip_group_members (group_id, clip_id, position) VALUES (?1, ?2, 0)",
+            rusqlite::params!["33333333-3333-4333-8333-333333333333", first.id],
+        )
+        .is_err());
+}
+
+#[test]
+fn merge_flattens_groups_deduplicates_members_and_lists_only_top_level_items() {
+    let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let service = open_service(&database_path(&temp_directory));
+    let first = service.create(new_clip("First")).unwrap();
+    let second = service.create(new_clip("Second")).unwrap();
+    let third = service.create(new_clip("Third")).unwrap();
+    let first_group = service
+        .merge(&[
+            LibraryItemRef::clip(first.id.clone()),
+            LibraryItemRef::clip(second.id.clone()),
+        ])
+        .unwrap();
+    let merged = service
+        .merge(&[
+            LibraryItemRef::group(first_group.id.clone()),
+            LibraryItemRef::clip(third.id.clone()),
+            LibraryItemRef::clip(first.id.clone()),
+        ])
+        .unwrap();
+
+    assert_ne!(merged.id, first_group.id);
+    assert_eq!(merged.members.len(), 3);
+    assert!(merged.members.windows(2).all(|clips| {
+        clips[0].created_at > clips[1].created_at
+            || (clips[0].created_at == clips[1].created_at && clips[0].id < clips[1].id)
+    }));
+    let listed = service.list_library_items().unwrap();
+    assert_eq!(listed.len(), 1);
+    assert!(matches!(&listed[0], LibraryItem::Group { group } if group.id == merged.id));
+    assert!(service.get_group(&first_group.id).unwrap().is_none());
+}
+
+#[test]
+fn group_title_and_pin_are_independent_while_member_metadata_is_preserved() {
+    let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let service = open_service(&database_path(&temp_directory));
+    let first = service.create(new_clip("First")).unwrap();
+    let second = service.create(new_clip("Second")).unwrap();
+    let pinned_first = service.pin(&first.id).unwrap().unwrap();
+    let group = service
+        .merge(&[
+            LibraryItemRef::clip(first.id.clone()),
+            LibraryItemRef::clip(second.id.clone()),
+        ])
+        .unwrap();
+    assert_eq!(group.title, "Example conversation");
+    assert!(!group.is_pinned);
+    assert_eq!(
+        group
+            .members
+            .iter()
+            .find(|clip| clip.id == first.id)
+            .unwrap(),
+        &pinned_first
+    );
+
+    let pinned_group = service.set_group_pinned(&group.id, true).unwrap().unwrap();
+    assert!(pinned_group.is_pinned);
+    assert!(
+        pinned_group
+            .members
+            .iter()
+            .find(|clip| clip.id == first.id)
+            .unwrap()
+            .is_pinned
+    );
+    service.unmerge_group(&group.id).unwrap();
+    assert!(service.get(&first.id).unwrap().unwrap().is_pinned);
+}
+
+#[test]
+fn automatic_group_title_requires_exact_trimmed_nonempty_page_titles() {
+    let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let service = open_service(&database_path(&temp_directory));
+    let first = service.create(new_clip("First")).unwrap();
+    let mut different = new_clip("Second");
+    different.source_page_title = Some("Different page".to_owned());
+    let second = service.create(different).unwrap();
+    let group = service
+        .merge(&[
+            LibraryItemRef::clip(first.id),
+            LibraryItemRef::clip(second.id),
+        ])
+        .unwrap();
+    assert_eq!(group.title, "Merged clips");
+}
+
+#[test]
+fn merge_rejects_a_duplicate_only_selection_without_persisting_a_one_member_group() {
+    let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let service = open_service(&database_path(&temp_directory));
+    let clip = service.create(new_clip("Only")).unwrap();
+    assert!(service
+        .merge(&[
+            LibraryItemRef::clip(clip.id.clone()),
+            LibraryItemRef::clip(clip.id.clone()),
+        ])
+        .is_err());
+    assert_eq!(service.list_library_items().unwrap().len(), 1);
+    assert!(matches!(
+        service.list_library_items().unwrap()[0],
+        LibraryItem::Clip { .. }
+    ));
+}
+
+#[test]
+fn failed_merge_rolls_back_without_changing_existing_group_membership() {
+    let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let service = open_service(&database_path(&temp_directory));
+    let first = service.create(new_clip("First")).unwrap();
+    let second = service.create(new_clip("Second")).unwrap();
+    let group = service
+        .merge(&[
+            LibraryItemRef::clip(first.id.clone()),
+            LibraryItemRef::clip(second.id.clone()),
+        ])
+        .unwrap();
+
+    assert!(service
+        .merge(&[
+            LibraryItemRef::group(group.id.clone()),
+            LibraryItemRef::clip("44444444-4444-4444-8444-444444444444".to_owned()),
+        ])
+        .is_err());
+    let persisted = service.get_group(&group.id).unwrap().unwrap();
+    assert_eq!(persisted.members.len(), 2);
+}
+
+#[test]
+fn member_unmerge_and_delete_dissolve_groups_atomically_at_one_survivor() {
+    let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let service = open_service(&database_path(&temp_directory));
+    let clips = [
+        service.create(new_clip("First")).unwrap(),
+        service.create(new_clip("Second")).unwrap(),
+        service.create(new_clip("Third")).unwrap(),
+    ];
+    let group = service
+        .merge(&[
+            LibraryItemRef::clip(clips[0].id.clone()),
+            LibraryItemRef::clip(clips[1].id.clone()),
+            LibraryItemRef::clip(clips[2].id.clone()),
+        ])
+        .unwrap();
+
+    service
+        .unmerge_member(&group.id, &clips[1].id)
+        .expect("one member should unmerge");
+    assert_eq!(
+        service.get_group(&group.id).unwrap().unwrap().members.len(),
+        2
+    );
+    assert!(service.get(&clips[1].id).unwrap().is_some());
+
+    service
+        .delete_member(&group.id, &clips[0].id)
+        .expect("deleting to one survivor should dissolve the group");
+    assert!(service.get_group(&group.id).unwrap().is_none());
+    assert!(service.get(&clips[0].id).unwrap().is_none());
+    assert!(service.get(&clips[2].id).unwrap().is_some());
+    assert_eq!(service.list_library_items().unwrap().len(), 2);
+}
+
+#[test]
+fn whole_group_unmerge_preserves_clips_and_whole_group_delete_removes_them() {
+    let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
+    let service = open_service(&database_path(&temp_directory));
+    let first = service.create(new_clip("First")).unwrap();
+    let second = service.create(new_clip("Second")).unwrap();
+    let group = service
+        .merge(&[
+            LibraryItemRef::clip(first.id.clone()),
+            LibraryItemRef::clip(second.id.clone()),
+        ])
+        .unwrap();
+    service.unmerge_group(&group.id).unwrap();
+    assert!(service.get(&first.id).unwrap().is_some());
+    assert!(service.get(&second.id).unwrap().is_some());
+
+    let group = service
+        .merge(&[
+            LibraryItemRef::clip(first.id.clone()),
+            LibraryItemRef::clip(second.id.clone()),
+        ])
+        .unwrap();
+    service.delete_group(&group.id).unwrap();
+    assert!(service.get(&first.id).unwrap().is_none());
+    assert!(service.get(&second.id).unwrap().is_none());
+    assert!(service.list_library_items().unwrap().is_empty());
 }
 
 #[test]

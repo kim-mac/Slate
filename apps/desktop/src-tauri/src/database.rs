@@ -2,7 +2,10 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, Error, OpenFlags, Result, TransactionBehavior};
 
-const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_create_clips.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_create_clips.sql"),
+    include_str!("../migrations/0002_create_clip_groups.sql"),
+];
 
 #[derive(Clone, Debug)]
 pub(crate) struct Database {
@@ -26,12 +29,16 @@ impl Database {
             path: path.as_ref().to_owned(),
         };
         let mut connection = Connection::open_with_flags(&database.path, flags)?;
+        connection.pragma_update(None, "foreign_keys", true)?;
         apply_migrations(&mut connection)?;
         Ok(database)
     }
 
     pub(crate) fn connect(&self) -> Result<Connection> {
-        Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+        let connection =
+            Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+        connection.pragma_update(None, "foreign_keys", true)?;
+        Ok(connection)
     }
 }
 

@@ -1,4 +1,4 @@
-import type { Clip, ClipInput } from '@ai-clip-memory/shared';
+import type { Clip, ClipInput, LibraryItem } from '@ai-clip-memory/shared';
 import {
   cleanup,
   fireEvent,
@@ -48,9 +48,12 @@ const pinnedClip: Clip = {
   updatedAt: '2026-09-01T15:00:00.000Z',
 };
 
-function fakeClient(initialClips: Clip[] = []) {
+function fakeClient(initialClips: Array<Clip | LibraryItem> = []) {
+  const initialItems = initialClips.map((item): LibraryItem =>
+    'kind' in item ? item : { kind: 'clip', clip: item },
+  );
   const methods = {
-    list: vi.fn<ClipClient['list']>().mockResolvedValue(initialClips),
+    list: vi.fn().mockResolvedValue(initialItems),
     create: vi.fn<ClipClient['create']>(),
     update: vi.fn<ClipClient['update']>(),
     delete: vi.fn<ClipClient['delete']>().mockResolvedValue(undefined),
@@ -59,8 +62,22 @@ function fakeClient(initialClips: Clip[] = []) {
       .fn<ClipClient['copyContent']>()
       .mockResolvedValue(undefined),
     openSource: vi.fn<ClipClient['openSource']>().mockResolvedValue(undefined),
+    merge: vi.fn<ClipClient['merge']>(),
+    unmergeMember: vi
+      .fn<ClipClient['unmergeMember']>()
+      .mockResolvedValue(undefined),
+    unmergeGroup: vi
+      .fn<ClipClient['unmergeGroup']>()
+      .mockResolvedValue(undefined),
+    deleteGroupMember: vi
+      .fn<ClipClient['deleteGroupMember']>()
+      .mockResolvedValue(undefined),
+    deleteGroup: vi
+      .fn<ClipClient['deleteGroup']>()
+      .mockResolvedValue(undefined),
+    setGroupPinned: vi.fn<ClipClient['setGroupPinned']>(),
   };
-  return { client: methods satisfies ClipClient, ...methods };
+  return { client: methods as ClipClient, ...methods };
 }
 
 function fakeStartupClient(enabled = false): StartupClient {
@@ -132,7 +149,15 @@ async function openClipFromSidebar(clip: Clip) {
 }
 
 async function openCalendarActions(title: string) {
-  fireEvent.click(screen.getByRole('button', { name: `Actions for ${title}` }));
+  const trigger = await waitFor(() => {
+    const button = screen.getByRole('button', {
+      name: `Actions for ${title}`,
+    });
+    expect(button).toHaveProperty('disabled', false);
+    return button;
+  });
+  fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' });
+  fireEvent.mouseDown(trigger, { button: 0 });
   return screen.findByRole('menu', undefined, { timeout: 3_000 });
 }
 
@@ -466,13 +491,10 @@ describe('App', () => {
     expect(fake.setPinned).toHaveBeenCalledWith(currentMonthClip.id, true);
   });
 
-  test('reuses App copy, edit, pin, and delete flows from calendar actions without opening Detail', async () => {
-    const pinned = { ...currentMonthClip, isPinned: true };
+  test('reuses App copy from calendar actions without opening Detail', async () => {
     const fake = fakeClient([currentMonthClip]);
-    fake.setPinned.mockResolvedValue(pinned);
     render(<App client={fake.client} />);
     await waitForCalendar();
-    const actionsName = `Actions for ${currentMonthClip.title!}`;
 
     fireEvent.click(
       within(await openCalendarActions(currentMonthClip.title!)).getByRole(
@@ -486,6 +508,12 @@ describe('App', () => {
     expect(
       screen.queryByRole('button', { name: 'Back to calendar' }),
     ).toBeNull();
+  });
+
+  test('reuses App edit from calendar actions without opening Detail', async () => {
+    const fake = fakeClient([currentMonthClip]);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
 
     fireEvent.click(
       within(await openCalendarActions(currentMonthClip.title!)).getByRole(
@@ -495,6 +523,17 @@ describe('App', () => {
     );
     expect(screen.getByRole('dialog', { name: 'Edit clip' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(
+      screen.queryByRole('button', { name: 'Back to calendar' }),
+    ).toBeNull();
+  });
+
+  test('reuses App pin from calendar actions without opening Detail', async () => {
+    const pinned = { ...currentMonthClip, isPinned: true };
+    const fake = fakeClient([currentMonthClip]);
+    fake.setPinned.mockResolvedValue(pinned);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
 
     fireEvent.click(
       within(await openCalendarActions(currentMonthClip.title!)).getByRole(
@@ -508,6 +547,13 @@ describe('App', () => {
     expect(
       screen.queryByRole('button', { name: 'Back to calendar' }),
     ).toBeNull();
+  });
+
+  test('reuses App delete from calendar actions without opening Detail', async () => {
+    const fake = fakeClient([currentMonthClip]);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    const actionsName = `Actions for ${currentMonthClip.title!}`;
 
     fireEvent.click(
       within(await openCalendarActions(currentMonthClip.title!)).getByRole(

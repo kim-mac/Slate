@@ -5,7 +5,9 @@ use tauri_plugin_opener::OpenerExt;
 use url::Url;
 use uuid::Uuid;
 
-use crate::clips::{Clip, ClipService, CreateClip, UpdateClip};
+use crate::clips::{
+    Clip, ClipGroup, ClipService, CreateClip, LibraryItem, LibraryItemRef, UpdateClip,
+};
 use crate::platform;
 use crate::storage::{StorageBootstrapError, StorageState};
 
@@ -234,11 +236,123 @@ fn invalid_stored_source_error() -> CommandError {
     )
 }
 
+fn group_operation_error() -> CommandError {
+    CommandError::new(
+        "group_operation_failed",
+        "The merged clips changed. Refresh the library and try again.",
+    )
+}
+
+fn validate_library_item_refs(selected: &[LibraryItemRef]) -> Result<(), CommandError> {
+    if selected.len() < 2 {
+        return Err(CommandError::new(
+            "merge_requires_two_items",
+            "Select at least two clips to merge.",
+        ));
+    }
+    for item in selected {
+        match item {
+            LibraryItemRef::Clip { id } | LibraryItemRef::Group { id } => {
+                validate_clip_id(id)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
-pub fn list_clips(storage: State<'_, StorageState>) -> Result<Vec<Clip>, CommandError> {
+pub fn list_clips(storage: State<'_, StorageState>) -> Result<Vec<LibraryItem>, CommandError> {
     storage
-        .with_service(ClipService::list)
+        .with_service(ClipService::list_library_items)
         .map_err(bootstrap_error)
+}
+
+#[tauri::command]
+pub fn merge_clips(
+    storage: State<'_, StorageState>,
+    selected: Vec<LibraryItemRef>,
+) -> Result<ClipGroup, CommandError> {
+    validate_library_item_refs(&selected)?;
+    storage
+        .with_service(|service| service.merge(&selected))
+        .map_err(|_| group_operation_error())
+}
+
+#[tauri::command]
+pub fn unmerge_group_member(
+    storage: State<'_, StorageState>,
+    group_id: String,
+    clip_id: String,
+) -> Result<(), CommandError> {
+    validate_clip_id(&group_id)?;
+    validate_clip_id(&clip_id)?;
+    match storage
+        .with_service(|service| service.unmerge_member(&group_id, &clip_id))
+        .map_err(|_| group_operation_error())?
+    {
+        true => Ok(()),
+        false => Err(not_found_error()),
+    }
+}
+
+#[tauri::command]
+pub fn unmerge_group(
+    storage: State<'_, StorageState>,
+    group_id: String,
+) -> Result<(), CommandError> {
+    validate_clip_id(&group_id)?;
+    match storage
+        .with_service(|service| service.unmerge_group(&group_id))
+        .map_err(|_| group_operation_error())?
+    {
+        true => Ok(()),
+        false => Err(not_found_error()),
+    }
+}
+
+#[tauri::command]
+pub fn delete_group_member(
+    storage: State<'_, StorageState>,
+    group_id: String,
+    clip_id: String,
+) -> Result<(), CommandError> {
+    validate_clip_id(&group_id)?;
+    validate_clip_id(&clip_id)?;
+    match storage
+        .with_service(|service| service.delete_member(&group_id, &clip_id))
+        .map_err(|_| group_operation_error())?
+    {
+        true => Ok(()),
+        false => Err(not_found_error()),
+    }
+}
+
+#[tauri::command]
+pub fn delete_group(
+    storage: State<'_, StorageState>,
+    group_id: String,
+) -> Result<(), CommandError> {
+    validate_clip_id(&group_id)?;
+    match storage
+        .with_service(|service| service.delete_group(&group_id))
+        .map_err(|_| group_operation_error())?
+    {
+        true => Ok(()),
+        false => Err(not_found_error()),
+    }
+}
+
+#[tauri::command]
+pub fn set_group_pinned(
+    storage: State<'_, StorageState>,
+    group_id: String,
+    is_pinned: bool,
+) -> Result<ClipGroup, CommandError> {
+    validate_clip_id(&group_id)?;
+    storage
+        .with_service(|service| service.set_group_pinned(&group_id, is_pinned))
+        .map_err(bootstrap_error)?
+        .ok_or_else(not_found_error)
 }
 
 #[tauri::command]

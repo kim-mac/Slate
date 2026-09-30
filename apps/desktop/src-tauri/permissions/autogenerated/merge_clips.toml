@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-merge-clips"
+description = "Enables the merge_clips command without any pre-configured scope."
+commands.allow = ["merge_clips"]
+
+[[permission]]
+identifier = "deny-merge-clips"
+description = "Denies the merge_clips command without any pre-configured scope."
+commands.deny = ["merge_clips"]

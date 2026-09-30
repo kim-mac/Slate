@@ -1,4 +1,4 @@
-import type { Clip } from '@ai-clip-memory/shared';
+import type { Clip, LibraryItem } from '@ai-clip-memory/shared';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
@@ -15,17 +15,29 @@ import {
   groupClipsByLocalDate,
   type CalendarMonth,
 } from '../../lib/memoryCalendar';
+import { asLibraryItem, libraryItemId } from '../../lib/libraryItems';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
-interface MemoryCalendarProps extends CalendarClipActions {
+interface MemoryCalendarProps extends Omit<
+  CalendarClipActions,
+  'onDeleteItem' | 'onSetItemPinned'
+> {
   actionsDisabled?: boolean;
-  clips: Clip[];
+  clips: Array<LibraryItem | Clip>;
   headerControl?: ReactNode;
   visibleMonth: CalendarMonth;
   onVisibleMonthChange: (month: CalendarMonth) => void;
   today?: Date;
   timeZone?: string;
+  selectionMode?: boolean;
+  selectedClipIds?: ReadonlySet<string>;
+  sameSourceHintIds?: ReadonlySet<string>;
+  onToggleSelection?: (id: string) => void;
+  onDeleteItem?: CalendarClipActions['onDeleteItem'];
+  onSetItemPinned?: CalendarClipActions['onSetItemPinned'];
+  onDeleteClip?: (clip: Clip) => void;
+  onSetPinned?: (clip: Clip, isPinned: boolean) => void;
 }
 
 export function MemoryCalendar({
@@ -34,14 +46,30 @@ export function MemoryCalendar({
   headerControl,
   onActivateClip,
   onCopyClip,
+  onDeleteItem,
   onDeleteClip,
   onEditClip,
+  onSetItemPinned,
   onSetPinned,
   visibleMonth,
   onVisibleMonthChange,
   today = new Date(),
   timeZone,
+  selectionMode = false,
+  selectedClipIds,
+  sameSourceHintIds,
+  onToggleSelection,
 }: MemoryCalendarProps) {
+  const deleteItem =
+    onDeleteItem ??
+    ((item: LibraryItem) => {
+      if (item.kind === 'clip') onDeleteClip?.(item.clip);
+    });
+  const setItemPinned =
+    onSetItemPinned ??
+    ((item: LibraryItem, pinned: boolean) => {
+      if (item.kind === 'clip') onSetPinned?.(item.clip, pinned);
+    });
   const [activeDay, setActiveDay] = useState<{
     key: string;
     date: Date;
@@ -55,7 +83,7 @@ export function MemoryCalendar({
     [today, visibleMonth],
   );
   const clipsByDay = useMemo(
-    () => groupClipsByLocalDate(clips, timeZone),
+    () => groupClipsByLocalDate(clips.map(asLibraryItem), timeZone),
     [clips, timeZone],
   );
   const currentMonth = calendarMonthFromDate(today);
@@ -116,7 +144,11 @@ export function MemoryCalendar({
   useEffect(() => {
     const pending = pendingCardFocus.current;
     if (!pending) return;
-    if (clips.some((clip) => clip.id === pending.clipId)) {
+    if (
+      clips.some(
+        (clip) => libraryItemId(asLibraryItem(clip)) === pending.clipId,
+      )
+    ) {
       pendingCardFocus.current = null;
       return;
     }
@@ -213,25 +245,32 @@ export function MemoryCalendar({
               >
                 <span className="memory-calendar-day-number">{cell.day}</span>
                 <div className="memory-calendar-clips">
-                  {visibleClips.map((clip) => (
-                    <CalendarClipCard
-                      key={clip.id}
-                      clip={clip}
-                      disabled={actionsDisabled}
-                      primaryId={calendarClipElementId(clip.id)}
-                      onActivateClip={onActivateClip}
-                      onCopyClip={onCopyClip}
-                      onDeleteClip={onDeleteClip}
-                      onEditClip={onEditClip}
-                      onFocusClip={(candidate) => {
-                        pendingCardFocus.current = {
-                          clipId: candidate.id,
-                          dayKey: cell.key,
-                        };
-                      }}
-                      onSetPinned={onSetPinned}
-                    />
-                  ))}
+                  {visibleClips.map((clip) => {
+                    const id = libraryItemId(clip);
+                    return (
+                      <CalendarClipCard
+                        key={id}
+                        clip={clip}
+                        disabled={actionsDisabled}
+                        primaryId={calendarClipElementId(id)}
+                        selectionMode={selectionMode}
+                        selected={selectedClipIds?.has(id) ?? false}
+                        sameSourceHint={sameSourceHintIds?.has(id) ?? false}
+                        onToggleSelection={onToggleSelection}
+                        onActivateClip={onActivateClip}
+                        onCopyClip={onCopyClip}
+                        onDeleteItem={deleteItem}
+                        onEditClip={onEditClip}
+                        onFocusClip={(candidate) => {
+                          pendingCardFocus.current = {
+                            clipId: libraryItemId(candidate),
+                            dayKey: cell.key,
+                          };
+                        }}
+                        onSetItemPinned={setItemPinned}
+                      />
+                    );
+                  })}
                   {overflowCount > 0 && (
                     <button
                       id={calendarMoreElementId(cell.key)}
@@ -259,22 +298,26 @@ export function MemoryCalendar({
           disabled={actionsDisabled}
           focusOrigin={() => dayFocusOrigin(activeDay.key)}
           onClose={closeActiveDay}
+          selectionMode={selectionMode}
+          selectedClipIds={selectedClipIds}
+          sameSourceHintIds={sameSourceHintIds}
+          onToggleSelection={onToggleSelection}
           onActivateClip={onActivateClip}
           onCopyClip={onCopyClip}
-          onDeleteClip={onDeleteClip}
+          onDeleteItem={deleteItem}
           onEditClip={onEditClip}
-          onSetPinned={onSetPinned}
+          onSetItemPinned={setItemPinned}
           onOpenFromDialog={(clip) => {
             const origin = dayFocusOrigin(activeDay.key);
             setActiveDay(null);
             onActivateClip(
-              clip.id,
+              libraryItemId(clip),
               origin ?? document.getElementById('calendar-month-heading')!,
             );
           }}
           onEditFromDialog={(clip) => {
             setActiveDay(null);
-            onEditClip(clip);
+            if (clip.kind === 'clip') onEditClip(clip.clip);
           }}
         />
       )}

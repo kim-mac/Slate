@@ -5,6 +5,12 @@
   "windows": ["main"],
   "permissions": [
     "allow-list-clips",
+    "allow-merge-clips",
+    "allow-unmerge-group-member",
+    "allow-unmerge-group",
+    "allow-delete-group-member",
+    "allow-delete-group",
+    "allow-set-group-pinned",
     "allow-create-clip",
     "allow-update-clip",
     "allow-delete-clip",

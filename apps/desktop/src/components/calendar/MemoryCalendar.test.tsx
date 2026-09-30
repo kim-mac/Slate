@@ -1,4 +1,4 @@
-import type { Clip } from '@ai-clip-memory/shared';
+import type { Clip, LibraryItem } from '@ai-clip-memory/shared';
 import {
   cleanup,
   fireEvent,
@@ -64,6 +64,39 @@ const clips: Clip[] = [
 ];
 
 afterEach(cleanup);
+
+test('places a merged group by its own creation date and shows it once', () => {
+  const groupItem: LibraryItem = {
+    kind: 'group',
+    group: {
+      id: 'group-one',
+      title: 'Merged research',
+      isPinned: false,
+      createdAt: '2026-09-12T18:00:00.000Z',
+      updatedAt: '2026-09-12T18:00:00.000Z',
+      members: clips.slice(0, 2),
+    },
+  };
+  render(
+    <MemoryCalendar
+      clips={[groupItem]}
+      visibleMonth={{ year: 2026, month: 8 }}
+      onVisibleMonthChange={vi.fn()}
+      {...calendarActions()}
+      today={new Date(2026, 8, 11, 12)}
+      timeZone="UTC"
+    />,
+  );
+  const day = screen.getByRole('gridcell', {
+    name: /Saturday, September 12, 2026/i,
+  });
+  expect(
+    within(day).getByRole('button', { name: 'Open Merged research' }),
+  ).toBeTruthy();
+  expect(
+    screen.getAllByRole('button', { name: 'Open Merged research' }),
+  ).toHaveLength(1);
+});
 
 test('renders the month shell, weekday labels, outside dates, and two-item overflow', () => {
   const actions = calendarActions();

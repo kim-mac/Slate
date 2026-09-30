@@ -1,4 +1,4 @@
-import type { Clip } from '@ai-clip-memory/shared';
+import type { LibraryItem } from '@ai-clip-memory/shared';
 import { useEffect, useRef } from 'react';
 
 import { CalendarClipCard, type CalendarClipActions } from './CalendarClipCard';
@@ -10,15 +10,20 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { libraryItemId } from '@/lib/libraryItems';
 
 interface CalendarDayDialogProps extends CalendarClipActions {
-  clips: Clip[];
+  clips: LibraryItem[];
   dateLabel: string;
   disabled?: boolean;
   focusOrigin: () => HTMLElement | null;
   onClose: () => void;
-  onEditFromDialog: (clip: Clip) => void;
-  onOpenFromDialog: (clip: Clip) => void;
+  onEditFromDialog: (clip: LibraryItem) => void;
+  onOpenFromDialog: (clip: LibraryItem) => void;
+  selectionMode?: boolean;
+  selectedClipIds?: ReadonlySet<string> | undefined;
+  sameSourceHintIds?: ReadonlySet<string> | undefined;
+  onToggleSelection?: ((id: string) => void) | undefined;
 }
 
 export function CalendarDayDialog({
@@ -29,16 +34,20 @@ export function CalendarDayDialog({
   onClose,
   onEditFromDialog,
   onOpenFromDialog,
+  selectionMode = false,
+  selectedClipIds,
+  sameSourceHintIds,
+  onToggleSelection,
   ...actions
 }: CalendarDayDialogProps) {
-  const previousClipIds = useRef(clips.map((clip) => clip.id));
+  const previousClipIds = useRef(clips.map(libraryItemId));
 
   useEffect(() => {
-    const currentIds = new Set(clips.map((clip) => clip.id));
+    const currentIds = new Set(clips.map(libraryItemId));
     const resultDisappeared = previousClipIds.current.some(
       (id) => !currentIds.has(id),
     );
-    previousClipIds.current = clips.map((clip) => clip.id);
+    previousClipIds.current = clips.map(libraryItemId);
     if (!resultDisappeared) return;
 
     const activeElement = document.activeElement;
@@ -49,7 +58,7 @@ export function CalendarDayDialog({
     )
       return;
     document
-      .getElementById(calendarDayDialogClipElementId(clips[0]!.id))
+      .getElementById(calendarDayDialogClipElementId(libraryItemId(clips[0]!)))
       ?.focus();
   }, [clips]);
 
@@ -72,17 +81,24 @@ export function CalendarDayDialog({
         </DialogHeader>
         <ScrollArea className="calendar-day-dialog-scroll">
           <div className="calendar-day-dialog-list">
-            {clips.map((clip) => (
-              <CalendarClipCard
-                key={clip.id}
-                clip={clip}
-                disabled={disabled}
-                primaryId={calendarDayDialogClipElementId(clip.id)}
-                {...actions}
-                onActivateClip={() => onOpenFromDialog(clip)}
-                onEditClip={() => onEditFromDialog(clip)}
-              />
-            ))}
+            {clips.map((clip) => {
+              const id = libraryItemId(clip);
+              return (
+                <CalendarClipCard
+                  key={id}
+                  clip={clip}
+                  disabled={disabled}
+                  primaryId={calendarDayDialogClipElementId(id)}
+                  selectionMode={selectionMode}
+                  selected={selectedClipIds?.has(id) ?? false}
+                  sameSourceHint={sameSourceHintIds?.has(id) ?? false}
+                  onToggleSelection={onToggleSelection}
+                  {...actions}
+                  onActivateClip={() => onOpenFromDialog(clip)}
+                  onEditClip={() => onEditFromDialog(clip)}
+                />
+              );
+            })}
           </div>
         </ScrollArea>
       </DialogContent>

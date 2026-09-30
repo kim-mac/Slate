@@ -59,6 +59,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::list_clips,
+            commands::merge_clips,
+            commands::unmerge_group_member,
+            commands::unmerge_group,
+            commands::delete_group_member,
+            commands::delete_group,
+            commands::set_group_pinned,
             commands::create_clip,
             commands::update_clip,
             commands::delete_clip,

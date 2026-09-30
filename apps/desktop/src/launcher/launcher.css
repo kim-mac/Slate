@@ -168,6 +168,30 @@
   font-size: 11px;
   color: var(--muted-foreground);
 }
+.launcher-group {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.launcher-group-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+.launcher-group-heading h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.launcher-group-heading span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.launcher-group-member .launcher-preview {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .launcher-state {
   align-items: flex-start;
   display: flex;

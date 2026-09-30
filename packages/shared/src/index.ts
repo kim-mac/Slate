@@ -74,3 +74,18 @@ export interface Clip extends ClipInput {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ClipGroup {
+  id: string;
+  title: string;
+  isPinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+  members: Clip[];
+}
+
+export type LibraryItem =
+  { kind: 'clip'; clip: Clip } | { kind: 'group'; group: ClipGroup };
+
+export type LibraryItemRef =
+  { kind: 'clip'; id: string } | { kind: 'group'; id: string };

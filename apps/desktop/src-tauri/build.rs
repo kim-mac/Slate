@@ -2,6 +2,12 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "list_clips",
+            "merge_clips",
+            "unmerge_group_member",
+            "unmerge_group",
+            "delete_group_member",
+            "delete_group",
+            "set_group_pinned",
             "create_clip",
             "update_clip",
             "delete_clip",
