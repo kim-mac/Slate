@@ -149,7 +149,15 @@ async function openClipFromSidebar(clip: Clip) {
 }
 
 async function openCalendarActions(title: string) {
-  fireEvent.click(screen.getByRole('button', { name: `Actions for ${title}` }));
+  const trigger = await waitFor(() => {
+    const button = screen.getByRole('button', {
+      name: `Actions for ${title}`,
+    });
+    expect(button).toHaveProperty('disabled', false);
+    return button;
+  });
+  fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' });
+  fireEvent.mouseDown(trigger, { button: 0 });
   return screen.findByRole('menu', undefined, { timeout: 3_000 });
 }
 
@@ -483,13 +491,10 @@ describe('App', () => {
     expect(fake.setPinned).toHaveBeenCalledWith(currentMonthClip.id, true);
   });
 
-  test('reuses App copy, edit, pin, and delete flows from calendar actions without opening Detail', async () => {
-    const pinned = { ...currentMonthClip, isPinned: true };
+  test('reuses App copy from calendar actions without opening Detail', async () => {
     const fake = fakeClient([currentMonthClip]);
-    fake.setPinned.mockResolvedValue(pinned);
     render(<App client={fake.client} />);
     await waitForCalendar();
-    const actionsName = `Actions for ${currentMonthClip.title!}`;
 
     fireEvent.click(
       within(await openCalendarActions(currentMonthClip.title!)).getByRole(
@@ -503,6 +508,12 @@ describe('App', () => {
     expect(
       screen.queryByRole('button', { name: 'Back to calendar' }),
     ).toBeNull();
+  });
+
+  test('reuses App edit from calendar actions without opening Detail', async () => {
+    const fake = fakeClient([currentMonthClip]);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
 
     fireEvent.click(
       within(await openCalendarActions(currentMonthClip.title!)).getByRole(
@@ -512,6 +523,17 @@ describe('App', () => {
     );
     expect(screen.getByRole('dialog', { name: 'Edit clip' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(
+      screen.queryByRole('button', { name: 'Back to calendar' }),
+    ).toBeNull();
+  });
+
+  test('reuses App pin from calendar actions without opening Detail', async () => {
+    const pinned = { ...currentMonthClip, isPinned: true };
+    const fake = fakeClient([currentMonthClip]);
+    fake.setPinned.mockResolvedValue(pinned);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
 
     fireEvent.click(
       within(await openCalendarActions(currentMonthClip.title!)).getByRole(
@@ -525,6 +547,13 @@ describe('App', () => {
     expect(
       screen.queryByRole('button', { name: 'Back to calendar' }),
     ).toBeNull();
+  });
+
+  test('reuses App delete from calendar actions without opening Detail', async () => {
+    const fake = fakeClient([currentMonthClip]);
+    render(<App client={fake.client} />);
+    await waitForCalendar();
+    const actionsName = `Actions for ${currentMonthClip.title!}`;
 
     fireEvent.click(
       within(await openCalendarActions(currentMonthClip.title!)).getByRole(

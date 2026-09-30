@@ -99,7 +99,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-test('Merge mode reuses the header, preserves cross-view ID selection, and exits with Cancel or Escape', async () => {
+test('Merge mode reuses the header, preserves cross-view ID selection, and exits with Cancel', async () => {
   setup();
   await enterMergeMode();
   expect(screen.queryByRole('toolbar', { name: 'Merge selection' })).toBeNull();
@@ -115,6 +115,10 @@ test('Merge mode reuses the header, preserves cross-view ID selection, and exits
   expect(screen.getByText('2 selected')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(screen.getByRole('button', { name: 'Merge' })).toBeTruthy();
+});
+
+test('Escape exits Merge mode', async () => {
+  setup();
   await enterMergeMode();
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(screen.getByRole('button', { name: 'Merge' })).toBeTruthy();
@@ -207,24 +211,28 @@ test('group detail exposes members and management actions', async () => {
   );
 });
 
-test('group-level unmerge, delete, and pin use their atomic client operations', async () => {
-  let client = setup([{ kind: 'group', group: mergedGroup }]);
+test('group pin uses its atomic client operation', async () => {
+  const client = setup([{ kind: 'group', group: mergedGroup }]);
   await screen.findByRole('button', { name: 'Open Shared page' });
   fireEvent.click(screen.getByRole('button', { name: 'Open Shared page' }));
   fireEvent.click(screen.getByRole('button', { name: 'Pin merged clip' }));
   await waitFor(() =>
     expect(client.setGroupPinned).toHaveBeenCalledWith(mergedGroup.id, true),
   );
-  cleanup();
-  client = setup([{ kind: 'group', group: mergedGroup }]);
+});
+
+test('whole-group unmerge uses its atomic client operation', async () => {
+  const client = setup([{ kind: 'group', group: mergedGroup }]);
   await screen.findByRole('button', { name: 'Open Shared page' });
   fireEvent.click(screen.getByRole('button', { name: 'Open Shared page' }));
   fireEvent.click(screen.getByRole('button', { name: 'Unmerge all clips' }));
   await waitFor(() =>
     expect(client.unmergeGroup).toHaveBeenCalledWith(mergedGroup.id),
   );
-  cleanup();
-  client = setup([{ kind: 'group', group: mergedGroup }]);
+});
+
+test('whole-group delete uses its atomic client operation after confirmation', async () => {
+  const client = setup([{ kind: 'group', group: mergedGroup }]);
   await screen.findByRole('button', { name: 'Open Shared page' });
   fireEvent.click(screen.getByRole('button', { name: 'Open Shared page' }));
   fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
