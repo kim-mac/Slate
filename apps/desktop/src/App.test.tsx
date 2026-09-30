@@ -1,4 +1,4 @@
-import type { Clip, ClipInput } from '@ai-clip-memory/shared';
+import type { Clip, ClipInput, LibraryItem } from '@ai-clip-memory/shared';
 import {
   cleanup,
   fireEvent,
@@ -48,9 +48,12 @@ const pinnedClip: Clip = {
   updatedAt: '2026-09-01T15:00:00.000Z',
 };
 
-function fakeClient(initialClips: Clip[] = []) {
+function fakeClient(initialClips: Array<Clip | LibraryItem> = []) {
+  const initialItems = initialClips.map((item): LibraryItem =>
+    'kind' in item ? item : { kind: 'clip', clip: item },
+  );
   const methods = {
-    list: vi.fn<ClipClient['list']>().mockResolvedValue(initialClips),
+    list: vi.fn().mockResolvedValue(initialItems),
     create: vi.fn<ClipClient['create']>(),
     update: vi.fn<ClipClient['update']>(),
     delete: vi.fn<ClipClient['delete']>().mockResolvedValue(undefined),
@@ -59,8 +62,22 @@ function fakeClient(initialClips: Clip[] = []) {
       .fn<ClipClient['copyContent']>()
       .mockResolvedValue(undefined),
     openSource: vi.fn<ClipClient['openSource']>().mockResolvedValue(undefined),
+    merge: vi.fn<ClipClient['merge']>(),
+    unmergeMember: vi
+      .fn<ClipClient['unmergeMember']>()
+      .mockResolvedValue(undefined),
+    unmergeGroup: vi
+      .fn<ClipClient['unmergeGroup']>()
+      .mockResolvedValue(undefined),
+    deleteGroupMember: vi
+      .fn<ClipClient['deleteGroupMember']>()
+      .mockResolvedValue(undefined),
+    deleteGroup: vi
+      .fn<ClipClient['deleteGroup']>()
+      .mockResolvedValue(undefined),
+    setGroupPinned: vi.fn<ClipClient['setGroupPinned']>(),
   };
-  return { client: methods satisfies ClipClient, ...methods };
+  return { client: methods as ClipClient, ...methods };
 }
 
 function fakeStartupClient(enabled = false): StartupClient {

@@ -18,6 +18,9 @@ test('delegates launcher scrolling to the shared custom ScrollArea', () => {
   expect(stylesheet).not.toMatch(
     /\.launcher-results\s*\{[^}]*overflow:\s*auto/s,
   );
+  expect(stylesheet).not.toMatch(
+    /\.launcher-group-member\s+\.launcher-preview\s*\{[^}]*overflow:\s*auto/s,
+  );
   expect(stylesheet).toMatch(
     /\.launcher-results-content\s*\{[^}]*padding-right:\s*12px/s,
   );

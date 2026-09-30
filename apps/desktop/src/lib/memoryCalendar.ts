@@ -1,6 +1,10 @@
-import type { Clip } from '@ai-clip-memory/shared';
-
-import { recentClips } from './clipRetrieval';
+import type { Clip, LibraryItem } from '@ai-clip-memory/shared';
+import {
+  asLibraryItem,
+  libraryItemCreatedAt,
+  libraryItemId,
+  recentLibraryItems,
+} from './libraryItems';
 
 export interface CalendarMonth {
   year: number;
@@ -118,10 +122,22 @@ export function localDateKey(
 export function groupClipsByLocalDate(
   clips: Clip[],
   timeZone?: string,
-): Map<string, Clip[]> {
-  const grouped = new Map<string, Clip[]>();
-  for (const clip of recentClips(clips)) {
-    const key = localDateKey(clip.createdAt, timeZone);
+): Map<string, Clip[]>;
+export function groupClipsByLocalDate(
+  clips: LibraryItem[],
+  timeZone?: string,
+): Map<string, LibraryItem[]>;
+export function groupClipsByLocalDate(
+  clips: Array<LibraryItem | Clip>,
+  timeZone?: string,
+): Map<string, Array<LibraryItem | Clip>> {
+  const originalById = new Map(
+    clips.map((item) => [libraryItemId(asLibraryItem(item)), item]),
+  );
+  const grouped = new Map<string, Array<LibraryItem | Clip>>();
+  for (const normalized of recentLibraryItems(clips.map(asLibraryItem))) {
+    const clip = originalById.get(libraryItemId(normalized))!;
+    const key = localDateKey(libraryItemCreatedAt(normalized), timeZone);
     if (!key) continue;
     const dayClips = grouped.get(key);
     if (dayClips) dayClips.push(clip);
@@ -130,8 +146,10 @@ export function groupClipsByLocalDate(
   return grouped;
 }
 
-export function getDayClipSummary(clips: Clip[]): {
-  visibleClips: Clip[];
+export function getDayClipSummary<T extends LibraryItem | Clip>(
+  clips: T[],
+): {
+  visibleClips: T[];
   overflowCount: number;
 } {
   return {

@@ -1,10 +1,10 @@
-import type { Clip } from '@ai-clip-memory/shared';
+import type { LibraryItem } from '@ai-clip-memory/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClipClient } from '../clipClient';
-import { recentClips } from '../lib/clipRetrieval';
+import { asLibraryItem, recentLibraryItems } from '../lib/libraryItems';
 
 export function useClipLibrary(client: Pick<ClipClient, 'list'>) {
-  const [clips, setClips] = useState<Clip[]>([]);
+  const [clips, setClips] = useState<LibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -15,7 +15,8 @@ export function useClipLibrary(client: Pick<ClipClient, 'list'>) {
     setLoadError(null);
     try {
       const loaded = await client.list();
-      if (request === generation.current) setClips(recentClips(loaded));
+      if (request === generation.current)
+        setClips(recentLibraryItems(loaded.map(asLibraryItem)));
     } catch (error) {
       if (request === generation.current) {
         const missingMessage =

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-group-member"
+description = "Enables the delete_group_member command without any pre-configured scope."
+commands.allow = ["delete_group_member"]
+
+[[permission]]
+identifier = "deny-delete-group-member"
+description = "Denies the delete_group_member command without any pre-configured scope."
+commands.deny = ["delete_group_member"]

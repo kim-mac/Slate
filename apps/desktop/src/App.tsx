@@ -3,18 +3,31 @@ import {
   type ClipContentType,
   type Clip,
   type ClipInput,
+  type ClipGroup,
+  type LibraryItem,
 } from '@ai-clip-memory/shared';
 import { ListFilter, Moon, Plus, RefreshCw, Search, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useClipLibrary } from './hooks/useClipLibrary';
 import {
+  hasSameSourceHint,
+  libraryItemRef,
+  reconcileSelectedIds,
+  selectedItemsInLibraryOrder,
+} from './lib/mergeClips';
+import {
   displayTitle,
   formatContentType,
-  matchesSearch,
-  recentClips,
   truncatePresentation,
 } from './lib/clipRetrieval';
+import {
+  libraryItemId,
+  libraryItemPinned,
+  matchesLibraryItemContentType,
+  matchesLibraryItemSearch,
+  recentLibraryItems,
+} from './lib/libraryItems';
 import { ClipFeedback } from './components/ClipFeedback';
 import { LauncherAvailability } from './components/LauncherAvailability';
 import { SettingsView } from './components/SettingsView';
@@ -35,6 +48,7 @@ import { tauriClipClient, type ClipClient } from './clipClient';
 import { tauriStartupClient, type StartupClient } from './startupClient';
 import { AppSidebar, type AppView } from './components/AppSidebar';
 import { ClipDetail } from './components/ClipDetail';
+import { MergedClipDetail } from './components/MergedClipDetail';
 import { clipListItemElementId } from './components/ClipList';
 import { ClipFormDialog } from './components/ClipFormDialog';
 import {
@@ -70,6 +84,10 @@ import {
 } from './themePreference';
 
 type FormMode = { type: 'create' } | { type: 'edit'; clip: Clip };
+type DeleteTarget =
+  | { type: 'clip'; clip: Clip }
+  | { type: 'member'; groupId: string; clip: Clip }
+  | { type: 'group'; group: ClipGroup };
 type WorkspaceMode = 'calendar' | 'detail';
 type DetailOrigin = {
   type: 'calendar' | 'sidebar' | 'create';
@@ -115,7 +133,7 @@ export function App({
     refresh,
     invalidate,
   } = useClipLibrary(client);
-  const [deleteTarget, setDeleteTarget] = useState<Clip | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
@@ -130,6 +148,11 @@ export function App({
   const libraryRef = useRef<HTMLElement>(null);
   const clipListRef = useRef<HTMLDivElement>(null);
   const [searchText, setSearchText] = useState('');
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedClipIds, setSelectedClipIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [mergeError, setMergeError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const currentSelectedId = useRef<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('calendar');
@@ -169,27 +192,43 @@ export function App({
 
   const matchingClips = useMemo(
     () =>
-      recentClips(clips).filter(
-        (clip) =>
-          (contentType === 'all' || clip.contentType === contentType) &&
-          matchesSearch(clip, searchText),
+      recentLibraryItems(clips).filter(
+        (item) =>
+          matchesLibraryItemContentType(item, contentType) &&
+          matchesLibraryItemSearch(item, searchText),
       ),
     [clips, searchText, contentType],
   );
   const visibleClips = useMemo(
     () =>
-      matchingClips.filter((clip) => activeView !== 'pinned' || clip.isPinned),
+      matchingClips.filter(
+        (clip) => activeView !== 'pinned' || libraryItemPinned(clip),
+      ),
     [activeView, matchingClips],
   );
   const sidebarClips = useMemo(
     () =>
       matchingClips.filter(
-        (clip) => expandedSection !== 'pinned' || clip.isPinned,
+        (clip) => expandedSection !== 'pinned' || libraryItemPinned(clip),
       ),
     [expandedSection, matchingClips],
   );
-  const selectedClip = clips.find((clip) => clip.id === selectedId) ?? null;
-  const pinnedCount = clips.filter((clip) => clip.isPinned).length;
+  const selectedClip =
+    clips.find((clip) => libraryItemId(clip) === selectedId) ?? null;
+  const validSelectedCount = selectedItemsInLibraryOrder(
+    clips,
+    selectedClipIds,
+  ).length;
+  const pinnedCount = clips.filter(libraryItemPinned).length;
+  const sameSourceHintIds = useMemo(
+    () =>
+      new Set(
+        clips
+          .filter((item) => hasSameSourceHint(item, selectedClipIds, clips))
+          .map(libraryItemId),
+      ),
+    [clips, selectedClipIds],
+  );
   const hasSearch = !!searchText.trim();
   const hasTypeFilter = contentType !== 'all';
   const hasFilters = hasSearch || hasTypeFilter;
@@ -200,6 +239,45 @@ export function App({
   function clearFilters() {
     setSearchText('');
     setContentType('all');
+  }
+
+  function exitSelectionMode() {
+    setSelectionMode(false);
+    setSelectedClipIds(new Set());
+    setMergeError(null);
+  }
+
+  function toggleSelection(id: string) {
+    setSelectedClipIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setMergeError(null);
+  }
+
+  async function startMerge() {
+    const selected = selectedItemsInLibraryOrder(clips, selectedClipIds);
+    if (selected.length < 2) {
+      setMergeError('Select at least two clips to merge.');
+      return;
+    }
+    if (!beginOperation()) return;
+    setMergeError(null);
+    try {
+      const group = await client.merge(selected.map(libraryItemRef));
+      setClips((current) => [
+        { kind: 'group', group },
+        ...current.filter((item) => !selectedClipIds.has(libraryItemId(item))),
+      ]);
+      exitSelectionMode();
+      notify(`${group.members.length} clips merged`);
+    } catch (error) {
+      setMergeError(safeErrorMessage(error));
+    } finally {
+      finishOperation();
+    }
   }
 
   function updateSelectedId(id: string | null) {
@@ -235,6 +313,13 @@ export function App({
     setFormMode(null);
   }
 
+  useEffect(() => {
+    setSelectedClipIds((current) => {
+      const next = reconcileSelectedIds(current, clips);
+      return next.size === current.size ? current : next;
+    });
+  }, [clips]);
+
   function toggleLibrarySection(view: Exclude<AppView, 'settings'>) {
     setActiveView(view);
     setExpandedSection((current) => (current === view ? null : view));
@@ -249,12 +334,16 @@ export function App({
       if (formMode?.type === 'edit') {
         const updated = await client.update(formMode.clip.id, input);
         setClips((current) =>
-          current.map((clip) => (clip.id === updated.id ? updated : clip)),
+          current.map((item) =>
+            item.kind === 'clip' && item.clip.id === updated.id
+              ? { kind: 'clip', clip: updated }
+              : item,
+          ),
         );
         updateSelectedId(updated.id);
       } else {
         const created = await client.create(input);
-        setClips((current) => [created, ...current]);
+        setClips((current) => [{ kind: 'clip', clip: created }, ...current]);
         setActiveView('all');
         setExpandedSection('all');
         const createdMonth = calendarMonthFromTimestamp(created.createdAt);
@@ -278,7 +367,11 @@ export function App({
     try {
       const updated = await client.setPinned(clip.id, isPinned);
       setClips((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
+        current.map((item) =>
+          item.kind === 'clip' && item.clip.id === updated.id
+            ? { kind: 'clip', clip: updated }
+            : item,
+        ),
       );
       notify(isPinned ? 'Clip pinned.' : 'Clip unpinned.');
     } catch (pinError) {
@@ -294,7 +387,11 @@ export function App({
     setActionError(null);
     try {
       await client.delete(clip.id);
-      setClips((current) => current.filter((item) => item.id !== clip.id));
+      setClips((current) =>
+        current.filter(
+          (item) => !(item.kind === 'clip' && item.clip.id === clip.id),
+        ),
+      );
       if (currentSelectedId.current === clip.id) {
         updateSelectedId(null);
         setDetailOrigin(null);
@@ -303,6 +400,97 @@ export function App({
       notify('Clip deleted.');
     } catch (deleteError) {
       setActionError(safeErrorMessage(deleteError));
+    } finally {
+      finishOperation();
+    }
+  }
+
+  async function setItemPinned(item: LibraryItem, isPinned: boolean) {
+    if (item.kind === 'clip') return setPinned(item.clip, isPinned);
+    if (!beginOperation()) return;
+    setActionError(null);
+    try {
+      const updated = await client.setGroupPinned(item.group.id, isPinned);
+      setClips((current) =>
+        current.map((candidate) =>
+          candidate.kind === 'group' && candidate.group.id === updated.id
+            ? { kind: 'group', group: updated }
+            : candidate,
+        ),
+      );
+      notify(isPinned ? 'Merged clip pinned.' : 'Merged clip unpinned.');
+    } catch (error) {
+      setActionError(safeErrorMessage(error));
+    } finally {
+      finishOperation();
+    }
+  }
+
+  async function unmergeMember(group: ClipGroup, clip: Clip) {
+    if (!beginOperation()) return;
+    setActionError(null);
+    try {
+      await client.unmergeMember(group.id, clip.id);
+      await refresh();
+      notify('Clip unmerged.');
+    } catch (error) {
+      setActionError(safeErrorMessage(error));
+    } finally {
+      finishOperation();
+    }
+  }
+
+  async function unmergeGroup(group: ClipGroup) {
+    if (!beginOperation()) return;
+    setActionError(null);
+    try {
+      await client.unmergeGroup(group.id);
+      updateSelectedId(null);
+      setDetailOrigin(null);
+      returnToCalendar(null);
+      await refresh();
+      notify(`${group.members.length} clips unmerged.`);
+    } catch (error) {
+      setActionError(safeErrorMessage(error));
+    } finally {
+      finishOperation();
+    }
+  }
+
+  async function deleteGroupMember(groupId: string, clip: Clip) {
+    if (!beginOperation()) return;
+    setDeleteTarget(null);
+    setActionError(null);
+    try {
+      await client.deleteGroupMember(groupId, clip.id);
+      await refresh();
+      notify('Clip deleted.');
+    } catch (error) {
+      setActionError(safeErrorMessage(error));
+    } finally {
+      finishOperation();
+    }
+  }
+
+  async function deleteGroup(group: ClipGroup) {
+    if (!beginOperation()) return;
+    setDeleteTarget(null);
+    setActionError(null);
+    try {
+      await client.deleteGroup(group.id);
+      setClips((current) =>
+        current.filter(
+          (item) => !(item.kind === 'group' && item.group.id === group.id),
+        ),
+      );
+      if (currentSelectedId.current === group.id) {
+        updateSelectedId(null);
+        setDetailOrigin(null);
+        returnToCalendar(null);
+      }
+      notify(`${group.members.length} clips deleted.`);
+    } catch (error) {
+      setActionError(safeErrorMessage(error));
     } finally {
       finishOperation();
     }
@@ -381,7 +569,7 @@ export function App({
       !selectedId ||
       isLoading ||
       isRefreshing ||
-      clips.some((clip) => clip.id === selectedId)
+      clips.some((clip) => libraryItemId(clip) === selectedId)
     )
       return;
     updateSelectedId(null);
@@ -408,6 +596,23 @@ export function App({
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (
+        event.key === 'Escape' &&
+        selectionMode &&
+        !formMode &&
+        !deleteTarget &&
+        !event.defaultPrevented &&
+        !(
+          event.target instanceof HTMLElement &&
+          event.target.closest(
+            '[role="dialog"], [role="alertdialog"], [role="listbox"], [role="menu"]',
+          )
+        )
+      ) {
+        event.preventDefault();
+        exitSelectionMode();
+        return;
+      }
+      if (
         event.defaultPrevented ||
         event.isComposing ||
         event.repeat ||
@@ -431,7 +636,7 @@ export function App({
         event.shiftKey &&
         activeView !== 'settings' &&
         workspaceMode === 'detail' &&
-        selectedClip
+        selectedClip?.kind === 'clip'
       ) {
         const target = event.target;
         if (
@@ -445,7 +650,7 @@ export function App({
           return;
         if (window.getSelection()?.toString()) return;
         event.preventDefault();
-        void copyClip(selectedClip);
+        void copyClip(selectedClip.clip);
       }
     }
     window.addEventListener('keydown', handleKeyDown);
@@ -477,9 +682,13 @@ export function App({
             }}
             onToggleSection={toggleLibrarySection}
             pinnedCount={pinnedCount}
-            selectedId={selectedClip?.id ?? null}
+            selectedId={selectedClip ? libraryItemId(selectedClip) : null}
+            selectionMode={selectionMode}
+            selectedClipIds={selectedClipIds}
+            onToggleSelection={toggleSelection}
             onSelectView={(view) => {
               if (view === 'settings') {
+                exitSelectionMode();
                 setActiveView('settings');
                 setFormMode(null);
               } else {
@@ -537,19 +746,60 @@ export function App({
                         }
                       />
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setActiveView('all');
-                        setExpandedSection('all');
-                        setFormMode({ type: 'create' });
-                        setFormError(null);
-                      }}
-                      disabled={isLoading || isRefreshing || isBusy}
-                    >
-                      <Plus aria-hidden="true" />
-                      New clip
-                    </Button>
+                    {selectionMode ? (
+                      <>
+                        <span className="merge-selected-count">
+                          {validSelectedCount} selected
+                        </span>
+                        <Button
+                          size="sm"
+                          onClick={() => void startMerge()}
+                          disabled={
+                            validSelectedCount < 2 || isBusy || isRefreshing
+                          }
+                          aria-label="Merge selected"
+                        >
+                          Merge
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={exitSelectionMode}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            exitSelectionMode();
+                            setActiveView('all');
+                            setExpandedSection('all');
+                            setFormMode({ type: 'create' });
+                            setFormError(null);
+                          }}
+                          disabled={isLoading || isRefreshing || isBusy}
+                        >
+                          <Plus aria-hidden="true" />
+                          New clip
+                        </Button>
+                        {workspaceMode === 'calendar' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectionMode(true);
+                              setMergeError(null);
+                            }}
+                            disabled={isLoading || isBusy || isRefreshing}
+                          >
+                            Merge
+                          </Button>
+                        )}
+                      </>
+                    )}
                   </div>
                   <div className="desktop-header-actions">
                     <Tooltip>
@@ -612,6 +862,11 @@ export function App({
                   ref={libraryRef}
                   aria-label={activeView === 'pinned' ? 'Pinned' : 'All Clips'}
                 >
+                  {mergeError && selectionMode && (
+                    <p className="error-message" role="alert">
+                      {mergeError}
+                    </p>
+                  )}
                   {loadError && clips.length > 0 && (
                     <div className="load-error">
                       <p role="alert">{loadError}</p>
@@ -647,24 +902,65 @@ export function App({
                         Retry
                       </Button>
                     </div>
-                  ) : workspaceMode === 'detail' && selectedClip ? (
+                  ) : workspaceMode === 'detail' &&
+                    selectedClip?.kind === 'clip' ? (
                     <ClipDetail
-                      clip={selectedClip}
+                      clip={selectedClip.clip}
                       disabled={isBusy || isRefreshing}
                       backButtonRef={detailBackRef}
                       onBack={() => returnToCalendar()}
-                      onCopy={() => void copyClip(selectedClip)}
-                      onDelete={() => setDeleteTarget(selectedClip)}
-                      onEdit={() => editClip(selectedClip)}
-                      onOpenSource={() => void openSource(selectedClip)}
-                      onSetPinned={(isPinned) =>
-                        void setPinned(selectedClip, isPinned)
+                      onCopy={() => void copyClip(selectedClip.clip)}
+                      onDelete={() =>
+                        setDeleteTarget({
+                          type: 'clip',
+                          clip: selectedClip.clip,
+                        })
                       }
+                      onEdit={() => editClip(selectedClip.clip)}
+                      onOpenSource={() => void openSource(selectedClip.clip)}
+                      onSetPinned={(isPinned) =>
+                        void setPinned(selectedClip.clip, isPinned)
+                      }
+                    />
+                  ) : workspaceMode === 'detail' &&
+                    selectedClip?.kind === 'group' ? (
+                    <MergedClipDetail
+                      group={selectedClip.group}
+                      disabled={isBusy || isRefreshing}
+                      backButtonRef={detailBackRef}
+                      onBack={() => returnToCalendar()}
+                      onSetPinned={(isPinned) =>
+                        void setItemPinned(selectedClip, isPinned)
+                      }
+                      onUnmergeMember={(clip) =>
+                        void unmergeMember(selectedClip.group, clip)
+                      }
+                      onDeleteMember={(clip) =>
+                        setDeleteTarget({
+                          type: 'member',
+                          groupId: selectedClip.group.id,
+                          clip,
+                        })
+                      }
+                      onUnmergeGroup={() =>
+                        void unmergeGroup(selectedClip.group)
+                      }
+                      onDeleteGroup={() =>
+                        setDeleteTarget({
+                          type: 'group',
+                          group: selectedClip.group,
+                        })
+                      }
+                      onOpenSource={(clip) => void openSource(clip)}
                     />
                   ) : (
                     <MemoryCalendar
                       actionsDisabled={isBusy || isRefreshing}
                       clips={visibleClips}
+                      selectionMode={selectionMode}
+                      selectedClipIds={selectedClipIds}
+                      sameSourceHintIds={sameSourceHintIds}
+                      onToggleSelection={toggleSelection}
                       onActivateClip={(id, element) => {
                         const fallbackFocusTargetId =
                           element.closest<HTMLElement>('[role="gridcell"]')?.id;
@@ -678,10 +974,16 @@ export function App({
                         });
                       }}
                       onCopyClip={(clip) => void copyClip(clip)}
-                      onDeleteClip={setDeleteTarget}
+                      onDeleteItem={(item) =>
+                        setDeleteTarget(
+                          item.kind === 'clip'
+                            ? { type: 'clip', clip: item.clip }
+                            : { type: 'group', group: item.group },
+                        )
+                      }
                       onEditClip={editClip}
-                      onSetPinned={(clip, isPinned) =>
-                        void setPinned(clip, isPinned)
+                      onSetItemPinned={(item, isPinned) =>
+                        void setItemPinned(item, isPinned)
                       }
                       headerControl={
                         <>
@@ -791,11 +1093,17 @@ export function App({
         >
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete clip?</AlertDialogTitle>
+              <AlertDialogTitle>
+                {deleteTarget?.type === 'group'
+                  ? 'Delete merged clip?'
+                  : 'Delete clip?'}
+              </AlertDialogTitle>
               <AlertDialogDescription>
-                {deleteTarget
-                  ? `Delete “${truncatePresentation(displayTitle(deleteTarget), 60)}”? This removes the clip from local storage and cannot be undone.`
-                  : 'This removes the clip from local storage and cannot be undone.'}
+                {deleteTarget?.type === 'group'
+                  ? `Permanently delete all ${deleteTarget.group.members.length} clips in “${truncatePresentation(deleteTarget.group.title, 60)}”? This cannot be undone.`
+                  : deleteTarget
+                    ? `Permanently delete “${truncatePresentation(displayTitle(deleteTarget.clip), 60)}”? This removes the clip from local storage and cannot be undone.`
+                    : 'This removes the clip from local storage and cannot be undone.'}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -803,10 +1111,20 @@ export function App({
               <AlertDialogAction
                 variant="destructive"
                 onClick={() => {
-                  if (deleteTarget) void deleteClip(deleteTarget);
+                  if (deleteTarget?.type === 'clip')
+                    void deleteClip(deleteTarget.clip);
+                  else if (deleteTarget?.type === 'member')
+                    void deleteGroupMember(
+                      deleteTarget.groupId,
+                      deleteTarget.clip,
+                    );
+                  else if (deleteTarget?.type === 'group')
+                    void deleteGroup(deleteTarget.group);
                 }}
               >
-                Delete clip
+                {deleteTarget?.type === 'group'
+                  ? `Delete all ${deleteTarget.group.members.length} clips`
+                  : 'Delete clip'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

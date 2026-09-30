@@ -1,5 +1,15 @@
-import type { Clip, ClipInput } from '@ai-clip-memory/shared';
-import { AppWindow, GripVertical, Pencil, Plus, Trash2, X } from 'lucide-react';
+import type { Clip, ClipInput, LibraryItem } from '@ai-clip-memory/shared';
+import {
+  AppWindow,
+  ArrowLeft,
+  Copy,
+  ExternalLink,
+  GripVertical,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { tauriClipClient, type ClipClient } from '../clipClient';
 import {
@@ -21,13 +31,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../components/ui/tooltip';
+import { displayTitle } from '../lib/clipRetrieval';
 import {
-  clipPreview,
-  displayTitle,
-  formatContentType,
-  matchesSearch,
-  recentClips,
-} from '../lib/clipRetrieval';
+  asLibraryItem,
+  libraryItemId,
+  libraryItemPreview,
+  libraryItemSourceLabel,
+  libraryItemTitle,
+  libraryItemTypeLabel,
+  matchesLibraryItemSearch,
+  recentLibraryItems,
+} from '../lib/libraryItems';
 import {
   connectLauncher,
   tauriLauncherHost,
@@ -42,10 +56,14 @@ import { observeThemePreference } from '../themePreference';
 
 type LauncherClient = Pick<
   ClipClient,
-  'list' | 'copyContent' | 'create' | 'update' | 'delete'
+  'list' | 'copyContent' | 'openSource' | 'create' | 'update' | 'delete'
 >;
 type LauncherMode =
-  { kind: 'search' } | { kind: 'create' } | { kind: 'edit'; clipId: string };
+  | { kind: 'search' }
+  | { kind: 'create' }
+  | { kind: 'edit'; clipId: string }
+  | { kind: 'group'; groupId: string };
+type LauncherError = 'load' | 'copy' | 'hide' | 'open' | 'source' | null;
 const VISIBLE_REFRESH_INTERVAL_MS = 2_000;
 interface Props {
   client?: LauncherClient;
@@ -112,6 +130,110 @@ export function Launcher({
   );
 }
 
+function LauncherGroupView({
+  group,
+  busy,
+  error,
+  onBack,
+  onCopy,
+  onOpenSource,
+}: {
+  group: import('@ai-clip-memory/shared').ClipGroup | undefined;
+  busy: boolean;
+  error: LauncherError;
+  onBack: () => void;
+  onCopy: (clip: Clip) => void;
+  onOpenSource: (clip: Clip) => void;
+}) {
+  if (!group)
+    return (
+      <div className="launcher-state">
+        <strong>This merged clip is no longer available.</strong>
+        <Button variant="outline" size="sm" onClick={onBack}>
+          Back
+        </Button>
+      </div>
+    );
+  return (
+    <section className="launcher-group" aria-labelledby="launcher-group-title">
+      <div className="launcher-group-heading">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Back to search"
+          onClick={onBack}
+        >
+          <ArrowLeft />
+        </Button>
+        <div>
+          <h2 id="launcher-group-title">{group.title}</h2>
+          <span>{group.members.length} clips</span>
+        </div>
+      </div>
+      {error && error !== 'load' && (
+        <div className="launcher-error" role="alert">
+          <span>
+            {error === 'copy'
+              ? 'Clip could not be copied.'
+              : error === 'source'
+                ? 'Clip source could not be opened.'
+                : error === 'open'
+                  ? 'Slate could not be opened.'
+                  : 'Quick search could not close.'}
+          </span>
+        </div>
+      )}
+      <ScrollArea className="launcher-results">
+        <div className="launcher-results-content">
+          {group.members.map((clip) => (
+            <article
+              key={clip.id}
+              className="launcher-result launcher-group-member"
+            >
+              <div className="launcher-title-row">
+                <div className="launcher-title">{displayTitle(clip)}</div>
+                <div className="launcher-title-actions">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Copy ${displayTitle(clip)}`}
+                    disabled={busy}
+                    onClick={() => onCopy(clip)}
+                  >
+                    <Copy />
+                  </Button>
+                  {clip.sourceUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Open source for ${displayTitle(clip)}`}
+                      disabled={busy}
+                      onClick={() => onOpenSource(clip)}
+                    >
+                      <ExternalLink />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="launcher-preview">{clip.content}</div>
+              <div className="launcher-meta">
+                {clip.sourceApp || 'Local clip'} ·{' '}
+                {new Date(clip.createdAt).toLocaleDateString()}
+              </div>
+            </article>
+          ))}
+        </div>
+      </ScrollArea>
+      <footer className="launcher-footer">
+        <span>{group.members.length} clips</span>
+        <span>Esc Back</span>
+      </footer>
+    </section>
+  );
+}
+
 function LauncherSession({
   session,
   client,
@@ -138,7 +260,7 @@ function LauncherSession({
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const composing = useRef(false);
   const modeRef = useRef<LauncherMode>({ kind: 'search' });
-  const [clips, setClips] = useState<Clip[]>([]);
+  const [clips, setClips] = useState<LibraryItem[]>([]);
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -152,14 +274,12 @@ function LauncherSession({
   const [deleteTarget, setDeleteTarget] = useState<Clip | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState<'load' | 'copy' | 'hide' | 'open' | null>(
-    null,
-  );
-  const results = recentClips(clips).filter((clip) =>
-    matchesSearch(clip, query),
+  const [error, setError] = useState<LauncherError>(null);
+  const results = recentLibraryItems(clips).filter((clip) =>
+    matchesLibraryItemSearch(clip, query),
   );
   const selected = selectedId
-    ? results.find((clip) => clip.id === selectedId)
+    ? results.find((clip) => libraryItemId(clip) === selectedId)
     : undefined;
 
   function setMode(next: LauncherMode) {
@@ -175,7 +295,7 @@ function LauncherSession({
       const next = await client.list();
       if (active.current && generation === loadingGeneration.current) {
         hasLoaded.current = true;
-        setClips(next);
+        setClips(next.map(asLibraryItem));
       }
     } catch {
       if (active.current && generation === loadingGeneration.current)
@@ -206,7 +326,7 @@ function LauncherSession({
         !saving.current &&
         !deleting.current
       )
-        setClips(next);
+        setClips(next.map(asLibraryItem));
     } catch {
       // Keep the last usable list and current feedback on a silent refresh error.
     } finally {
@@ -258,7 +378,7 @@ function LauncherSession({
   }, [mode]);
   useEffect(() => {
     selectedRef.current?.scrollIntoView?.({ block: 'nearest' });
-  }, [selected?.id]);
+  }, [selectedId]);
 
   async function hide() {
     try {
@@ -313,6 +433,10 @@ function LauncherSession({
     setSaveError(null);
     setMode({ kind: 'search' });
   }
+  function openGroup(groupId: string) {
+    setError(null);
+    setMode({ kind: 'group', groupId });
+  }
   function openDelete(clip: Clip) {
     focusSearchAfterDelete.current = false;
     setDeleteError(null);
@@ -322,7 +446,9 @@ function LauncherSession({
   async function deleteClip() {
     if (!deleteTarget || deleting.current) return;
     const deletedId = deleteTarget.id;
-    const deletedIndex = results.findIndex((clip) => clip.id === deletedId);
+    const deletedIndex = results.findIndex(
+      (clip) => libraryItemId(clip) === deletedId,
+    );
     const nextSelection =
       results[deletedIndex + 1] ?? results[deletedIndex - 1] ?? null;
     deleting.current = true;
@@ -332,8 +458,12 @@ function LauncherSession({
     try {
       await client.delete(deletedId);
       if (!active.current) return;
-      setClips((current) => current.filter((clip) => clip.id !== deletedId));
-      setSelectedId(nextSelection?.id ?? null);
+      setClips((current) =>
+        current.filter(
+          (clip) => !(clip.kind === 'clip' && clip.clip.id === deletedId),
+        ),
+      );
+      setSelectedId(nextSelection ? libraryItemId(nextSelection) : null);
       setFeedback('deleted');
       focusSearchAfterDelete.current = true;
       setDeleteTarget(null);
@@ -362,28 +492,38 @@ function LauncherSession({
         });
         if (!active.current) return;
         setClips((current) => [
-          saved,
-          ...current.filter((clip) => clip.id !== saved.id),
+          { kind: 'clip', clip: saved },
+          ...current.filter(
+            (clip) => !(clip.kind === 'clip' && clip.clip.id === saved.id),
+          ),
         ]);
       } else if (modeRef.current.kind === 'edit') {
         const clipId = modeRef.current.clipId;
-        const latest = await client.list();
+        const latest = (await client.list()).map(asLibraryItem);
         if (!active.current || modeRef.current.kind !== 'edit') return;
-        const stored = latest.find((clip) => clip.id === clipId);
-        if (!stored) {
+        const storedItem = latest.find(
+          (item) => item.kind === 'clip' && item.clip.id === clipId,
+        );
+        if (!storedItem || storedItem.kind !== 'clip') {
           setSaveError('This clip is no longer available.');
           return;
         }
         const input: ClipInput = {
           ...draft,
-          title: stored.title,
-          sourceApp: stored.sourceApp,
-          sourceUrl: stored.sourceUrl,
-          sourcePageTitle: stored.sourcePageTitle,
+          title: storedItem.clip.title,
+          sourceApp: storedItem.clip.sourceApp,
+          sourceUrl: storedItem.clip.sourceUrl,
+          sourcePageTitle: storedItem.clip.sourcePageTitle,
         };
         saved = await client.update(clipId, input);
         if (!active.current || modeRef.current.kind !== 'edit') return;
-        setClips(latest.map((clip) => (clip.id === saved.id ? saved : clip)));
+        setClips(
+          latest.map((item) =>
+            item.kind === 'clip' && item.clip.id === saved.id
+              ? { kind: 'clip', clip: saved }
+              : item,
+          ),
+        );
       } else return;
       if (!active.current) return;
       setQuery('');
@@ -418,7 +558,9 @@ function LauncherSession({
     if (event.target !== searchRef.current) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
-      const index = results.findIndex((clip) => clip.id === selected?.id);
+      const index = results.findIndex(
+        (clip) => libraryItemId(clip) === selectedId,
+      );
       const next =
         index === -1
           ? event.key === 'ArrowDown'
@@ -431,10 +573,11 @@ function LauncherSession({
                 index + (event.key === 'ArrowDown' ? 1 : -1),
               ),
             );
-      setSelectedId(results[next]?.id ?? null);
+      setSelectedId(results[next] ? libraryItemId(results[next]!) : null);
     } else if (event.key === 'Enter' && !event.repeat && selected && !loading) {
       event.preventDefault();
-      void copy(selected.id);
+      if (selected.kind === 'clip') void copy(selected.clip.id);
+      else openGroup(selected.group.id);
     }
   }
   return (
@@ -490,7 +633,7 @@ function LauncherSession({
             role="searchbox"
             aria-controls="launcher-results"
             aria-activedescendant={
-              selected ? `result-${selected.id}` : undefined
+              selected ? `result-${libraryItemId(selected)}` : undefined
             }
             value={query}
             onChange={(event) => {
@@ -519,10 +662,12 @@ function LauncherSession({
               <Button
                 variant="outline"
                 size="sm"
-                disabled={busy || (error === 'copy' && !selected)}
+                disabled={
+                  busy || (error === 'copy' && selected?.kind !== 'clip')
+                }
                 onClick={() => {
                   if (error === 'copy') {
-                    if (selected) void copy(selected.id);
+                    if (selected?.kind === 'clip') void copy(selected.clip.id);
                   } else if (error === 'open') void openTin();
                   else void hide();
                 }}
@@ -572,90 +717,96 @@ function LauncherSession({
                   </span>
                 </div>
               ) : (
-                results.map((clip) => (
-                  <div
-                    key={clip.id}
-                    id={`result-${clip.id}`}
-                    ref={clip.id === selected?.id ? selectedRef : undefined}
-                    role="option"
-                    aria-selected={clip.id === selected?.id}
-                    className="launcher-result"
-                    onMouseDown={() => setSelectedId(clip.id)}
-                    onClick={() => {
-                      setSelectedId(clip.id);
-                      if (window.getSelection()?.isCollapsed !== false)
-                        searchRef.current?.focus();
-                    }}
-                  >
-                    <div className="launcher-title-row">
-                      <div className="launcher-title">{displayTitle(clip)}</div>
-                      {clip.id === selected?.id && (
-                        <div className="launcher-title-actions">
-                          <Tooltip>
-                            <TooltipTrigger
-                              render={
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  aria-label="Edit selected clip"
-                                  onMouseDown={(event) =>
-                                    event.stopPropagation()
-                                  }
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openEdit(clip.id);
-                                  }}
-                                />
-                              }
-                            >
-                              <Pencil aria-hidden="true" />
-                            </TooltipTrigger>
-                            <TooltipContent>Edit clip</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger
-                              render={
-                                <Button
-                                  ref={deleteTriggerRef}
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  aria-label="Delete selected clip"
-                                  onMouseDown={(event) =>
-                                    event.stopPropagation()
-                                  }
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openDelete(clip);
-                                  }}
-                                />
-                              }
-                            >
-                              <Trash2 aria-hidden="true" />
-                            </TooltipTrigger>
-                            <TooltipContent>Delete clip</TooltipContent>
-                          </Tooltip>
+                results.map((clip) => {
+                  const id = libraryItemId(clip);
+                  const isSelected = id === selectedId;
+                  return (
+                    <div
+                      key={id}
+                      id={`result-${id}`}
+                      ref={isSelected ? selectedRef : undefined}
+                      role="option"
+                      aria-selected={isSelected}
+                      className="launcher-result"
+                      onMouseDown={() => setSelectedId(id)}
+                      onClick={() => {
+                        setSelectedId(id);
+                        if (window.getSelection()?.isCollapsed !== false)
+                          searchRef.current?.focus();
+                      }}
+                    >
+                      <div className="launcher-title-row">
+                        <div className="launcher-title">
+                          {libraryItemTitle(clip)}
+                        </div>
+                        {isSelected && clip.kind === 'clip' && (
+                          <div className="launcher-title-actions">
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label="Edit selected clip"
+                                    onMouseDown={(event) =>
+                                      event.stopPropagation()
+                                    }
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openEdit(clip.clip.id);
+                                    }}
+                                  />
+                                }
+                              >
+                                <Pencil aria-hidden="true" />
+                              </TooltipTrigger>
+                              <TooltipContent>Edit clip</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <Button
+                                    ref={deleteTriggerRef}
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label="Delete selected clip"
+                                    onMouseDown={(event) =>
+                                      event.stopPropagation()
+                                    }
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openDelete(clip.clip);
+                                    }}
+                                  />
+                                }
+                              >
+                                <Trash2 aria-hidden="true" />
+                              </TooltipTrigger>
+                              <TooltipContent>Delete clip</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        )}
+                      </div>
+                      {isSelected && clip.kind === 'clip' ? (
+                        <ScrollArea className="launcher-preview launcher-preview-scroll">
+                          <span className="launcher-preview-content">
+                            {clip.clip.content}
+                          </span>
+                        </ScrollArea>
+                      ) : (
+                        <div className="launcher-preview">
+                          {libraryItemPreview(clip)}
                         </div>
                       )}
-                    </div>
-                    {clip.id === selected?.id ? (
-                      <ScrollArea className="launcher-preview launcher-preview-scroll">
-                        <span className="launcher-preview-content">
-                          {clip.content}
-                        </span>
-                      </ScrollArea>
-                    ) : (
-                      <div className="launcher-preview">
-                        {clipPreview(clip.content)}
+                      <div className="launcher-meta">
+                        {libraryItemSourceLabel(clip)} ·{' '}
+                        {libraryItemTypeLabel(clip)}
                       </div>
-                    )}
-                    <div className="launcher-meta">
-                      {clip.sourceApp || 'Local clip'} ·{' '}
-                      {formatContentType(clip.contentType)}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </ScrollArea>
@@ -672,23 +823,62 @@ function LauncherSession({
                       : `${results.length} ${results.length === 1 ? 'clip' : 'clips'}`}
             </span>
             <span>
-              ↑↓ Select · Enter Copy all · Ctrl+C Copy selection · Esc Close
+              ↑↓ Select ·{' '}
+              {selected?.kind === 'group' ? 'Enter Open' : 'Enter Copy all'} ·
+              Ctrl+C Copy selection · Esc Close
             </span>
           </footer>
         </>
+      ) : mode.kind === 'group' ? (
+        <LauncherGroupView
+          group={
+            (
+              clips.find(
+                (item) =>
+                  item.kind === 'group' && item.group.id === mode.groupId,
+              ) as Extract<LibraryItem, { kind: 'group' }> | undefined
+            )?.group
+          }
+          busy={busy}
+          error={error}
+          onBack={() => setMode({ kind: 'search' })}
+          onCopy={(clip) => void copy(clip.id)}
+          onOpenSource={async (clip) => {
+            setError(null);
+            try {
+              await client.openSource(clip.id);
+            } catch {
+              if (active.current) setError('source');
+            }
+          }}
+        />
       ) : (
         <LauncherClipEditor
           key={mode.kind === 'edit' ? mode.clipId : 'create'}
           mode={mode.kind}
           initialContent={
             mode.kind === 'edit'
-              ? (clips.find((clip) => clip.id === mode.clipId)?.content ?? '')
+              ? clips.find(
+                  (item) =>
+                    item.kind === 'clip' && item.clip.id === mode.clipId,
+                )?.kind === 'clip'
+                ? (
+                    clips.find(
+                      (item) =>
+                        item.kind === 'clip' && item.clip.id === mode.clipId,
+                    ) as { kind: 'clip'; clip: Clip }
+                  ).clip.content
+                : ''
               : ''
           }
           initialContentType={
             mode.kind === 'edit'
-              ? (clips.find((clip) => clip.id === mode.clipId)?.contentType ??
-                'text')
+              ? ((
+                  clips.find(
+                    (item) =>
+                      item.kind === 'clip' && item.clip.id === mode.clipId,
+                  ) as { kind: 'clip'; clip: Clip } | undefined
+                )?.clip.contentType ?? 'text')
               : 'text'
           }
           isSaving={isSaving}

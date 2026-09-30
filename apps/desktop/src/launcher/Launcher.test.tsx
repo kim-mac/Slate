@@ -1,4 +1,9 @@
-import type { Clip, ClipInput } from '@ai-clip-memory/shared';
+import type {
+  Clip,
+  ClipGroup,
+  ClipInput,
+  LibraryItem,
+} from '@ai-clip-memory/shared';
 import {
   act,
   cleanup,
@@ -39,7 +44,7 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-function setup(initialClips: Clip[] = [older, newer]) {
+function setup(initialClips: Array<Clip | LibraryItem> = [older, newer]) {
   let deliver!: (state: LauncherState) => void;
   const host: LauncherHost = {
     listen: vi.fn(async (handler) => {
@@ -51,7 +56,13 @@ function setup(initialClips: Clip[] = [older, newer]) {
     openTin: vi.fn(async () => undefined),
   };
   const client = {
-    list: vi.fn(async () => initialClips),
+    list: vi
+      .fn()
+      .mockResolvedValue(
+        initialClips.map((item) =>
+          'kind' in item ? item : { kind: 'clip' as const, clip: item },
+        ),
+      ),
     create: vi.fn(async () => ({
       ...newer,
       id: 'created',
@@ -71,6 +82,9 @@ function setup(initialClips: Clip[] = [older, newer]) {
     copyContent: vi
       .fn<(id: string) => Promise<void>>()
       .mockResolvedValue(undefined),
+    openSource: vi
+      .fn<(id: string) => Promise<void>>()
+      .mockResolvedValue(undefined),
   };
   render(<Launcher host={host} client={client} />);
   return {
@@ -84,6 +98,80 @@ afterEach(() => {
   vi.useRealTimers();
   window.localStorage.clear();
   delete document.documentElement.dataset.theme;
+});
+
+test('a merged result opens its member view and provides retrieval actions without management controls', async () => {
+  const group: ClipGroup = {
+    id: 'group-one',
+    title: 'Merged research',
+    isPinned: false,
+    createdAt: '2026-09-03T00:00:00Z',
+    updatedAt: '2026-09-03T00:00:00Z',
+    members: [newer, older],
+  };
+  const { client } = setup([{ kind: 'group', group }]);
+  await screen.findByRole('option', { name: /Merged research/ });
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' });
+  expect(screen.getByText(/Enter Open/)).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' });
+  expect(screen.getByRole('heading', { name: 'Merged research' })).toBeTruthy();
+  expect(screen.getByText('TypeScript guide')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Unmerge/ })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Copy Recent note' }));
+  await waitFor(() =>
+    expect(client.copyContent).toHaveBeenCalledWith(newer.id),
+  );
+});
+
+test('merged member retrieval failures remain visible in the expanded view', async () => {
+  const sourced = {
+    ...newer,
+    sourceUrl: 'https://example.com/source',
+  };
+  const group: ClipGroup = {
+    id: 'group-one',
+    title: 'Merged research',
+    isPinned: false,
+    createdAt: '2026-09-03T00:00:00Z',
+    updatedAt: '2026-09-03T00:00:00Z',
+    members: [sourced, older],
+  };
+  const { client } = setup([{ kind: 'group', group }]);
+  client.openSource.mockRejectedValueOnce(new Error('private failure'));
+  await screen.findByRole('option', { name: /Merged research/ });
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' });
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' });
+
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Open source for Recent note' }),
+  );
+
+  expect((await screen.findByRole('alert')).textContent).toContain(
+    'Clip source could not be opened.',
+  );
+  expect(screen.queryByText('private failure')).toBeNull();
+});
+
+test('merged result search matches member fields and Escape returns to preserved search', async () => {
+  const group: ClipGroup = {
+    id: 'group-one',
+    title: 'Merged clips',
+    isPinned: false,
+    createdAt: '2026-09-03T00:00:00Z',
+    updatedAt: '2026-09-03T00:00:00Z',
+    members: [newer, older],
+  };
+  setup([{ kind: 'group', group }]);
+  const search = await screen.findByRole('searchbox');
+  fireEvent.change(search, { target: { value: 'TypeScript' } });
+  expect(screen.getByRole('option', { name: /Merged clips/ })).toBeTruthy();
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.keyDown(search, { key: 'Enter' });
+  fireEvent.keyDown(screen.getByRole('main'), { key: 'Escape' });
+  expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe(
+    'TypeScript',
+  );
 });
 
 test('silently discovers an external clip while the same launcher session stays visible', async () => {

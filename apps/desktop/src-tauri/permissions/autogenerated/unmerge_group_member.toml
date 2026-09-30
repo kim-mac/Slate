@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-unmerge-group-member"
+description = "Enables the unmerge_group_member command without any pre-configured scope."
+commands.allow = ["unmerge_group_member"]
+
+[[permission]]
+identifier = "deny-unmerge-group-member"
+description = "Denies the unmerge_group_member command without any pre-configured scope."
+commands.deny = ["unmerge_group_member"]
