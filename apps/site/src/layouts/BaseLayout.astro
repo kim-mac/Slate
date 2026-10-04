@@ -1,0 +1,118 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { site, canonicalUrl } from '../data/site';
+interface Props {
+  title?: string;
+  description?: string;
+  home?: boolean;
+  indexable?: boolean;
+}
+const {
+  title = site.title,
+  description = site.description,
+  home = true,
+  indexable = true,
+} = Astro.props;
+const canonical = indexable ? canonicalUrl(Astro.url.pathname) : null;
+const shareImage = canonicalUrl('/brand/social-preview.png');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fafaf9" />
+    <script is:inline data-slate-theme>
+      (() => {
+        const key = 'slate-site-theme';
+        const root = document.documentElement;
+        const read = () => {
+          try {
+            const saved = window.localStorage.getItem(key);
+            if (saved === 'light' || saved === 'dark') return saved;
+          } catch {
+            // System preference still works when storage is unavailable.
+          }
+          return window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        };
+        const apply = (theme) => {
+          root.dataset.theme = theme;
+          const label =
+            theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+          const button = document.querySelector('[data-theme-toggle]');
+          button?.setAttribute('aria-label', label);
+          button?.setAttribute('title', label);
+          document
+            .querySelector('meta[name="theme-color"]')
+            ?.setAttribute('content', theme === 'dark' ? '#171717' : '#fafaf9');
+        };
+        apply(read());
+        document.addEventListener('DOMContentLoaded', () => {
+          apply(root.dataset.theme);
+          document
+            .querySelector('[data-theme-toggle]')
+            ?.addEventListener('click', () => {
+              const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+              apply(next);
+              try {
+                window.localStorage.setItem(key, next);
+              } catch {
+                // Switching remains usable without saving the preference.
+              }
+            });
+        });
+        window.addEventListener('storage', (event) => {
+          if (event.key === key || event.key === null) apply(read());
+        });
+      })();
+    </script>
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {(!canonical || !indexable) && (
+      <meta name="robots" content="noindex, nofollow" />
+    )}
+    {canonical && <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Slate" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {canonical && <meta property="og:url" content={canonical} />}
+    {shareImage && (
+      <>
+        <meta property="og:image" content={shareImage} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta
+          property="og:image:alt"
+          content="Slate. Your memory, outside the tab."
+        />
+      </>
+    )}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {shareImage && <meta name="twitter:image" content={shareImage} />}
+    {shareImage && (
+      <meta
+        name="twitter:image:alt"
+        content="Slate. Your memory, outside the tab."
+      />
+    )}
+    <link rel="icon" type="image/png" href="/favicon.png" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">
+      Skip to content
+    </a>
+    <Header home={home} />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

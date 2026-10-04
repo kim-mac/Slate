@@ -1,0 +1,55 @@
+---
+import Icon from './Icon.astro';
+---
+
+<section
+  class="features shell"
+  aria-label="Save and find things without breaking your flow"
+>
+  <article id="capture">
+    <div
+      class="feature-media demo-placeholder"
+      aria-label="Browser capture video will be added here"
+    >
+      <Icon name="globe" />
+      <span>Video coming soon</span>
+    </div>
+    <h2>Browser Capture</h2>
+    <p>
+      Keep useful answers from ChatGPT, Claude, and the web. No copy-pasting.
+    </p>
+  </article>
+  <article id="desktop-capture">
+    <div class="feature-media desktop-shortcut">
+      <span
+        class="shortcut-keys"
+        aria-label="Control plus Alt plus Shift plus C"
+      >
+        <kbd>Ctrl</kbd>
+        <span aria-hidden="true">+</span>
+        <kbd>Alt</kbd>
+        <span aria-hidden="true">+</span>
+        <kbd>Shift</kbd>
+        <span aria-hidden="true">+</span>
+        <kbd>C</kbd>
+      </span>
+      <span>Select text. Press to save.</span>
+    </div>
+    <h2>Desktop Capture</h2>
+    <p>Save selected text from Windows apps without switching away.</p>
+  </article>
+  <article id="quick-search">
+    <div
+      class="feature-media demo-placeholder"
+      aria-label="Quick Search video will be added here"
+    >
+      <Icon name="search" />
+      <span>Video coming soon</span>
+    </div>
+    <h2>Quick Search</h2>
+    <p>Bring your saved clips back into the flow.</p>
+    <span class="feature-shortcut">
+      <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd>
+    </span>
+  </article>
+</section>
