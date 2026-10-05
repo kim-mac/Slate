@@ -1,0 +1,194 @@
+---
+import DownloadActions from './DownloadActions.astro';
+import Icon from './Icon.astro';
+
+// Public sample data only. This illustration does not read the Slate library.
+const clips = [
+  {
+    title: 'A better way to remember',
+    preview: 'Keep useful ideas close to you.',
+    date: '2026-10-02',
+  },
+  {
+    title: 'Notes for the next project',
+    preview: 'Start small. Keep the flow.',
+    date: '2026-10-02',
+  },
+  {
+    title: 'Useful ChatGPT prompts',
+    preview: 'Give context. Ask one clear question.',
+    date: '2026-10-01',
+    pinned: true,
+  },
+  {
+    title: 'SQLite documentation',
+    preview: 'A small, reliable local database.',
+    date: '2026-09-30',
+  },
+  {
+    title: 'An idea from Claude',
+    preview: 'Make space for a simpler approach.',
+    date: '2026-09-29',
+  },
+  {
+    title: 'Local-first by design',
+    preview: 'Your library stays on your computer.',
+    date: '2026-09-28',
+  },
+];
+const days = Array.from({ length: 42 }, (_, index) => {
+  const date = new Date(Date.UTC(2026, 8, 27 + index));
+  const key = date.toISOString().slice(0, 10);
+  return {
+    key,
+    day: date.getUTCDate(),
+    outside: date.getUTCMonth() !== 9,
+    today: key === '2026-10-02',
+    clips: clips.filter((clip) => clip.date === key),
+  };
+});
+---
+
+<section class="hero shell" aria-labelledby="hero-title">
+  <div class="hero-copy">
+    <h1 id="hero-title">
+      Keep what matters.
+      <br />
+      Find it again.
+    </h1>
+    <p class="hero-description">
+      Save clips, notes, and links in your own local library.
+    </p>
+    <DownloadActions />
+  </div>
+  <figure
+    id="product"
+    class="hero-product"
+    aria-label="Illustration of Slate's library and Calendar with sample clips"
+  >
+    <div class="product-frame library-demo" aria-hidden="true">
+      <div class="window-bar">
+        <span class="window-name">
+          <img src="/brand/slate-icon.png" width="20" height="20" alt="" />
+          Slate
+        </span>
+        <span class="window-controls">
+          <Icon name="minimize" />
+          <Icon name="maximize" />
+          <Icon name="close" />
+        </span>
+      </div>
+      <div class="library-body">
+        <aside class="demo-sidebar">
+          <span class="demo-section-label">Library</span>
+          <span class="sidebar-item active">
+            <Icon name="chevron-down" /> All Clips <small>{clips.length}</small>
+          </span>
+          <div class="sidebar-results">
+            {clips.map((clip) => (
+              <div class="sidebar-clip">
+                <strong>{clip.title}</strong>
+                <span>{clip.preview}</span>
+              </div>
+            ))}
+          </div>
+          <span class="sidebar-item">
+            <Icon name="chevron-right" /> Pinned <small>1</small>
+          </span>
+          <div class="sidebar-footer">
+            <span class="sidebar-local">Local only</span>
+            <span class="sidebar-settings">
+              <Icon name="settings" /> Settings
+            </span>
+          </div>
+        </aside>
+        <div class="demo-main">
+          <div class="demo-toolbar">
+            <span class="demo-sidebar-toggle">
+              <Icon name="sidebar" />
+            </span>
+            <span class="demo-search">
+              <Icon name="search" /> Search clips...
+            </span>
+            <span class="demo-new-clip">
+              <Icon name="plus" /> New clip
+            </span>
+            <span class="demo-header-actions">
+              <span>
+                <span class="theme-sun">
+                  <Icon name="sun" />
+                </span>
+                <span class="theme-moon">
+                  <Icon name="moon" />
+                </span>
+              </span>
+              <span>
+                <Icon name="refresh" />
+              </span>
+            </span>
+          </div>
+          <div class="demo-workspace">
+            <div class="demo-calendar-panel">
+              <div class="calendar-heading">
+                <span class="calendar-controls">
+                  <span>
+                    <Icon name="chevron-left" />
+                  </span>
+                  <span>
+                    <Icon name="chevron-right" />
+                  </span>
+                  <span class="calendar-today">Today</span>
+                  <span class="calendar-filter">
+                    <Icon name="filter" />
+                  </span>
+                </span>
+                <strong>2 October 2026</strong>
+              </div>
+              <div class="demo-weekdays">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(
+                  (day) => (
+                    <span class="calendar-weekday">{day}</span>
+                  ),
+                )}
+              </div>
+              <div class="demo-calendar">
+                {days.map((day) => (
+                  <div
+                    class:list={[
+                      'calendar-cell',
+                      { 'outside-month': day.outside },
+                    ]}
+                    data-date={day.key}
+                  >
+                    <span
+                      class:list={[
+                        'calendar-number',
+                        { 'today-circle': day.today },
+                      ]}
+                    >
+                      {day.day}
+                    </span>
+                    <div class="calendar-clips">
+                      {day.clips.map((clip) => (
+                        <div class="calendar-clip">
+                          <span class="calendar-clip-label">
+                            {clip.pinned && <Icon name="pin" />}
+                            <span>{clip.title}</span>
+                          </span>
+                          <span class="calendar-clip-actions">
+                            <Icon name="more" />
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>Illustrative product view · Sample content</figcaption>
+  </figure>
+</section>

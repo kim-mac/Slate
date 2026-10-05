@@ -1,0 +1,77 @@
+---
+interface Props {
+  name:
+    | 'arrow'
+    | 'search'
+    | 'copy'
+    | 'check'
+    | 'window'
+    | 'globe'
+    | 'pin'
+    | 'download'
+    | 'star'
+    | 'github'
+    | 'sun'
+    | 'moon'
+    | 'plus'
+    | 'refresh'
+    | 'sidebar'
+    | 'settings'
+    | 'filter'
+    | 'chevron-left'
+    | 'chevron-right'
+    | 'chevron-down'
+    | 'more'
+    | 'minimize'
+    | 'maximize'
+    | 'close'
+    | 'split';
+}
+const { name } = Astro.props;
+const paths = {
+  plus: 'M12 5v14M5 12h14',
+  refresh:
+    'M20 7v5h-5M4 17v-5h5M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9',
+  sidebar: 'M3 3h18v18H3zM9 3v18',
+  settings:
+    'm9 3-1 3-3 1-2 4 2 2v3l4 3 3-1 3 1 4-3v-3l2-2-2-4-3-1-1-3H9M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+  filter: 'M4 6h16M7 12h10M10 18h4',
+  'chevron-left': 'm15 6-6 6 6 6',
+  'chevron-right': 'm9 6 6 6-6 6',
+  'chevron-down': 'm6 9 6 6 6-6',
+  more: 'M5 12h.01M12 12h.01M19 12h.01',
+  minimize: 'M5 12h14',
+  maximize: 'M5 5h14v14H5z',
+  close: 'm6 6 12 12M6 18 18 6',
+  github:
+    'M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z',
+  sun: 'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6L19 19M5 19l1.4-1.4M17.6 6.4L19 5',
+  moon: 'M21 13a9 9 0 0 1-10-10 9 9 0 1 0 10 10Z',
+  arrow: 'M5 12h14M13 6l6 6-6 6',
+  search: 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
+  copy: 'M9 9h12v12H9zM5 15H3V3h12v2',
+  check: 'M5 12l4 4L19 6',
+  window: 'M3 3h18v18H3zM3 8h18M8 8v13',
+  globe:
+    'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18',
+  pin: 'M9 3h6l-1 6 4 4H6l4-4-1-6M12 13v8',
+  download: 'M12 3v12M7 10l5 5 5-5M4 16v5h16v-5',
+  split: 'M12 21v-8M12 13L5 6M12 13l7-7M5 10V4h6M19 10V4h-6',
+  star: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3',
+};
+---
+
+<svg
+  class="icon"
+  width="20"
+  height="20"
+  viewBox={name === 'github' ? '0 0 16 16' : '0 0 24 24'}
+  fill={name === 'github' ? 'currentColor' : 'none'}
+  stroke={name === 'github' ? 'none' : 'currentColor'}
+  stroke-width="1.6"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+>
+  <path d={paths[name]} />
+</svg>

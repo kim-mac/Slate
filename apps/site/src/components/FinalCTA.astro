@@ -1,0 +1,61 @@
+---
+import Icon from './Icon.astro';
+import { release, publicDownloads, downloadUrl } from '../data/releases';
+const allDownloadsReady = publicDownloads.every((option) =>
+  downloadUrl(release.downloads[option.id]),
+);
+---
+
+<section
+  id="download"
+  class="download-section"
+  aria-labelledby="download-title"
+>
+  <div class="shell">
+    <div class="download-heading">
+      <div>
+        <h2 id="download-title">Get Slate</h2>
+      </div>
+      <p>v{release.version} · Windows 11</p>
+    </div>
+    <div class="download-options">
+      {publicDownloads.map((option) => {
+        const url = downloadUrl(release.downloads[option.id]);
+        return (
+          <div class="download-option">
+            <Icon name={option.id === 'chrome' ? 'globe' : 'window'} />
+            <h3>{option.title}</h3>
+            <p>{option.detail}</p>
+            {url ? (
+              <a class="button secondary" href={url}>
+                {option.label}
+                <Icon name="arrow" />
+              </a>
+            ) : (
+              <button class="button secondary" type="button" disabled>
+                {option.label}
+                <Icon name="arrow" />
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+    <p class="small-note download-pairing">
+      Slate for Windows and the Chrome extension work together. Browser capture
+      requires the desktop app.
+    </p>
+    {!allDownloadsReady && (
+      <p class="download-status">
+        {publicDownloads.some((option) =>
+          downloadUrl(release.downloads[option.id]),
+        )
+          ? 'Some public download links are not live yet.'
+          : 'Public download links are not live yet.'}
+      </p>
+    )}
+    <p class="small-note download-safety">
+      Unsigned installers may trigger Windows SmartScreen.
+    </p>
+  </div>
+</section>

@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Page not found | Slate"
+  description="Return to Slate's homepage."
+  home={false}
+  indexable={false}
+>
+  <article class="shell privacy-page not-found-page">
+    <p class="eyebrow">404</p>
+    <h1>This page isn't in Slate.</h1>
+    <a class="button primary" href="/">
+      Return home
+    </a>
+  </article>
+</BaseLayout>

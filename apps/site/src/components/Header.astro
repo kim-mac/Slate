@@ -1,0 +1,54 @@
+---
+import Icon from './Icon.astro';
+import { site } from '../data/site';
+interface Props {
+  home?: boolean;
+}
+const { home = true } = Astro.props;
+const anchor = (id: string) => (home ? `#${id}` : `/#${id}`);
+---
+
+<header class="site-header">
+  <div class="shell header-inner">
+    <a class="wordmark" href="/" aria-label="Slate home">
+      <img src="/brand/slate-icon.png" width="40" height="40" alt="" />
+      <span>Slate</span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a
+        class="github-link"
+        href={site.repositoryUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Open Slate on GitHub in a new tab"
+        aria-label={
+          site.githubStars === null
+            ? 'Star Slate on GitHub'
+            : `Slate on GitHub, ${site.githubStars} stars`
+        }
+      >
+        <span class="github-mark">
+          <Icon name="github" />
+        </span>
+        <span>{site.githubStars ?? 'Star'}</span>
+      </a>
+      <a class="nav-download" href={anchor('download')}>
+        Download
+      </a>
+      <button
+        class="theme-toggle"
+        type="button"
+        data-theme-toggle
+        aria-label="Switch to dark mode"
+        title="Switch to dark mode"
+      >
+        <span class="theme-sun">
+          <Icon name="sun" />
+        </span>
+        <span class="theme-moon">
+          <Icon name="moon" />
+        </span>
+      </button>
+    </nav>
+  </div>
+</header>

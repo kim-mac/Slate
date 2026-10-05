@@ -1,0 +1,106 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { site } from '../data/site';
+---
+
+<BaseLayout
+  title="Slate Support | Slate"
+  description="Help with Slate for Windows, browser capture, Quick Search, and Merge."
+  home={false}
+>
+  <article class="shell privacy-page support-page">
+    <p class="eyebrow">SLATE / SUPPORT</p>
+    <h1>Slate Support</h1>
+    <p class="privacy-intro">
+      Help with installing Slate, saving from Chrome, and finding your clips.
+    </p>
+    <section>
+      <h2>Getting started</h2>
+      <ol>
+        <li>
+          Install <a href="/#download">Slate for Windows</a>.
+        </li>
+        <li>Install the Slate Chrome extension.</li>
+        <li>
+          Keep the Slate desktop app installed. Browser capture requires it.
+        </li>
+        <li>Save from Chrome to your local Slate library.</li>
+      </ol>
+    </section>
+    <section>
+      <h2>Saving from Chrome</h2>
+      <p>
+        Select useful text, right-click, and choose{' '}
+        <strong>Save selection</strong>. Use <strong>Save this page</strong> to
+        keep the page's link and title. On supported ChatGPT, Claude, and Gemini
+        pages, you can also use the selection's <strong>Save</strong> action.
+      </p>
+      <p>Source links and page context are retained where available.</p>
+    </section>
+    <section>
+      <h2>Quick Search</h2>
+      <p>
+        Press{' '}
+        <span class="support-shortcut">
+          <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd>
+        </span>{' '}
+        while Slate is running to find saved clips without navigating the full
+        library.
+      </p>
+    </section>
+    <section>
+      <h2>Merge</h2>
+      <p>
+        Select related clips and choose <strong>Merge</strong> to group them.
+        The original clips stay separate, with each member's content, source and
+        date accessible. Use <strong>Unmerge</strong> for an individual member
+        or the whole group to return clips to the library.
+      </p>
+    </section>
+    <section>
+      <h2>Troubleshooting</h2>
+      <h3>Browser capture is not appearing</h3>
+      <p>
+        Check that Slate is installed and running, and the Chrome extension is
+        installed and enabled. Retry the capture. If needed, restart Slate and
+        Chrome.
+      </p>
+      <h3>Quick Search does not open</h3>
+      <p>
+        Confirm Slate is running and retry Ctrl + Shift + Space. Restart Slate
+        if it still does not open.
+      </p>
+      <h3>The extension cannot connect</h3>
+      <p>
+        The extension connects to the locally installed Slate desktop app. Check
+        that both are installed, then restart Slate and Chrome.
+      </p>
+    </section>
+    <section>
+      <h2>Platform support</h2>
+      <p>
+        Slate is available for Windows 11 on Windows x64 (Intel and AMD) and
+        Windows ARM64 PCs. Choose the installer for your device.
+      </p>
+    </section>
+    <section>
+      <h2>Reporting a problem</h2>
+      <p>
+        Visit
+        <a
+          href={site.repositoryUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open Slate on GitHub in a new tab"
+        >
+          Slate on GitHub
+        </a>
+        . Include what you tried, your Windows architecture, and the error
+        message. Do not share private clip content.
+      </p>
+    </section>
+    <a class="text-link" href="/">
+      Back to Slate <span aria-hidden="true">↗</span>
+    </a>
+  </article>
+</BaseLayout>

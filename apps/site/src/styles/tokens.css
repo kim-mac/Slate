@@ -1,0 +1,60 @@
+:root {
+  /* Site-local translation of Slate's neutral surfaces, Geist and 10px radius. */
+  --page: #fafaf9;
+  --surface: #fff;
+  --ink: #242424;
+  --muted: #666661;
+  --line: #deded9;
+  --soft: #efefeb;
+  --accent: #e7e7e2;
+  --on-ink: #fff;
+  --ink-hover: #000;
+  --button-line: #d4d4ce;
+  --stage-dot: #d2d2ca;
+  --stage-end: #e5e5de;
+  --frame-line: #cdcdc6;
+  --window-surface: #f5f5f1;
+  --sidebar-surface: #f4f4f0;
+  --sidebar-active: #e6e6e0;
+  --preview-muted: #676760;
+  --calendar-line: #ebebe6;
+  --calendar-chip: #efefea;
+  --clip-muted: #65655e;
+  --dark: #171717;
+  --dark-surface: #202020;
+  --dark-ink: #f1f1ee;
+  --dark-muted: #a9a9a4;
+  --radius: 10px;
+  --radius-panel: 14px;
+  --shadow-panel:
+    0 24px 70px -26px rgb(0 0 0 / 20%), 0 3px 12px rgb(0 0 0 / 3%);
+  --font: 'Geist Variable', 'Segoe UI', system-ui, sans-serif;
+  --shell: 1264px;
+  --space-section: clamp(80px, 9vw, 132px);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page: #171717;
+  --surface: #202020;
+  --ink: #f1f1ee;
+  --muted: #a9a9a4;
+  --line: #383838;
+  --soft: #292929;
+  --accent: #333;
+  --on-ink: #171717;
+  --ink-hover: #fff;
+  --button-line: #444;
+  --stage-dot: #454545;
+  --stage-end: #262626;
+  --frame-line: #484848;
+  --window-surface: #262626;
+  --sidebar-surface: #1c1c1c;
+  --sidebar-active: #333;
+  --preview-muted: #b4b4ad;
+  --calendar-line: #333;
+  --calendar-chip: #2b2b2b;
+  --clip-muted: #b4b4ad;
+  --shadow-panel:
+    0 24px 70px -26px rgb(0 0 0 / 60%), 0 3px 12px rgb(0 0 0 / 20%);
+}

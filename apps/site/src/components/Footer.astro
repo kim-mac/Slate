@@ -1,0 +1,27 @@
+---
+import { release } from '../data/releases';
+import { site } from '../data/site';
+---
+
+<footer class="site-footer">
+  <div class="shell footer-inner">
+    <a class="wordmark" href="/" aria-label="Slate home">
+      <img src="/brand/slate-icon.png" width="32" height="32" alt="" />
+      <span>Slate</span>
+    </a>
+    <p>Open source. Local-first.</p>
+    <nav aria-label="Footer navigation">
+      <a href="/privacy/">Privacy</a>
+      <a href="/support/">Support</a>
+      <a
+        href={site.repositoryUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Open Slate on GitHub in a new tab"
+      >
+        GitHub <span aria-hidden="true">↗</span>
+      </a>
+      <span>v{release.version}</span>
+    </nav>
+  </div>
+</footer>
