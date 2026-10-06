@@ -5,26 +5,28 @@ import { release } from '../data/releases';
 
 <BaseLayout
   title="Privacy & local-first | Slate"
-  description={`How Slate ${release.version} stores clips locally, handles user-initiated captures, and keeps the core experience independent of accounts and cloud services.`}
+  description="How Slate Desktop and its browser extension process captures locally, store your library on your computer, and handle privacy."
   home={false}
 >
   <article class="shell privacy-page">
-    <p class="eyebrow">SLATE {release.version} / PRIVACY</p>
+    <p class="eyebrow">SLATE / PRIVACY</p>
     <h1>
       Your memory.
       <br />
       <span>On your computer.</span>
     </h1>
     <p class="privacy-intro">
-      Slate's core experience is local-first. Here's what that means and what it
-      doesn't.
+      Slate is local-first: your captures stay on your computer, not in a Slate
+      cloud library. This policy covers Slate Desktop for Windows, its Chrome
+      extension, and this website. Current releases are Desktop{' '}
+      {release.version} and extension 0.1.1. No Slate account is required.
     </p>
     <section>
       <h2>Local storage, not a cloud library</h2>
       <p>
         Clips, groups, and source metadata are stored in a local plaintext
-        SQLite database. Slate does not require an account or send those records
-        to a Slate server.
+        SQLite database. Slate handles this information locally so you can find
+        and reuse it; local storage does not mean no data is processed.
       </p>
       <p>
         The database is not encrypted by Slate. Windows account security, device
@@ -34,43 +36,153 @@ import { release } from '../data/releases';
     <section>
       <h2>You choose what to capture</h2>
       <p>
-        Browser selection capture happens when you invoke Save or Save
-        selection. Save this page stores the current HTTP/HTTPS URL and page
-        title as a Link clip, not a copy of the entire page. Saved URLs can
-        include sensitive query parameters or fragments.
+        Save or Save selection saves text you choose, including personal
+        communications from AI conversations such as ChatGPT, Claude, and
+        Gemini. Slate does not automatically collect complete conversation
+        histories. Save this page stores the current HTTP/HTTPS URL and page
+        title as a Link clip, not the entire page text or HTML.
       </p>
       <p>
-        Browser capture uses Native Messaging to reach the local installed host.
+        Saved records can include content, type, source application or
+        classification, source URL, page title, a locally generated ID,
+        timestamps, and pin or group metadata. URLs and titles record the source
+        of your chosen captures. Slate does not read, enumerate, or continuously
+        monitor your browser history.
+      </p>
+      <p>
+        Selected text, page titles, and URLs may contain sensitive information,
+        including URL query parameters or fragments. Slate does not
+        automatically detect or redact that information. Choose what you save
+        carefully.
+      </p>
+    </section>
+    <section>
+      <h2>The floating Save control</h2>
+      <p>
+        The floating Save content script runs only on https://chatgpt.com/*,
+        https://chat.openai.com/*, https://claude.ai/*, and
+        https://gemini.google.com/*. It is not injected across every website.
+      </p>
+      <p>
+        To show and position the control, it temporarily processes your selected
+        text, selection geometry, current document URL, and relevant pointer,
+        keyboard-selection, focus, and navigation state locally. It keeps no
+        click, keystroke, pointer, or interaction history. The selection
+        snapshot is discarded when the control is dismissed. Merely selecting
+        text sends nothing to the native host; an explicit trusted Save action
+        is required to save it to your library.
+      </p>
+    </section>
+    <section>
+      <h2>Chrome permissions</h2>
+      <p>
+        <strong>activeTab:</strong> Temporary access after a user action to
+        relevant active-tab information, such as the source URL and title.
+      </p>
+      <p>
+        <strong>contextMenus:</strong> Adds Save selection and Save this page
+        browser actions.
+      </p>
+      <p>
+        <strong>nativeMessaging:</strong> Sends user-initiated captures to the
+        installed Slate native host on the same computer for local storage.
+      </p>
+      <p>
+        <strong>notifications:</strong> Shows local capture success or failure
+        feedback. The limited supported-site content scripts are described
+        above. The extension uses no remotely hosted JavaScript, WebAssembly, or
+        runtime-downloaded executable code.
+      </p>
+    </section>
+    <section>
+      <h2>Local capture communication</h2>
+      <p>
+        A browser capture passes through the extension's background service
+        worker and Chrome Native Messaging to the installed native host. The
+        payload contains content, content type, source classification, URL, and
+        page title. The host writes directly to local SQLite using Slate's
+        shared persistence implementation, not through the desktop window. This
+        is local process communication, not a cloud upload.
+      </p>
+      <p>
         Desktop selected-text capture uses a user-invoked Copy action and
         attempts to restore the previous clipboard state; some applications or
         clipboard formats can prevent capture or restoration.
       </p>
     </section>
     <section>
-      <h2>No app analytics or telemetry</h2>
+      <h2>Network and third parties</h2>
       <p>
-        Slate {release.version} contains no analytics or telemetry SDK and does
-        not upload clip content, usage events, or diagnostics. Websites you
-        visit and source links you choose to open still make their normal
-        network requests independently.
+        Slate does not upload your saved clips, source URLs, or browsing
+        activity to Slate-operated or third-party servers as part of its capture
+        and library functionality.
+      </p>
+      <p>
+        Open source visits the stored URL in your browser. Visiting this
+        website, GitHub, or source websites makes normal web requests. Copy
+        places chosen content on the Windows clipboard, where other software or
+        user-enabled clipboard services may access it. Windows, Chrome,
+        WebView2, installation components, and other software have their own
+        network and data-handling behavior outside Slate's control.
       </p>
     </section>
     <section>
-      <h2>Copy, sources, and data retention</h2>
+      <h2>No app analytics or telemetry</h2>
       <p>
-        Copy puts chosen clip content on the Windows clipboard. Open source
-        opens the stored URL in your browser. Ordinary uninstall retains the
-        library; choosing Delete app data in the uninstaller removes it. Keep a
-        backup of information you need.
+        Slate has no account or authentication service, cloud sync, application
+        analytics, or telemetry SDK. It does not upload usage events,
+        diagnostics, or crash reports. This does not control telemetry from your
+        browser, operating system, or other software.
+      </p>
+    </section>
+    <section>
+      <h2>Data retention and deletion</h2>
+      <p>
+        Clips stay in your local library until you delete them. Deleting a group
+        can delete its member clips when you explicitly choose that operation.
+        Unmerging removes the grouping, not the original clips. Ordinary
+        uninstall retains the library; choosing Delete app data in the
+        uninstaller removes the relevant application-data directories.
+      </p>
+      <p>
+        Deletion is not a promise of secure forensic erasure. Deleted SQLite
+        records, backups, or other copies may remain recoverable outside Slate's
+        control. Keep a backup of information you need.
       </p>
     </section>
     <section>
       <h2>This website</h2>
       <p>
-        This site has no account forms, analytics, tracking scripts, or cookies
-        added by the application. A hosting provider receives ordinary web
-        requests to serve the site; that is separate from Slate's local clip
-        storage.
+        This site saves your theme preference in browser localStorage. It has no
+        account forms, analytics, tracking scripts, or application cookies. The
+        hosting provider receives ordinary request information to serve the
+        site; that is separate from Slate's local clip storage.
+      </p>
+    </section>
+    <section>
+      <h2>Data use and Chrome Limited Use</h2>
+      <p>
+        Slate does not sell user data or use captured information for
+        advertising, creditworthiness, or lending. It does not use or transfer
+        captured information for purposes unrelated to saving, finding, and
+        reusing your local clips.
+      </p>
+      <p>
+        Slate's use of information received from Chrome APIs complies with the
+        Chrome Web Store User Data Policy, including its Limited Use
+        requirements.
+      </p>
+    </section>
+    <section>
+      <h2>Privacy questions</h2>
+      <p>
+        Visit{' '}
+        <a class="text-link" href="/support/">
+          Slate Support
+        </a>{' '}
+        for the existing GitHub support channel. Do not put private clip
+        content, sensitive URLs, or other personal information in public GitHub
+        issues.
       </p>
     </section>
     <a class="text-link" href="/">
