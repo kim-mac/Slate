@@ -302,8 +302,15 @@ describe('extension manifest', () => {
     expect(png.readUInt32BE(20)).toBe(128);
     expect(existsSync(resolve(icons, 'notification.svg'))).toBe(false);
   });
-  test('uses the aligned MVP release version', () => {
-    expect(manifest.version).toBe('0.1.0');
+  test('versions the Chrome extension independently of the desktop release', () => {
+    expect(manifest.version).toBe('0.1.1');
+    const desktopRelease = JSON.parse(
+      readFileSync(
+        resolve(import.meta.dirname, '../../../package.json'),
+        'utf8',
+      ),
+    ) as { version: string };
+    expect(desktopRelease.version).toBe('0.1.0');
   });
 
   test('has a deterministic unpacked Chrome extension identity', () => {

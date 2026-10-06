@@ -9,7 +9,9 @@ $extensionDirectory = Join-Path $repositoryRoot 'apps\extension'
 $extensionOutputDirectory = Join-Path $extensionDirectory 'dist'
 $sourceManifestPath = Join-Path $extensionDirectory 'public\manifest.json'
 $rootPackage = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'package.json') | ConvertFrom-Json
-$releaseVersion = $rootPackage.version
+$desktopReleaseVersion = $rootPackage.version
+$sourceManifest = Get-Content -Raw -LiteralPath $sourceManifestPath | ConvertFrom-Json
+$releaseVersion = $sourceManifest.version
 $expectedChromeId = 'jjfaegknedfakmidhhdlmbebnjafcjfi'
 $expectedPermissions = @('activeTab', 'contextMenus', 'nativeMessaging', 'notifications')
 $expectedMatches = @(
@@ -147,18 +149,21 @@ function New-DeterministicZip {
     }
 }
 
-if ($releaseVersion -cnotmatch '^\d+\.\d+\.\d+$') {
+if ($desktopReleaseVersion -cnotmatch '^\d+\.\d+\.\d+$') {
     throw 'The root package version is not a valid release version.'
 }
+if ($releaseVersion -cnotmatch '^\d+\.\d+\.\d+$') {
+    throw 'The extension manifest version is not a valid release version.'
+}
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-    $OutputDirectory = Join-Path $repositoryRoot "dist\release\v$releaseVersion"
+    $OutputDirectory = Join-Path $repositoryRoot "dist\release\v$desktopReleaseVersion"
 }
 
 if (Test-Path -LiteralPath $OutputDirectory) {
     $allowedStagedNames = @(
         "Slate-Extension-$releaseVersion.zip"
-        "Slate-$releaseVersion-Windows-x64.exe"
-        "Slate-$releaseVersion-Windows-ARM64.exe"
+        "Slate-$desktopReleaseVersion-Windows-x64.exe"
+        "Slate-$desktopReleaseVersion-Windows-ARM64.exe"
         'SHA256SUMS.txt'
     )
     $unexpectedEntries = @(
@@ -204,7 +209,6 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw 'The production extension build did not emit manifest.json.'
 }
 
-$sourceManifest = Get-Content -Raw -LiteralPath $sourceManifestPath | ConvertFrom-Json
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 if ($manifest.name -cne 'Slate' -or $manifest.version -cne $releaseVersion) {
     throw 'The built extension name or version is not the approved release identity.'

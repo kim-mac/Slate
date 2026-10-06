@@ -98,7 +98,7 @@ fn png_dimensions(path: impl AsRef<Path>) -> (u32, u32) {
 }
 
 #[test]
-fn release_versions_are_aligned() {
+fn release_versions_preserve_desktop_and_independent_extension_version() {
     let root = repository_root();
 
     for path in [
@@ -106,7 +106,6 @@ fn release_versions_are_aligned() {
         root.join("apps/desktop/package.json"),
         root.join("apps/extension/package.json"),
         root.join("packages/shared/package.json"),
-        root.join("apps/extension/public/manifest.json"),
         root.join("apps/desktop/src-tauri/tauri.conf.json"),
     ] {
         let document = read_json(&path);
@@ -117,6 +116,26 @@ fn release_versions_are_aligned() {
             path.display()
         );
     }
+
+    let desktop_version = read_json(root.join("package.json"));
+    let extension_version = read_json(root.join("apps/extension/public/manifest.json"));
+    for document in [&desktop_version, &extension_version] {
+        let version = document["version"]
+            .as_str()
+            .expect("release version must be a string");
+        let parts: Vec<_> = version.split('.').collect();
+        assert_eq!(
+            parts.len(),
+            3,
+            "release version must have three numeric parts"
+        );
+        assert!(parts.iter().all(|part| {
+            !part.is_empty()
+                && part.bytes().all(|byte| byte.is_ascii_digit())
+                && part.parse::<u32>().is_ok()
+        }));
+    }
+    assert_eq!(extension_version["version"].as_str(), Some("0.1.1"));
 
     let cargo_manifest = read(root.join("apps/desktop/src-tauri/Cargo.toml"));
     assert_eq!(package_version(&cargo_manifest), RELEASE_VERSION);
@@ -1030,7 +1049,7 @@ fn chrome_web_store_zip_omits_only_the_development_key_and_is_reproducible() {
     assert!(!source_key.is_empty());
 
     let output_directory = tempfile::tempdir().expect("release output directory should exist");
-    let zip_path = output_directory.path().join("Slate-Extension-0.1.0.zip");
+    let zip_path = output_directory.path().join("Slate-Extension-0.1.1.zip");
     let release_script = root.join("scripts/windows/Build-ExtensionRelease.ps1");
     let build = || {
         let output = Command::new("powershell.exe")
@@ -1044,6 +1063,8 @@ fn chrome_web_store_zip_omits_only_the_development_key_and_is_reproducible() {
             .arg(&release_script)
             .arg("-OutputDirectory")
             .arg(output_directory.path())
+            // Build with existing dependencies; packaging must not install or purge them.
+            .env("pnpm_config_verify_deps_before_run", "false")
             .output()
             .expect("PowerShell should run extension release packaging");
         assert!(
