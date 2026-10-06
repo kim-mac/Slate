@@ -16,6 +16,11 @@ import {
 } from './captureMessage';
 import { notifyCaptureResult } from './contextMenuFeedback';
 
+function reportNotificationFailure(): void {
+  if (import.meta.env.DEV)
+    console.warn('Slate: Chrome capture notification could not be shown.');
+}
+
 type CaptureClickInfo = Pick<
   chrome.contextMenus.OnClickData,
   'menuItemId' | 'pageUrl' | 'selectionText' | 'linkUrl' | 'frameUrl'
@@ -78,7 +83,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
         chrome.runtime.getURL('icons/notification.png'),
         (id) => chrome.notifications.clear(id),
         captureKind,
-      ).catch(() => undefined);
+      ).catch(reportNotificationFailure);
   });
 });
 
@@ -91,7 +96,17 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, respond) => {
   )
     return;
   void handleFloatingCapture(message, sender, chrome.runtime.id).then(
-    respond,
+    (result) => {
+      // Deliver inline feedback independently of notification availability.
+      respond(result);
+      if (result.ok)
+        void notifyCaptureResult(
+          result,
+          (id, options) => chrome.notifications.create(id, options),
+          chrome.runtime.getURL('icons/notification.png'),
+          (id) => chrome.notifications.clear(id),
+        ).catch(reportNotificationFailure);
+    },
     () => respond({ version: 1, ok: false, error: 'invalid_payload' }),
   );
   return true;
