@@ -1,55 +1,46 @@
 ---
-import Icon from './Icon.astro';
+import FeatureCard from './FeatureCard.astro';
+import BrowserCaptureDemo from './BrowserCaptureDemo.astro';
+import DesktopCaptureDemo from './DesktopCaptureDemo.astro';
+import QuickSearchDemo from './QuickSearchDemo.astro';
+import '../styles/feature-demos.css';
 ---
 
 <section
-  class="features shell"
+  class="features shell animated-features"
   aria-label="Save and find things without breaking your flow"
 >
-  <article id="capture">
-    <div
-      class="feature-media demo-placeholder"
-      aria-label="Browser capture video will be added here"
-    >
-      <Icon name="globe" />
-      <span>Video coming soon</span>
-    </div>
-    <h2>Browser Capture</h2>
-    <p>
-      Keep useful answers from ChatGPT, Claude, and the web. No copy-pasting.
-    </p>
-  </article>
-  <article id="desktop-capture">
-    <div class="feature-media desktop-shortcut">
-      <span
-        class="shortcut-keys"
-        aria-label="Control plus Alt plus Shift plus C"
-      >
-        <kbd>Ctrl</kbd>
-        <span aria-hidden="true">+</span>
-        <kbd>Alt</kbd>
-        <span aria-hidden="true">+</span>
-        <kbd>Shift</kbd>
-        <span aria-hidden="true">+</span>
-        <kbd>C</kbd>
-      </span>
-      <span>Select text. Press to save.</span>
-    </div>
-    <h2>Desktop Capture</h2>
-    <p>Save selected text from Windows apps without switching away.</p>
-  </article>
-  <article id="quick-search">
-    <div
-      class="feature-media demo-placeholder"
-      aria-label="Quick Search video will be added here"
-    >
-      <Icon name="search" />
-      <span>Video coming soon</span>
-    </div>
-    <h2>Quick Search</h2>
-    <p>Bring your saved clips back into the flow.</p>
-    <span class="feature-shortcut">
-      <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd>
-    </span>
-  </article>
+  <FeatureCard
+    id="capture"
+    demo="browser"
+    title="Capture from the browser"
+    label="Browser capture"
+    description="Save useful answers from ChatGPT, Claude, and the web. No copy-pasting."
+  >
+    <BrowserCaptureDemo />
+  </FeatureCard>
+  <FeatureCard
+    id="desktop-capture"
+    demo="desktop"
+    title="Capture from your desktop"
+    label="Desktop capture"
+    description="Select text in any Windows app. Press Ctrl + Alt + Shift + C to save it."
+  >
+    <DesktopCaptureDemo />
+  </FeatureCard>
+  <FeatureCard
+    id="quick-search"
+    demo="search"
+    title="Find it instantly"
+    label="Quick Search"
+    description="Press Ctrl + Shift + Space to find your saved clips without breaking your flow."
+  >
+    <QuickSearchDemo />
+  </FeatureCard>
 </section>
+
+<script>
+  import { initializeFeatureDemos } from '../scripts/featureDemos';
+  const cleanup = initializeFeatureDemos(document, window);
+  window.addEventListener('pagehide', cleanup, { once: true });
+</script>

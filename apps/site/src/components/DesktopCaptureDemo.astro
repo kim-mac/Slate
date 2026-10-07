@@ -1,0 +1,37 @@
+---
+import Icon from './Icon.astro';
+import DemoKeycaps from './DemoKeycaps.astro';
+---
+
+<div class="demo-window mini-document">
+  <div class="demo-window-bar">
+    <Icon name="window" />
+    <span>Research notes</span>
+    <Icon name="more" />
+  </div>
+  <div class="demo-document-body">
+    <span class="demo-eyebrow">PROJECT NOTES</span>
+    <strong class="demo-page-title">A useful idea</strong>
+    <p class="demo-prose">
+      <mark class="demo-selection desktop-selection">
+        Keep routing and authentication at the edge of your application.
+      </mark>{' '}
+      Start with one clear entry point.
+    </p>
+    <div class="demo-text-lines">
+      <i></i>
+      <i></i>
+    </div>
+  </div>
+</div>
+<div class="desktop-chord">
+  <DemoKeycaps keys={['Ctrl', 'Alt', 'Shift', 'C']} />
+</div>
+<div class="desktop-notification demo-notification">
+  <img src="/brand/slate-icon.png" width="24" height="24" alt="" />
+  <div>
+    <strong>Slate</strong>
+    <span>Saved to Slate</span>
+  </div>
+  <Icon name="check" />
+</div>

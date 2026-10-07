@@ -1,0 +1,47 @@
+---
+interface Props {
+  id: string;
+  demo: 'browser' | 'desktop' | 'search';
+  title: string;
+  label: string;
+  description: string;
+}
+const { id, demo, title, label, description } = Astro.props;
+---
+
+<article id={id} class="feature-card">
+  <div
+    class={`feature-demo feature-demo-${demo}`}
+    data-feature-demo
+    data-demo-label={label}
+    data-active="false"
+    data-running="false"
+    data-static="true"
+  >
+    <div class="demo-visual" aria-hidden="true">
+      <slot />
+    </div>
+    <button
+      class="demo-toggle"
+      type="button"
+      data-demo-toggle
+      aria-label="Pause feature demos"
+      aria-pressed="false"
+      title="Pause demos"
+      hidden
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path class="demo-pause-icon" d="M4 3h3v10H4zM9 3h3v10H9z" />
+        <path class="demo-play-icon" d="m5 3 8 5-8 5z" />
+      </svg>
+    </button>
+  </div>
+  <h2>{title}</h2>
+  <p>{description}</p>
+</article>

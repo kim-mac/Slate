@@ -4,15 +4,44 @@ export type Destination =
 
 export const release = {
   version: '0.1.0',
+  extensionVersion: '0.1.1',
   downloads: {
-    windowsX64: { state: 'unverified', url: null },
-    windowsARM64: { state: 'unverified', url: null },
+    windowsX64: {
+      state: 'unverified',
+      url: null,
+      architecture: 'x64',
+      title: 'Windows x64',
+      description: 'For Intel & AMD PCs',
+      filename: 'Slate-0.1.0-Windows-x64.exe',
+      sha256:
+        'EE3A0832A002905CCBC5567401093CB1F5D6ED1D209F521B04F418D39594E5DA',
+    },
+    windowsARM64: {
+      state: 'unverified',
+      url: null,
+      architecture: 'ARM64',
+      title: 'Windows ARM64',
+      description: 'For Snapdragon & ARM PCs',
+      filename: 'Slate-0.1.0-Windows-ARM64.exe',
+      sha256:
+        'EDD641A2231AE846B224FCE0BAA4B7E11FCFBAA63E75D08B2F6FCD9117CFF57C',
+    },
     chrome: { state: 'unverified', url: null },
     macOSAppleSilicon: { state: 'unverified', url: null },
   },
 } as const satisfies {
   version: string;
-  downloads: Record<string, Destination>;
+  extensionVersion: string;
+  downloads: Record<
+    string,
+    Destination & {
+      architecture?: string;
+      title?: string;
+      description?: string;
+      filename?: string;
+      sha256?: string;
+    }
+  >;
 };
 
 /** Only explicitly verified HTTPS destinations can be rendered as download links. */
@@ -51,3 +80,5 @@ export const publicDownloads = [
     label: 'Add to Chrome',
   },
 ] as const;
+
+export const windowsDownloads = ['windowsX64', 'windowsARM64'] as const;

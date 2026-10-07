@@ -1,21 +1,11 @@
 ---
 import Icon from './Icon.astro';
-import { release, downloadUrl } from '../data/releases';
-const windowsReady =
-  downloadUrl(release.downloads.windowsX64) ||
-  downloadUrl(release.downloads.windowsARM64);
 ---
 
 <div class="download-actions">
-  {windowsReady ? (
-    <a class="button primary" href="#download">
-      <Icon name="download" /> Download for Windows
-    </a>
-  ) : (
-    <button class="button primary" type="button" disabled>
-      <Icon name="download" /> Download for Windows
-    </button>
-  )}
+  <a class="button primary" href="#download">
+    <Icon name="download" /> Download for Windows
+  </a>
   <button class="button secondary" type="button" disabled>
     Coming soon for macOS
   </button>

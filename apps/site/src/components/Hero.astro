@@ -52,12 +52,17 @@ const days = Array.from({ length: 42 }, (_, index) => {
 <section class="hero shell" aria-labelledby="hero-title">
   <div class="hero-copy">
     <h1 id="hero-title">
-      Keep what matters.
+      Save what matters.
       <br />
-      Find it again.
+      Without breaking your flow.
     </h1>
     <p class="hero-description">
-      Save clips, notes, and links in your own local library.
+      Save useful information from ChatGPT, Claude, the web, and your desktop
+      directly to your private local library without having to copy and paste.
+    </p>
+    <p class="hero-trust">
+      No account required&nbsp;· Local-first&nbsp;· Your data stays on your
+      device
     </p>
     <DownloadActions />
   </div>
@@ -191,3 +196,20 @@ const days = Array.from({ length: 42 }, (_, index) => {
     </div>
   </figure>
 </section>
+
+<style is:global>
+  /* Keep the longer headline on two lines where the viewport has room. */
+  .hero .hero-copy {
+    max-width: 960px;
+  }
+  .hero .hero-description {
+    max-width: 720px;
+  }
+  .hero .hero-trust {
+    margin: 12px auto 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+    text-wrap: balance;
+  }
+</style>

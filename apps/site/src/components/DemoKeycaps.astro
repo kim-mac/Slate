@@ -1,0 +1,15 @@
+---
+interface Props {
+  keys: string[];
+}
+const { keys } = Astro.props;
+---
+
+<div class="demo-keycaps">
+  {keys.map((key, index) => (
+    <>
+      {index > 0 && <span>+</span>}
+      <kbd>{key}</kbd>
+    </>
+  ))}
+</div>

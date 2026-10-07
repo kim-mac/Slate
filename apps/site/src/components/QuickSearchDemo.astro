@@ -1,0 +1,92 @@
+---
+import Icon from './Icon.astro';
+import DemoKeycaps from './DemoKeycaps.astro';
+---
+
+<div class="demo-work-context">
+  <div class="demo-window-bar">
+    <Icon name="window" />
+    <span>Workspace</span>
+    <Icon name="more" />
+  </div>
+  <div class="demo-text-lines">
+    <i></i>
+    <i></i>
+    <i></i>
+  </div>
+</div>
+<div class="search-chord">
+  <DemoKeycaps keys={['Ctrl', 'Shift', 'Space']} />
+</div>
+<div class="mini-launcher">
+  <div class="mini-launcher-header">
+    <span class="mini-launcher-heading">
+      <span class="demo-grip">⠿</span> Quick Search
+    </span>
+    <div class="mini-launcher-actions">
+      <span>
+        <Icon name="plus" /> New
+      </span>
+      <span>
+        <Icon name="window" />
+      </span>
+      <span>
+        <Icon name="close" />
+      </span>
+    </div>
+  </div>
+  <div class="mini-search-input">
+    <span class="demo-search-placeholder">Search clips…</span>
+    <span class="demo-typed-query">API gateway</span>
+  </div>
+  <div class="mini-search-results">
+    <div class="demo-search-result result-match">
+      <div class="demo-result-heading">
+        <strong>API gateway</strong>
+        <span class="demo-result-tools">
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m16 3 5 5-12 12-6 1 1-6zM14 5l5 5" />
+          </svg>
+          <svg
+            class="icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" />
+          </svg>
+        </span>
+      </div>
+      <p>An API gateway acts as a single entry point for client requests.</p>
+      <span class="demo-result-meta">ChatGPT · Text</span>
+    </div>
+    <div class="demo-search-result result-other">
+      <strong>Project notes</strong>
+      <p>Start with one clear idea.</p>
+      <span class="demo-result-meta">Desktop · Text</span>
+    </div>
+  </div>
+  <div class="mini-launcher-footer">
+    <span class="demo-result-count">
+      <span class="count-all">2 clips</span>
+      <span class="count-match">1 clip</span>
+      <span class="copy-confirmation">
+        <Icon name="check" /> Copied
+      </span>
+    </span>
+    <span>
+      <kbd class="demo-enter-key">Enter</kbd> Copy all · Esc Close
+    </span>
+  </div>
+</div>

@@ -1,0 +1,67 @@
+---
+import Icon from './Icon.astro';
+---
+
+<div class="demo-window mini-browser">
+  <div class="demo-window-bar">
+    <span class="demo-window-dots">
+      <i></i>
+      <i></i>
+      <i></i>
+    </span>
+    <span class="demo-address">
+      <Icon name="globe" /> Research
+    </span>
+    <Icon name="more" />
+  </div>
+  <div class="browser-ai-scene demo-scene">
+    <div class="demo-question">What does an API gateway do?</div>
+    <div class="demo-assistant">Assistant</div>
+    <p class="demo-prose">
+      <mark class="demo-selection ai-selection">
+        An API gateway acts as a single entry point for client requests.
+      </mark>{' '}
+      It routes them to the right service.
+    </p>
+    <div class="browser-floating">
+      <div class="floating-save">
+        <span class="floating-ready">Save</span>
+        <span class="floating-saving">Saving…</span>
+        <span class="floating-saved">Saved</span>
+      </div>
+      <span class="floating-feedback">Saved locally</span>
+    </div>
+  </div>
+  <div class="browser-web-scene demo-scene">
+    <span class="demo-eyebrow">DEVELOPER NOTES</span>
+    <strong class="demo-page-title">API gateway</strong>
+    <p class="demo-prose">
+      <mark class="demo-selection web-selection">
+        A gateway keeps routing and authentication in one place.
+      </mark>{' '}
+      Your services can focus on their work.
+    </p>
+    <div class="demo-context-menu">
+      <div class="demo-menu-brand">
+        <img src="/brand/slate-icon.png" width="16" height="16" alt="" /> Slate
+      </div>
+      <div class="demo-menu-option menu-chosen">
+        <Icon name="plus" /> Save selection
+      </div>
+      <div class="demo-menu-option">
+        <Icon name="window" /> Save this page
+      </div>
+    </div>
+    <div class="browser-notification demo-notification">
+      <img src="/brand/slate-icon.png" width="20" height="20" alt="" />
+      <div>
+        <strong>Slate</strong>
+        <span>Clip saved locally.</span>
+      </div>
+    </div>
+  </div>
+</div>
+<span class="demo-scene-caption">
+  <span class="caption-ai">Select. Save. Keep going.</span>
+  <span class="caption-web">Right-click. Save to Slate.</span>
+</span>

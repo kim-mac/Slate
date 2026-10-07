@@ -38,7 +38,8 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 a:focus-visible,
-button:focus-visible {
+button:focus-visible,
+summary:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 5px;
 }
@@ -710,40 +711,159 @@ kbd {
   font-size: 12px;
   color: var(--muted);
 }
-.download-options {
+.download-layout {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 20px;
   margin-top: 30px;
 }
-.download-option {
+.windows-panel,
+.extension-panel {
   min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 3%);
 }
-.download-option > .icon {
-  display: none;
+.platform-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.download-option h3 {
+.extension-panel {
+  align-self: start;
+}
+.platform-heading h3 {
+  font-size: 17px;
+  letter-spacing: -0.025em;
+}
+.platform-heading p,
+.artifact-format {
+  font-size: 12px;
+  color: var(--muted);
+}
+.artifact-format {
+  margin-left: auto;
+  font-family: ui-monospace, monospace;
+}
+.windows-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.installer-option {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.installer-option[data-recommended='true'] {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.installer-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+.installer-heading h4 {
+  margin: 0;
   font-size: 15px;
   letter-spacing: -0.02em;
 }
-.download-option p {
+.system-badge {
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 500;
+}
+.system-badge[hidden] {
+  display: none;
+}
+.installer-description,
+.extension-description {
   color: var(--muted);
   font-size: 12px;
   margin-top: 3px;
 }
-.download-option .button {
+.installer-option .button,
+.extension-panel .button {
   margin-top: 15px;
   width: 100%;
   justify-content: space-between;
   font-size: 12px;
 }
-.download-status {
+.extension-description {
+  margin-top: 20px;
+}
+.fingerprint-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+}
+.fingerprint {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.fingerprint summary {
+  cursor: pointer;
+  list-style: none;
+}
+.fingerprint summary::-webkit-details-marker {
+  display: none;
+}
+.fingerprint summary code {
+  display: block;
+  white-space: nowrap;
+  font-size: 10px;
+}
+.full-hash {
+  display: block;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.hash-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 36px;
+  min-width: 58px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+  cursor: pointer;
+}
+.hash-copy:hover {
+  background: var(--soft);
+}
+.hash-copy .icon {
+  width: 13px;
+  height: 13px;
+}
+.copy-status {
+  display: block;
+  margin-top: 5px;
   color: var(--muted);
   font-size: 11px;
-  margin-top: 23px;
+}
+.copy-status:empty {
+  margin-top: 0;
 }
 .download-safety {
-  margin-top: 5px;
+  margin-top: 16px;
   font-size: 11px;
 }
 .site-footer {
@@ -886,6 +1006,9 @@ kbd {
   }
 }
 @media (max-width: 1024px) {
+  .download-layout {
+    grid-template-columns: 1fr;
+  }
   .shell {
     width: calc(100% - 64px);
   }
@@ -1196,27 +1319,17 @@ kbd {
   .download-heading h2 {
     font-size: 29px;
   }
-  .download-options {
+  .download-layout {
     grid-template-columns: 1fr;
-    gap: 22px;
+    gap: 16px;
     margin-top: 26px;
   }
-  .download-option {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px 15px;
+  .windows-panel,
+  .extension-panel {
+    padding: 20px;
   }
-  .download-option h3,
-  .download-option p {
-    grid-column: 1;
-  }
-  .download-option .button {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    margin-top: 0;
-    align-self: center;
-    font-size: 11px;
-    padding: 12px;
+  .windows-options {
+    grid-template-columns: 1fr;
   }
   .footer-inner {
     flex-wrap: wrap;

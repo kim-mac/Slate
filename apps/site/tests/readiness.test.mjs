@@ -98,7 +98,10 @@ test('all launch routes preserve accessible structure, safe links, themes and co
       assert.match(attrs, /target="_blank"/);
       assert.match(attrs, /rel="noopener noreferrer"/);
     }
-    assert.equal((html.match(/<script\b/g) ?? []).length, 1);
+    assert.equal(
+      (html.match(/<script\b/g) ?? []).length,
+      route === 'index.html' ? 3 : 1,
+    );
     assert.doesNotMatch(html, /<form|astro-island|<iframe|googletagmanager/);
   }
 });

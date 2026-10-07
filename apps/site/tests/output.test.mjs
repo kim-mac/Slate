@@ -26,10 +26,51 @@ test('built homepage keeps the approved compact hierarchy', () => {
   ]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  assert.match(html, /Keep what matters\./);
-  assert.match(html, /Find it again\./);
+  const headline = html.match(
+    /<h1\b[^>]*id="hero-title"[^>]*>([\s\S]*?)<\/h1>/,
+  )?.[1];
+  assert.ok(headline);
+  assert.equal(
+    headline
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+    'Save what matters. Without breaking your flow.',
+  );
+  assert.match(
+    headline,
+    /Save what matters\.\s*<br\s*\/?>(?:\s*)Without breaking your flow\./,
+  );
+  const supportingCopy = html.match(
+    /<p class="hero-description">([\s\S]*?)<\/p>/,
+  )?.[1];
+  assert.equal(
+    supportingCopy?.replace(/\s+/g, ' ').trim(),
+    'Save useful information from ChatGPT, Claude, the web, and your desktop directly to your private local library without having to copy and paste.',
+  );
   assert.equal((html.match(/<section(?:\s|>)/g) ?? []).length, 3);
   assert.doesNotMatch(html, /id="(?:local-first|workflows)"/);
+});
+
+test('hero trust line is plain secondary copy between the description and CTA buttons', () => {
+  const hero = page().match(
+    /<section class="hero shell"[\s\S]*?<\/section>/,
+  )?.[0];
+  assert.ok(hero);
+  const trust = hero.match(/<p class="hero-trust">([^<]+)<\/p>/);
+  assert.ok(
+    trust,
+    'Trust copy must be a plain paragraph, not badges or controls',
+  );
+  assert.equal(
+    trust[1]
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+    'No account required · Local-first · Your data stays on your device',
+  );
+  assert.ok(hero.indexOf('hero-description') < hero.indexOf('hero-trust'));
+  assert.ok(hero.indexOf('hero-trust') < hero.indexOf('download-actions'));
 });
 
 test('page copy and tab metadata contain no em dashes', () => {
@@ -94,7 +135,7 @@ test('hero keeps Windows primary and presents macOS as an unavailable secondary 
   assert.ok(actions);
   assert.match(
     actions,
-    /class="button primary"[^>]*>[\s\S]*Download for Windows/,
+    /<a class="button primary" href="#download">[\s\S]*Download for Windows/,
   );
   const macOS = actions.match(
     /<button\b([^>]*)>\s*Coming soon for macOS\s*<\/button>/,
@@ -242,7 +283,9 @@ test('unconfigured domain stays noindex with no invented canonical or sitemap', 
 test('preview omits the caption and feature cards prioritize capture without breaking flow', () => {
   const html = page();
   assert.doesNotMatch(html, /Illustrative product view|Sample content/);
-  const cards = [...html.matchAll(/<article id="([^"]+)"[\s\S]*?<\/article>/g)];
+  const cards = [
+    ...html.matchAll(/<article id="([^"]+)"[^>]*>[\s\S]*?<\/article>/g),
+  ];
   assert.deepEqual(
     cards.map((card) => card[1]),
     ['capture', 'desktop-capture', 'quick-search'],
@@ -255,10 +298,20 @@ test('preview omits the caption and feature cards prioritize capture without bre
   );
   assert.equal(
     (html.match(/class="[^"]*\bdemo-placeholder\b[^"]*"/g) ?? []).length,
-    2,
+    0,
   );
-  assert.match(cards[0][0], /Video coming soon/);
-  assert.match(cards[2][0], /Video coming soon/);
+  assert.doesNotMatch(html, /Video coming soon/);
+  assert.match(cards[0][0], /Save selection/);
+  assert.match(cards[0][0], /Saved locally/);
+  assert.match(cards[1][0], /Saved to Slate/);
+  assert.match(
+    cards[2][0],
+    /<kbd>Ctrl<\/kbd>[\s\S]*<kbd>Shift<\/kbd>[\s\S]*<kbd>Space<\/kbd>/,
+  );
+  assert.equal(
+    (html.match(/<div\b[^>]*\sdata-feature-demo(?:\s|>)/g) ?? []).length,
+    3,
+  );
   assert.doesNotMatch(html, /<video|id="merge"|>Merge<|Unmerge/);
   assert.doesNotMatch(
     html,
@@ -273,13 +326,29 @@ test('site ships no hydrated app, remote scripts, forms or trackers', () => {
     const scripts = [
       ...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g),
     ];
-    assert.equal(
-      scripts.length,
-      1,
-      'Only the local theme controller is needed',
-    );
+    assert.equal(scripts.length, path === 'index.html' ? 3 : 1);
     assert.match(scripts[0][1], /data-slate-theme/);
     assert.doesNotMatch(scripts[0][1], /\bsrc=/);
+    if (path === 'index.html') {
+      for (const [index, script] of scripts.slice(1).entries()) {
+        assert.match(script[1], /type="module"/);
+        const localScript = script[1].match(/src="([^"]+)"/)?.[1];
+        if (localScript) {
+          assert.ok(localScript.startsWith('/_astro/'));
+          assert.ok(existsSync(resolve(output, `.${localScript}`)));
+        } else if (index === 0) {
+          assert.match(script[2], /IntersectionObserver/);
+          assert.match(script[2], /prefers-reduced-motion/);
+          assert.doesNotMatch(
+            script[2],
+            /requestAnimationFrame|setInterval|fetch\(/,
+          );
+        } else {
+          assert.match(script[2], /getHighEntropyValues/);
+          assert.match(script[2], /clipboard\.writeText/);
+        }
+      }
+    }
     assert.doesNotMatch(
       html,
       /googletagmanager|google-analytics|plausible\.io|segment\.com/,

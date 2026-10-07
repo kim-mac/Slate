@@ -1,6 +1,7 @@
 ---
 import Icon from './Icon.astro';
-import { release, publicDownloads, downloadUrl } from '../data/releases';
+import { release, windowsDownloads, downloadUrl } from '../data/releases';
+const chromeUrl = downloadUrl(release.downloads.chrome);
 ---
 
 <section
@@ -15,35 +16,115 @@ import { release, publicDownloads, downloadUrl } from '../data/releases';
       </div>
       <p>v{release.version} · Windows 11</p>
     </div>
-    <div class="download-options">
-      {publicDownloads.map((option) => {
-        const url = downloadUrl(release.downloads[option.id]);
-        return (
-          <div class="download-option">
-            <Icon name={option.id === 'chrome' ? 'globe' : 'window'} />
-            <h3>{option.title}</h3>
-            <p>{option.detail}</p>
-            {url ? (
-              <a class="button secondary" href={url}>
-                {option.label}
-                <Icon name="arrow" />
-              </a>
-            ) : (
-              <button class="button secondary" type="button" disabled>
-                {option.label}
-                <Icon name="arrow" />
-              </button>
-            )}
+    <div class="download-layout">
+      <div class="windows-panel" aria-labelledby="windows-title">
+        <div class="platform-heading">
+          <Icon name="window" />
+          <div>
+            <h3 id="windows-title">Windows</h3>
+            <p>Slate {release.version}</p>
           </div>
-        );
-      })}
+          <span class="artifact-format">.exe</span>
+        </div>
+        <div class="windows-options">
+          {windowsDownloads.map((id) => {
+            const artifact = release.downloads[id];
+            const url = downloadUrl(artifact);
+            return (
+              <article
+                class="installer-option"
+                data-windows-installer={id}
+                aria-labelledby={`${id}-title`}
+              >
+                <div class="installer-heading">
+                  <h4 id={`${id}-title`}>{artifact.title}</h4>
+                  <span class="system-badge" data-recommendation hidden>
+                    Recommended
+                  </span>
+                </div>
+                <p class="installer-description">{artifact.description}</p>
+                {url ? (
+                  <a
+                    class="button secondary"
+                    href={url}
+                    download={artifact.filename}
+                  >
+                    Download {artifact.architecture}
+                    <Icon name="download" />
+                  </a>
+                ) : (
+                  <button
+                    class="button secondary"
+                    type="button"
+                    disabled
+                    title="Download not available yet"
+                  >
+                    Download {artifact.architecture}
+                    <Icon name="download" />
+                  </button>
+                )}
+                <div class="fingerprint-row">
+                  <details class="fingerprint">
+                    <summary>
+                      SHA-256 <code>{artifact.sha256.slice(0, 16)}…</code>
+                    </summary>
+                    <code class="full-hash">{artifact.sha256}</code>
+                  </details>
+                  <button
+                    class="hash-copy"
+                    type="button"
+                    data-copy-hash={artifact.sha256}
+                    aria-label={`Copy SHA-256 for ${artifact.title}`}
+                  >
+                    <Icon name="copy" />
+                    <span data-copy-label>Copy</span>
+                  </button>
+                </div>
+                <span class="copy-status" data-copy-status role="status"></span>
+              </article>
+            );
+          })}
+        </div>
+        <p class="small-note download-safety">
+          Unsigned Windows installers may trigger Microsoft Defender
+          SmartScreen.
+        </p>
+      </div>
+      <div class="extension-panel">
+        <div class="platform-heading">
+          <Icon name="globe" />
+          <div>
+            <h3>Chrome extension</h3>
+            <p>Slate {release.extensionVersion}</p>
+          </div>
+        </div>
+        <p class="extension-description">Pairs with the desktop app</p>
+        {chromeUrl ? (
+          <a class="button secondary" href={chromeUrl}>
+            Add to Chrome
+            <Icon name="arrow" />
+          </a>
+        ) : (
+          <button
+            class="button secondary"
+            type="button"
+            disabled
+            title="Store listing not available yet"
+          >
+            Add to Chrome
+            <Icon name="arrow" />
+          </button>
+        )}
+      </div>
     </div>
     <p class="small-note download-pairing">
       Slate for Windows and the Chrome extension work together. Browser capture
       requires the desktop app.
     </p>
-    <p class="small-note download-safety">
-      Unsigned Windows installers may trigger Microsoft Defender SmartScreen.
-    </p>
   </div>
 </section>
+
+<script>
+  import { initializeDownloads } from '../scripts/downloads';
+  initializeDownloads(document, navigator);
+</script>
