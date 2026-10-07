@@ -46,8 +46,11 @@ test('product preview follows the actual sidebar and full Calendar layout', () =
     /<figure\b[^>]*id="product"[\s\S]*?<\/figure>/,
   )?.[0];
   assert.ok(preview);
-  assert.match(preview, /Illustrative product view/);
-  assert.match(preview, /Sample content/);
+  assert.doesNotMatch(preview, /Illustrative product view|Sample content/);
+  assert.match(
+    preview,
+    /Illustration of Slate's library and Calendar with sample clips/,
+  );
   assert.match(preview, /aria-hidden="true"/);
   assert.doesNotMatch(preview, /<(?:button|input|a)\b|selected-clip/);
   assert.match(preview, /class="sidebar-results"/);
@@ -83,6 +86,44 @@ test('navigation highlights GitHub without inventing a star count', () => {
   assert.match(html, /Star on GitHub/);
 });
 
+test('hero keeps Windows primary and presents macOS as an unavailable secondary button', () => {
+  const html = page();
+  const actions = html.match(
+    /<div class="download-actions">[\s\S]*?<\/div>/,
+  )?.[0];
+  assert.ok(actions);
+  assert.match(
+    actions,
+    /class="button primary"[^>]*>[\s\S]*Download for Windows/,
+  );
+  const macOS = actions.match(
+    /<button\b([^>]*)>\s*Coming soon for macOS\s*<\/button>/,
+  );
+  assert.ok(macOS, 'macOS must be informational, not a link');
+  assert.match(macOS[1], /class="button secondary"/);
+  assert.match(macOS[1], /type="button"/);
+  assert.match(macOS[1], /\bdisabled(?:\s|$)/);
+  assert.doesNotMatch(macOS[1], /href=|onclick=|tabindex=/);
+  assert.doesNotMatch(
+    actions,
+    /Star on GitHub|Download for macOS|<a[^>]*github/,
+  );
+});
+
+test('navbar GitHub action has the full visible label and retains its safe destination', () => {
+  const header = page().match(/<header\b[\s\S]*?<\/header>/)?.[0];
+  assert.ok(header);
+  const github = header.match(
+    /<a\b([^>]*class="github-link"[^>]*)>([\s\S]*?)<\/a>/,
+  );
+  assert.ok(github);
+  assert.equal(github[2].replace(/<[^>]*>/g, '').trim(), 'Star on GitHub');
+  assert.match(github[2], /class="github-mark"/);
+  assert.match(github[1], /href="https:\/\/github\.com\/kim-mac\/Slate"/);
+  assert.match(github[1], /target="_blank"/);
+  assert.match(github[1], /rel="noopener noreferrer"/);
+});
+
 test('navbar GitHub and Download corners match without reordering controls', () => {
   const html = page();
   const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0];
@@ -104,7 +145,7 @@ test('every GitHub link opens a safe new tab', () => {
     const links = [...page(path).matchAll(/<a\b([^>]*)>/g)].filter((link) =>
       link[1].includes('href="https://github.com/kim-mac/Slate"'),
     );
-    assert.equal(links.length, path === 'index.html' ? 3 : 2);
+    assert.equal(links.length, 2);
     for (const [, attributes] of links) {
       assert.match(attributes, /target="_blank"/);
       assert.match(attributes, /rel="noopener noreferrer"/);
@@ -167,8 +208,25 @@ test('unverified releases never become installer or store links', () => {
     /href="[^"]*(?:\.exe|chromewebstore\.google\.com|releases\/download)/,
   );
   assert.match(html, /disabled/);
-  assert.match(html, /Public download links are not live yet/);
-  assert.doesNotMatch(html, /macOS|Apple Silicon/);
+  assert.doesNotMatch(html, /Public download links are not live yet/);
+  assert.doesNotMatch(html, /Download for macOS|Apple Silicon/);
+});
+
+test('launch copy keeps only the platform label and a secondary SmartScreen disclosure', () => {
+  const html = page();
+  assert.match(html, /<p class="availability">\s*Windows 11\s*<\/p>/);
+  assert.doesNotMatch(
+    html,
+    /Public downloads coming soon|public download links are not live yet\./i,
+  );
+  assert.match(
+    html,
+    /Slate for Windows and the Chrome extension work together\. Browser capture\s+requires the desktop app\./,
+  );
+  assert.match(
+    html,
+    /<p class="small-note download-safety">\s*Unsigned Windows installers may trigger Microsoft Defender SmartScreen\.\s*<\/p>/,
+  );
 });
 
 test('unconfigured domain stays noindex with no invented canonical or sitemap', () => {
@@ -181,10 +239,9 @@ test('unconfigured domain stays noindex with no invented canonical or sitemap', 
   assert.ok(!existsSync(resolve(output, 'sitemap.xml')));
 });
 
-test('illustrations are disclosed and feature cards prioritize capture without breaking flow', () => {
+test('preview omits the caption and feature cards prioritize capture without breaking flow', () => {
   const html = page();
-  assert.match(html, /Illustrative product view/);
-  assert.match(html, /Sample content/);
+  assert.doesNotMatch(html, /Illustrative product view|Sample content/);
   const cards = [...html.matchAll(/<article id="([^"]+)"[\s\S]*?<\/article>/g)];
   assert.deepEqual(
     cards.map((card) => card[1]),

@@ -14,4 +14,9 @@ The approved compact page needs only one real screenshot:
 
 The user will supply two short silent recordings for the existing feature cards: browser capture of safe sample text from ChatGPT/Claude, and Quick Search opening/finding a safe saved clip. Use local MP4/WebM files under public/product, with useful poster frames, visible playback controls and no autoplay. Avoid accounts, personal clip data and unrelated browser/profile UI. Until supplied, the cards explicitly say “Video coming soon”; do not fabricate footage or broken video URLs. Desktop Capture uses a static keyboard-shortcut visual, not a third video. Group-detail screenshots are not needed for the current page.
 
-Remove the illustration/sample-content caption only when its replacement is a real screenshot. Add useful alt text, keep sources legible without exposing personal information, and recheck mobile crops/file size.
+The approved current hero has no visible illustration/sample-content caption;
+its accessible figure description still identifies the sample illustration.
+When replacing it with a real screenshot, update that description and use useful
+alt text. Keep sources legible without exposing personal information, and
+recheck mobile crops/file size. Do not reintroduce the removed caption as part of
+the media handoff.

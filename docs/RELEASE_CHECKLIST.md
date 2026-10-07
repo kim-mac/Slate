@@ -5,8 +5,11 @@ does not authorize publishing until the applicable manual gates are recorded.
 
 ## Release source and version
 
-- [ ] Root, desktop, extension, shared package, Cargo, Tauri, and extension
-      manifest versions are exactly `0.1.0`.
+- [ ] Root, desktop, shared package, Cargo, and Tauri versions are exactly `0.1.0`.
+- [ ] Chrome extension manifest version is `0.1.1`. The extension release process
+      reads its version from `apps/extension/public/manifest.json`; it may advance
+      independently of the Windows/Desktop release and private workspace package
+      versions.
 - [ ] Release commit is recorded and the worktree is clean.
 - [ ] Full tests, formatting, lint, typecheck, frontend, extension, native-host,
       and Tauri production builds pass.
@@ -17,7 +20,7 @@ does not authorize publishing until the applicable manual gates are recorded.
 ## Browser extension
 
 - [ ] Production extension output is deleted and rebuilt from source.
-- [ ] `Slate-Extension-0.1.0.zip` passes package validation.
+- [ ] `Slate-Extension-0.1.1.zip` passes package validation.
 - [ ] ZIP root contains `manifest.json` directly, not a wrapping directory.
 - [ ] Source/unpacked manifest retains its stable key and development Chrome ID
       `jjfaegknedfakmidhhdlmbebnjafcjfi`; the Chrome Web Store ZIP omits `key`.

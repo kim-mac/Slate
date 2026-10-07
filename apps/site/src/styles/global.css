@@ -143,6 +143,7 @@ h2 {
   box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .github-mark .icon {
   width: 18px;
@@ -1249,7 +1250,8 @@ kbd {
     gap: 8px;
   }
   .github-link {
-    padding-inline: 13px;
+    padding-inline: 4px;
+    font-size: 12px;
   }
   .nav-download {
     padding-inline: 10px;

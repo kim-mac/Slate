@@ -52,7 +52,7 @@ Astro 7 uses a separate Vite `prerender` environment. Its build-only `cookie` de
 
 ## Downloads and domain
 
-`src/data/releases.ts` is the only source for release destinations. Windows x64, ARM64, Chrome Web Store and future macOS Apple Silicon all begin unverified with null URLs. macOS is not rendered. Later, verify each actual public HTTPS URL, then explicitly set its state to verified. The shared `downloadUrl()` helper fails closed. Never copy installers into public.
+`src/data/releases.ts` is the only source for release destinations. Windows x64, ARM64, Chrome Web Store and future macOS Apple Silicon all begin unverified with null URLs. The hero shows Download for Windows (disabled until a destination is verified) and a disabled informational Coming soon for macOS secondary button. The macOS button does not navigate or imply that a build exists. Later, verify each actual public HTTPS URL, then explicitly set its state to verified. The shared `downloadUrl()` helper fails closed. Never copy installers into public.
 
 `src/data/site.ts` deliberately has `url: null`. This preview is noindex/nofollow; robots disallows indexing. No canonical, absolute sharing-image URL or sitemap is fabricated. Setting the verified HTTPS production domain enables canonicals, the social image URL, robots' sitemap reference, and a sitemap for /, /privacy/ and /support/. The 404 stays noindex and is excluded. Review these outputs before publication.
 
@@ -89,11 +89,11 @@ Ensure the build image uses pinned pnpm; don't let automatic installation/buildi
 
 ## Product visuals
 
-Views are explicitly labeled illustrations with sample content, not screenshots or interactive app embeds. Decorative controls are excluded from the accessibility tree. Site controls are semantic links/buttons.
+The hero is an HTML product illustration containing sample content, not a real screenshot or interactive app embed. Its accessible figure description identifies it as such; the approved design has no visible illustration/sample-content caption. Decorative controls are excluded from the accessibility tree. Site controls are semantic links/buttons.
 
 The compact page keeps its centered hero and large library/Calendar illustration, followed by Browser Capture, Desktop Capture and Quick Search cards. Browser Capture highlights saving from ChatGPT/Claude without manual copy-pasting. Desktop Capture shows Ctrl+Alt+Shift+C. The browser/Quick Search cards reserve clearly labeled static spaces for real videos supplied later; no video URL or fake playback control is shipped. Merge is not marketed on this homepage. The page does not advertise connectors, agent memory, MCP, Autofill, semantic merging, summaries, cloud sync or macOS as shipping.
 
-The header links to GitHub with a star action. Public GitHub metadata returned 404 during verification, so `src/data/site.ts` leaves `githubStars` null and displays “Star” instead of an invented number. Set a count only after verifying public repository metadata; there is no browser-side API request or new script.
+The header's GitHub link displays Star on GitHub, retaining its icon and new-tab behavior. `src/data/site.ts` leaves `githubStars` null; the current design does not display a star count. There is no browser-side API request or invented number.
 
 Unmodified asset copies:
 

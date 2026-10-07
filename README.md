@@ -1,122 +1,100 @@
 # Slate
 
-Slate is a local-first memory tool for Windows. Save useful text and pages from
-your browser or desktop, find them quickly, and copy them back into whatever you
-are working on—without an account, cloud sync, telemetry, or a Slate backend.
+Useful information gets buried in ChatGPT, Claude, Gemini, other AI conversations,
+and browser tabs. Slate helps you save what matters without breaking your flow,
+then find and reuse it from your own private, local-first library.
 
-The core workflow is simple: **capture → find → reuse**. Clips are stored in a
-local SQLite database and remain available offline.
+**Capture → find → reuse.** No Slate account required.
 
-Slate 0.1.0 is available for Windows 11 on x64 and ARM64 computers.
+## What Slate does
 
-## Install Slate on Windows
+- **Save from AI conversations:** use the floating Save control on supported
+  ChatGPT, Claude, and Gemini pages.
+- **Capture from the web:** right-click to save selected text or save an
+  HTTP/HTTPS webpage as a link, preserving available source and page context.
+- **Capture from desktop apps:** select text and press `Ctrl+Alt+Shift+C`.
+- **Find and reuse:** press `Ctrl+Shift+Space` for Quick Search, then copy a clip
+  back into your work. Create and edit clips directly from Quick Search.
+- **Organise your library:** search, filter, pin, and browse by Calendar.
+  Persistent Merge groups keep related clips together while preserving each
+  original clip and its source information.
+- **Stay within reach:** closing the main window keeps Slate in the notification
+  area. Optional startup keeps it available when you sign in to Windows.
 
-Download the installer that matches your computer from the Slate GitHub Release
-or, when available, the Slate website:
+The main library refreshes external/native-host captures when its window regains
+focus, except while editing or performing a local action that needs protection.
+Quick Search loads fresh clips when opened, refreshes on focus, and silently
+refreshes approximately every two seconds while visible in Search mode. Create
+and Edit drafts are not refreshed. Manual Refresh remains available in the main
+library; the main window does not continuously poll.
 
-- **Windows x64** — `Slate-0.1.0-Windows-x64.exe` for Intel and AMD Windows PCs.
-- **Windows ARM64** — `Slate-0.1.0-Windows-ARM64.exe` for Windows-on-ARM devices
-  such as Snapdragon PCs.
+## Platforms and release status
 
-Slate does not provide an x86/32-bit installer. Windows 10 support has not been
-verified for this release.
+Slate is preparing its first public release:
 
-The current-user installer normally does not require administrator privileges.
-It installs the desktop application and local browser bridge. Microsoft Edge
-WebView2 is required for the desktop UI; if it is missing, the installer uses
-Microsoft's WebView2 bootstrapper, which requires an internet connection for
-that one-time download.
+| Component        | Release candidate | Platform                                                |
+| ---------------- | ----------------- | ------------------------------------------------------- |
+| Desktop          | 0.1.0             | Windows 11 x64 (Intel/AMD) and ARM64                    |
+| Chrome extension | 0.1.1             | Chrome; Microsoft Edge uses the same CWS package for V1 |
+| macOS            | Coming soon       | Not released                                            |
 
-Technical Windows paths and executable names may still contain **AI Clip Memory**.
-Slate 0.1.0 preserves those internal installation identities so existing users
-can upgrade without moving their application data or creating a second app.
+The GitHub repository is currently private. The GitHub Release, Chrome Web Store
+listing, and website are not published yet. Verified download and store links
+will be added after publication. Unpacked extension instructions are for
+development and testing, not a substitute for the public store release.
 
-### Unsigned installer notice
+Browser capture requires the installed Slate native host, provided by the Windows
+installer. WebView2 is required for the desktop UI; if missing, setup downloads
+Microsoft's bootstrapper. Windows 10 and x86/32-bit Windows are not verified
+release targets.
 
-The initial Slate 0.1.0 direct-download installers are unsigned. Windows
-SmartScreen may show **Windows protected your PC**, and the publisher may appear
-as **Unknown publisher**. If you downloaded the installer from the official
-Slate GitHub Release or website and verified its published SHA-256 checksum, use
-**More info → Run anyway** to continue. Do not disable SmartScreen, antivirus, or
-other Windows security features globally.
+The initial Windows installers are unsigned. Microsoft Defender SmartScreen may
+show a warning or an unknown publisher. After publication, use verified official
+downloads and compare their SHA-256 checksums. Do not disable Windows security
+protections.
 
-## Install the browser extension
+## How it works and privacy
 
-- **Google Chrome:** install Slate from the Chrome Web Store. The listing URL
-  will be added to the release page before V1 is published.
-- **Microsoft Edge:** for V1, install the same Chrome Web Store extension in
-  Edge. Edge may ask you to allow extensions from other stores.
+Browser capture follows this local path:
 
-The desktop app must be installed for browser captures to reach the local Slate
-library. Unpacked extension installation is only for development and testing;
-those instructions live in [the developer guide](docs/DEVELOPMENT.md).
+```text
+Slate extension → Chrome Native Messaging → installed Slate native host → local SQLite
+```
 
-## Quick start
+The native host writes through the shared persistence implementation directly to
+SQLite; the desktop GUI does not need to relay the capture. Slate then reads that
+library to display and organise your clips.
 
-Slate 0.1.0 includes:
+- No Slate account, cloud backend, or cloud sync in V1.
+- No Slate application analytics or telemetry.
+- The library is stored locally and remains available offline.
+- The SQLite database is plaintext, not application-level encrypted.
 
-- **Browser capture:** save selected text with **Save selection**, save an
-  HTTP/HTTPS page as a Link with **Save this page**, or use the floating **Save**
-  control on supported ChatGPT, Claude, and Gemini pages.
-- **Desktop capture:** select text in a Windows application and press
-  **Ctrl+Alt+Shift+C**.
-- **Quick Search:** press **Ctrl+Shift+Space** while Slate is running, search or
-  browse recent clips, then press **Enter** to copy the selected clip.
-- **Quick Capture and Edit:** create or edit from Quick Search and press
-  **Ctrl+Enter** to save.
-- **Desktop library:** create, edit, delete, pin, search, filter, browse by
-  Calendar, copy content, and open stored HTTP/HTTPS sources.
-- **Background availability:** closing the main window keeps Slate in the
-  Windows notification area. Use the tray menu to reopen or fully quit it.
-- **Optional startup:** enable **Start Slate when I sign in to Windows** in
-  Settings.
-
-Important shortcuts:
-
-| Area            | Action                                 | Shortcut           |
-| --------------- | -------------------------------------- | ------------------ |
-| Global          | Open or focus Quick Search             | `Ctrl+Shift+Space` |
-| Global          | Save selected text from the active app | `Ctrl+Alt+Shift+C` |
-| Quick Search    | Move through results                   | `↑` / `↓`          |
-| Quick Search    | Copy selected clip                     | `Enter`            |
-| Quick Search    | Save Quick Capture / Quick Edit        | `Ctrl+Enter`       |
-| Quick Search    | Go back or close                       | `Esc`              |
-| Desktop library | Focus search                           | `Ctrl+F`           |
-| Desktop library | Copy open clip                         | `Ctrl+Shift+C`     |
-| Desktop library | Show or hide sidebar                   | `Ctrl+B`           |
-
-Use **Refresh** in the desktop library after a browser capture. Browser capture
-is local, but the open library does not poll the database automatically.
-
-## Local data and uninstall behavior
-
-Slate stores clips in a plaintext SQLite database at:
+The normal Windows library location is:
 
 ```text
 %APPDATA%\com.aiclipmemory.desktop\clips.sqlite3
 ```
 
-Ordinary uninstall keeps this data so clips can survive reinstall or upgrade.
-The interactive uninstaller may offer **Delete app data**; selecting it
-deliberately removes the application-data directory. See [PRIVACY.md](PRIVACY.md)
-before deleting retained data manually.
+Ordinary uninstall retains application data. Selecting **Delete app data**
+deliberately removes it. Technical identifiers, executable names, and Windows
+paths may retain **AI Clip Memory** for upgrade and data compatibility; the
+public product name is Slate.
 
-Uninstall removes Slate's installed local browser bridge and its owned Chrome
-and Edge registration values. It does not remove the browser extension or
-unrelated browser state.
-
-## Privacy and security
-
-Slate has no account, Slate cloud sync, remote application backend, telemetry,
-or analytics. Browser-to-desktop capture uses Chromium Native Messaging on the
-same computer rather than a network service. See [PRIVACY.md](PRIVACY.md) for
-data-handling details and [SECURITY.md](SECURITY.md) for security boundaries and
-reporting guidance.
+See [PRIVACY.md](PRIVACY.md) for data handling and [SECURITY.md](SECURITY.md) for
+security boundaries and vulnerability-reporting guidance.
 
 ## Development
 
-Repository setup, verification, unpacked-extension testing, and private package
-commands are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+- `apps/desktop`: Tauri, React/TypeScript, Rust, and SQLite.
+- `apps/extension`: Chromium Manifest V3 extension.
+- `apps/site`: static Astro landing page.
+- `packages/shared`: shared TypeScript contracts.
+- `scripts/windows`: Native Messaging registration and release packaging.
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for prerequisites, local setup,
+desktop/extension commands, Native Messaging testing, and verification. Internal
+workspace package names are private build identifiers, not public branding.
 
 ## License
 

@@ -1,6 +1,9 @@
 # Slate 0.1.0
 
-Slate 0.1.0 is the first public release of a local-first memory tool for Windows.
+Draft notes for the upcoming first public Windows/Desktop release, Slate 0.1.0.
+The accompanying Chrome extension is independently versioned at 0.1.1. Downloads
+and the Chrome Web Store listing are not published yet.
+
 Capture useful text and pages, find them quickly, and reuse them without an
 account, Slate cloud service, telemetry, or analytics.
 
@@ -11,6 +14,12 @@ account, Slate cloud service, telemetry, or analytics.
 - Capture selected text from Windows applications with `Ctrl+Alt+Shift+C`.
 - Find and copy clips from Quick Search with `Ctrl+Shift+Space`.
 - Create, edit, delete, pin, search, filter, and browse clips by Calendar.
+- Merge related clips into persistent groups without replacing their original
+  records or source information. Unmerge members or whole groups when needed.
+- Refresh externally captured clips when the main window regains focus. Quick
+  Search loads fresh data on opening, refreshes on focus, and silently refreshes
+  approximately every two seconds while visible in Search mode, without
+  interrupting Create/Edit drafts.
 - Keep Slate available in the notification area and optionally start it when
   signing in to Windows.
 - Store clips locally in SQLite for offline access.
@@ -20,16 +29,16 @@ account, Slate cloud service, telemetry, or analytics.
 - Windows 11 x64 (Intel and AMD 64-bit PCs)
 - Windows 11 ARM64 (Windows-on-ARM devices)
 
-The browser extension is required for browser capture. Chrome uses the Chrome
-Web Store package; Microsoft Edge uses that same package for V1.
+The browser extension is required for browser capture. After publication, Chrome
+and Microsoft Edge will use the same Chrome Web Store package for V1. macOS is
+not released yet.
 
 ## Installation notes
 
 The initial direct-download installers are unsigned. Windows SmartScreen may
 show **Windows protected your PC**, and the publisher may appear as unknown.
-Download only from the official Slate GitHub Release or website, verify the
-published SHA-256 checksum, then use **More info → Run anyway** if you choose to
-continue.
+After publication, download only from verified official locations and compare
+the published SHA-256 checksum. Do not disable Windows security protections.
 
 Technical Windows paths and executable names may still contain **AI Clip
 Memory**. Slate preserves this earlier internal Windows identity in 0.1.0 so
@@ -46,5 +55,7 @@ Slate cloud sync, remote application backend, telemetry, or analytics. See
 - Installers and executables are unsigned for the initial V1 release.
 - Windows 10 and x86/32-bit Windows are not supported release targets.
 - The local SQLite database is not encrypted by Slate.
-- The open desktop library requires manual Refresh to show clips captured by the
-  browser while it is already open.
+- The main window does not continuously poll. It refreshes external captures on
+  focus when no protected edit/confirmation/local mutation is active; manual
+  Refresh is also available. Quick Search's visible Search mode refresh does not
+  run during Create/Edit.

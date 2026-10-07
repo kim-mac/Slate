@@ -10,6 +10,22 @@ apps/desktop/src-tauri/windows/generated/
 .env.*
 !.env.example
 
+# Local credentials and private signing material, not public manifest keys.
+credentials.json
+secrets.json
+*.pfx
+*.p12
+*.private-key.pem
+*.private-key.key
+id_rsa
+id_ed25519
+
+# Local Slate libraries, SQLite companions, and named library backups.
+clips.sqlite3
+clips.sqlite3-*
+clips.sqlite3.bak
+clips.sqlite3.backup
+
 *.log
 .DS_Store
 Thumbs.db

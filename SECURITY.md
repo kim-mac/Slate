@@ -9,12 +9,16 @@
 
 ## Report a vulnerability
 
-Use GitHub's private security-advisory feature for this repository when
-possible. Do not open a public issue for an unpatched vulnerability.
+Use GitHub's private vulnerability-reporting feature for this repository when
+it is available/enabled. This policy does not confirm that the feature is enabled.
+If no private reporting option is available, do not disclose vulnerability details
+in a public issue; wait for a private reporting channel or ask only how to contact
+the maintainer privately, without including sensitive details.
 
 Do not include real clips, selected text, browser conversations, database files,
-tokens, personal URLs, or other private content in a report. Use synthetic data
-and describe reproduction steps without disclosing user content.
+tokens, secrets, personal URLs, or other private content in a report. Do not
+publish vulnerability details or sensitive data in public issues. Use synthetic
+data and describe reproduction steps without disclosing user content.
 
 ## Current security boundaries
 

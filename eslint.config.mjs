@@ -5,7 +5,12 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/target/**'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/target/**',
+      '**/.worktrees/**',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

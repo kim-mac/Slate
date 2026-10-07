@@ -395,10 +395,10 @@ mod tests {
     fn expected_autostart_command_quotes_the_executable_and_places_the_argument_after_it() {
         assert_eq!(
             expected_autostart_command(Path::new(
-                r"C:\Users\Kim\AppData\Local\AI Clip Memory\ai-clip-memory-desktop.exe"
+                r"C:\Users\ExampleUser\AppData\Local\AI Clip Memory\ai-clip-memory-desktop.exe"
             )),
             Ok(
-                r#""C:\Users\Kim\AppData\Local\AI Clip Memory\ai-clip-memory-desktop.exe" --autostart"#
+                r#""C:\Users\ExampleUser\AppData\Local\AI Clip Memory\ai-clip-memory-desktop.exe" --autostart"#
                     .to_owned()
             )
         );

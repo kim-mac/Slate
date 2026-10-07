@@ -1,9 +1,6 @@
 ---
 import Icon from './Icon.astro';
 import { release, publicDownloads, downloadUrl } from '../data/releases';
-const allDownloadsReady = publicDownloads.every((option) =>
-  downloadUrl(release.downloads[option.id]),
-);
 ---
 
 <section
@@ -45,17 +42,8 @@ const allDownloadsReady = publicDownloads.every((option) =>
       Slate for Windows and the Chrome extension work together. Browser capture
       requires the desktop app.
     </p>
-    {!allDownloadsReady && (
-      <p class="download-status">
-        {publicDownloads.some((option) =>
-          downloadUrl(release.downloads[option.id]),
-        )
-          ? 'Some public download links are not live yet.'
-          : 'Public download links are not live yet.'}
-      </p>
-    )}
     <p class="small-note download-safety">
-      Unsigned installers may trigger Windows SmartScreen.
+      Unsigned Windows installers may trigger Microsoft Defender SmartScreen.
     </p>
   </div>
 </section>

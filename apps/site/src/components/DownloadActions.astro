@@ -1,7 +1,6 @@
 ---
 import Icon from './Icon.astro';
 import { release, downloadUrl } from '../data/releases';
-import { site } from '../data/site';
 const windowsReady =
   downloadUrl(release.downloads.windowsX64) ||
   downloadUrl(release.downloads.windowsARM64);
@@ -17,18 +16,8 @@ const windowsReady =
       <Icon name="download" /> Download for Windows
     </button>
   )}
-  <a
-    class="button secondary"
-    href={site.repositoryUrl}
-    target="_blank"
-    rel="noopener noreferrer"
-    title="Open Slate on GitHub in a new tab"
-  >
-    <Icon name="star" /> Star on GitHub
-  </a>
+  <button class="button secondary" type="button" disabled>
+    Coming soon for macOS
+  </button>
 </div>
-<p class="availability">
-  {windowsReady
-    ? 'Windows 11 · Choose your architecture below'
-    : 'Windows 11 · Public downloads coming soon'}
-</p>
+<p class="availability">Windows 11</p>

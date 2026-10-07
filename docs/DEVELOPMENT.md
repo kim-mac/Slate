@@ -7,7 +7,7 @@
 - `apps/extension` — Chromium Manifest V3 browser extension
 - `packages/shared` — source-exported TypeScript contracts shared by the apps
 - `scripts/windows` — Windows development registration and release packaging
-- `docs` — product source-of-truth and release documentation
+- `docs` — current development/release guidance and labelled historical designs
 
 ## Prerequisites
 
@@ -20,9 +20,14 @@ Install and verify:
 
 ```powershell
 corepack enable
-pnpm install
-pnpm format:check
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm --filter @slate/site format:check ../.. `
+  --ignore-path ../../.gitignore `
+  --ignore-path ../../.prettierignore `
+  --ignore-path .prettierignore
+pnpm format:rust:check
 pnpm lint
+pnpm --filter @slate/site build
 pnpm test
 pnpm typecheck
 pnpm build:extension
@@ -30,6 +35,20 @@ pnpm build:desktop
 pnpm build:bridge
 pnpm check:rust
 ```
+
+Build the site before `pnpm test`: its output tests read generated
+`apps/site/dist` files, which are ignored by Git and absent from a fresh clone.
+The other build commands above validate the desktop frontend, extension, and
+native host; they do not publish anything.
+
+`--ignore-scripts` skips dependency install hooks, not the explicit build/test
+commands. The pinned packages include the prebuilt binaries used by the verified
+Windows setup. This avoids pnpm adding dependency-script approval settings.
+The full-repository formatting command runs from the site's package so its Astro
+plugin resolves under pnpm's isolated dependencies. It combines the existing root
+and site ignore files to exclude generated output; Rust formatting is checked
+separately. The root `pnpm format:check` shortcut currently cannot resolve that
+site-only plugin from the root directory.
 
 Run the desktop app:
 
@@ -39,8 +58,14 @@ pnpm dev:desktop
 
 ## Unpacked extension and development Native Messaging
 
-Unpacked installation is for development and testing only. Public V1 users
-should install the Chrome Web Store package.
+Unpacked installation is for development and testing only. Once published,
+public V1 users should install the Chrome Web Store package.
+
+Development registration uses the same `com.aiclipmemory.bridge` host name and
+Chrome/Edge HKCU keys as the installed app, so it replaces the installed host
+registration for the chosen browsers. Prefer an isolated Windows testing profile.
+If testing in your normal profile, plan to restore the installed production host
+registration afterward by reinstalling Slate or explicitly registering that host.
 
 1. Build both components:
 
@@ -64,11 +89,16 @@ should install the Chrome Web Store package.
    Use `-Browser Edge` for Edge. Use `-Browser Both` with all exact unpacked IDs
    when both browsers should share the development manifest.
 
-4. Remove only the development registration when finished:
+4. Unregister the current host only when you intend to remove that registration:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts/windows/Unregister-NativeMessagingHost.ps1 -Browser Both
    ```
+
+   This script removes the current registration keys; it does not check whether
+   they still point to the development manifest. It can therefore remove an
+   installed production registration too. Restore production registration before
+   returning to normal browser capture.
 
 Normal users receive the Native Messaging registration from the desktop
 installer.
@@ -97,6 +127,10 @@ the key. The Chrome Web Store draft has the distinct production ID
 `hgbfaclkpmcecikjepoejgjccddjbekh`. Windows installer manifest generation
 allows both Chrome origins and the configured Edge origin
 `jcfcmapapjlgpbkcgcaeggeblgpidkoo`.
+
+Windows/root release version is `0.1.0`; the extension release version is
+independently read from `apps/extension/public/manifest.json`, currently `0.1.1`.
+Its upload artifact is `Slate-Extension-0.1.1.zip`.
 
 After both NSIS packages exist, copy them to friendly public filenames and
 regenerate `SHA256SUMS.txt`:

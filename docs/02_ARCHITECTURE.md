@@ -1,8 +1,50 @@
 # Technical Architecture
 
+## Current implemented architecture
+
+Slate uses a Tauri/React desktop UI, a Chromium Manifest V3 extension, and a Rust
+Native Messaging host. Windows/Desktop release `0.1.0` and extension release
+`0.1.1` are independently versioned. There is no Slate account, cloud backend,
+cloud sync, or application analytics/telemetry in V1.
+
+Browser capture follows this path:
+
+```text
+Browser page → Slate extension → background/service worker
+  → Chrome Native Messaging → installed Slate native host
+  → shared Rust persistence implementation → local SQLite
+```
+
+The native host persists directly to SQLite. The desktop GUI is not a relay and
+does not need to be open for host persistence. Desktop commands use the shared
+clip service/repository and database implementation. The normal library path is
+`%APPDATA%\com.aiclipmemory.desktop\clips.sqlite3`; the identifier and technical
+Windows names remain unchanged for compatibility.
+
+Schema V2 adds `clip_groups` and `clip_group_members` transactionally alongside
+`clips`. Groups are flat, preserve original clip rows/metadata, and store ordered
+membership and independent group pin state. The original clip table is not
+rewritten by the additive migration. Foreign keys are enabled on application
+connections, and committed migrations advance SQLite `user_version`.
+
+The main library reloads external captures on focus when no protected
+edit/confirmation/local mutation is active. Quick Search loads on opening,
+refreshes on focus, and silently refreshes approximately every two seconds while
+visible in Search mode, not during Create/Edit. SQLite is the persistence source
+of truth, not React or WebView storage.
+
+## Historical original MVP design and future proposals
+
+The remaining sections preserve the original design discussion. In particular,
+the diagram routing through the desktop GUI, localhost HTTP alternative,
+single-table schema sketch, and future FTS/semantic search/cloud sync are
+historical proposals, not descriptions of the current production implementation.
+They must not override the current summary or repository source/tests.
+
 ## Recommended stack
 
 ### Windows desktop application
+
 - Tauri
 - React
 - TypeScript
@@ -12,11 +54,13 @@
 - SQLite
 
 ### Browser extension
+
 - Chrome Extension Manifest V3
 - TypeScript
 - React only where UI requires it
 
 ### Monorepo
+
 Recommended:
 
 ```text
@@ -52,12 +96,15 @@ There is no cloud database in the MVP.
 ## Extension-to-desktop communication
 
 Preferred long-term approach:
+
 - Chrome Native Messaging
 
 Acceptable MVP alternative:
+
 - localhost HTTP service bound only to `127.0.0.1`
 
 If using localhost:
+
 - never bind to `0.0.0.0`
 - use a random or fixed high local port
 - validate requests
@@ -86,6 +133,7 @@ CREATE TABLE clips (
 ```
 
 Add indexes for:
+
 - created_at
 - is_pinned
 
@@ -94,12 +142,15 @@ Add SQLite FTS later when basic search works.
 ## Search progression
 
 ### Phase 1
+
 Simple case-insensitive substring search.
 
 ### Phase 2
+
 SQLite FTS5.
 
 ### Later
+
 Semantic search using local or optional remote embeddings.
 
 Do not start with vector search.
@@ -113,7 +164,7 @@ Example:
 ```ts
 export interface ClipInput {
   content: string;
-  contentType: "text" | "code" | "prompt" | "link";
+  contentType: 'text' | 'code' | 'prompt' | 'link';
   title?: string;
   sourceApp?: string;
   sourceUrl?: string;
@@ -124,6 +175,7 @@ export interface ClipInput {
 ## Privacy architecture
 
 Default:
+
 - all clip content stored locally
 - no telemetry containing clip content
 - no analytics SDK that reads saved content
@@ -155,13 +207,13 @@ The local database must remain usable if sync is disabled or unavailable.
 Treat captured text as sensitive user data.
 
 Never:
+
 - upload clips automatically
 - log full clip content to console in production
 - include clip content in crash reports
 - expose the local bridge publicly
 - execute saved code
 - render unsanitized HTML from captured content
-
 
 ## Platform strategy
 
@@ -174,6 +226,7 @@ Shared product logic must remain platform-independent wherever practical.
 OS-specific behavior must be isolated behind platform-specific modules or interfaces.
 
 Examples of platform-specific behavior:
+
 - global shortcuts
 - quick-launch window behavior
 - native messaging registration
@@ -185,6 +238,7 @@ Examples of platform-specific behavior:
 Do not implement macOS functionality during the Windows MVP unless required to preserve a clean abstraction.
 
 The goal is:
+
 - one shared React UI
 - one shared clip/data model
 - one shared SQLite schema
