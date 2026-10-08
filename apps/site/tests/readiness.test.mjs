@@ -70,10 +70,7 @@ test('all launch routes preserve accessible structure, safe links, themes and co
     assert.match(html, /name="description" content="[^"]+"/);
     assert.match(html, /name="twitter:card" content="summary_large_image"/);
     assert.doesNotMatch(html, /\u2014|&mdash;|&#8212;|&#x2014;/i);
-    assert.doesNotMatch(
-      html,
-      /rel="canonical"|https?:\/\/localhost|pages\.dev/,
-    );
+    assert.doesNotMatch(html, /https?:\/\/localhost|pages\.dev/);
     const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
     assert.equal(ids.length, new Set(ids).size);
     for (const [, url] of html.matchAll(/(?:href|src)="([^"]*)"/g)) {
@@ -131,9 +128,11 @@ test('social preview is a site-owned 1200 by 630 PNG, not a copied installer or 
 });
 
 test('domain configuration generates only the three public launch routes', async () => {
-  const { canonicalUrl, sitemapXml, robotsText } =
+  const { site, canonicalUrl, sitemapXml, robotsText } =
     await import('../src/data/site.ts');
-  assert.equal(canonicalUrl('/support/'), null);
+  assert.equal(site.url, 'https://tryslate.tech');
+  assert.equal(canonicalUrl('/support/'), 'https://tryslate.tech/support/');
+  assert.equal(canonicalUrl('/support/', null), null);
   assert.equal(sitemapXml(null), null);
   assert.equal(robotsText(null), 'User-agent: *\nDisallow: /\n');
   const base = 'https://slate.example';
@@ -156,5 +155,17 @@ test('domain configuration generates only the three public launch routes', async
   assert.match(
     robotsText(base),
     /Sitemap: https:\/\/slate\.example\/sitemap\.xml/,
+  );
+  assert.equal(
+    robotsText(),
+    'User-agent: *\nAllow: /\nSitemap: https://tryslate.tech/sitemap.xml\n',
+  );
+  assert.deepEqual(
+    [...sitemapXml().matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]),
+    [
+      'https://tryslate.tech/',
+      'https://tryslate.tech/privacy/',
+      'https://tryslate.tech/support/',
+    ],
   );
 });

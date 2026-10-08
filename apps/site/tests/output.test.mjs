@@ -270,14 +270,86 @@ test('launch copy keeps only the platform label and a secondary SmartScreen disc
   );
 });
 
-test('unconfigured domain stays noindex with no invented canonical or sitemap', () => {
-  for (const path of ['index.html', 'privacy/index.html']) {
-    const html = page(path);
-    assert.match(html, /name="robots" content="noindex, nofollow"/);
-    assert.doesNotMatch(html, /rel="canonical"/);
+test('public pages use the production apex for canonical and sharing metadata', () => {
+  const routes = [
+    {
+      file: 'index.html',
+      path: '/',
+      title: 'Slate | Save what matters. Without breaking your flow.',
+      description:
+        'Save useful information from ChatGPT, Claude, the web, and your desktop directly to your private local library without having to copy and paste.',
+    },
+    {
+      file: 'privacy/index.html',
+      path: '/privacy/',
+      title: 'Privacy &amp; local-first | Slate',
+      description:
+        'How Slate Desktop and its browser extension process captures locally, store your library on your computer, and handle privacy.',
+    },
+    {
+      file: 'support/index.html',
+      path: '/support/',
+      title: 'Slate Support | Slate',
+      description:
+        'Help with Slate for Windows, browser capture, Quick Search, and Merge.',
+    },
+  ];
+  for (const { file, path, title, description } of routes) {
+    const html = page(file);
+    const canonical = 'https://tryslate.tech' + path;
+    const image = 'https://tryslate.tech/brand/social-preview.png';
+    assert.equal((html.match(/rel="canonical"/g) ?? []).length, 1);
+    assert.ok(html.includes(`<link rel="canonical" href="${canonical}"`));
+    assert.ok(html.includes(`<title>${title}</title>`));
+    for (const [attribute, name, content] of [
+      ['name', 'description', description],
+      ['property', 'og:url', canonical],
+      ['property', 'og:title', title],
+      ['property', 'og:description', description],
+      ['property', 'og:image', image],
+      ['name', 'twitter:title', title],
+      ['name', 'twitter:description', description],
+      ['name', 'twitter:image', image],
+    ]) {
+      assert.ok(
+        html.includes(`<meta ${attribute}="${name}" content="${content}"`),
+        `${file} must have the expected ${name}`,
+      );
+    }
+    assert.doesNotMatch(html, /name="robots" content="noindex/);
+    assert.doesNotMatch(html, /https?:\/\/localhost|pages\.dev|slate\.example/);
+    assert.match(html, /href="\/privacy\/"/);
+    assert.match(html, /href="\/support\/"/);
   }
-  assert.match(page('robots.txt'), /Disallow: \//);
-  assert.ok(!existsSync(resolve(output, 'sitemap.xml')));
+  const notFound = page('404.html');
+  assert.match(notFound, /name="robots" content="noindex, nofollow"/);
+  assert.doesNotMatch(notFound, /rel="canonical"|property="og:url"/);
+});
+
+test('production robots and sitemap expose only the three public apex routes', () => {
+  assert.equal(
+    page('robots.txt'),
+    'User-agent: *\nAllow: /\nSitemap: https://tryslate.tech/sitemap.xml\n',
+  );
+  const xml = page('sitemap.xml');
+  assert.match(xml, /^<\?xml version="1.0" encoding="UTF-8"\?>/);
+  assert.deepEqual(
+    [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]),
+    [
+      'https://tryslate.tech/',
+      'https://tryslate.tech/privacy/',
+      'https://tryslate.tech/support/',
+    ],
+  );
+  assert.doesNotMatch(xml, /404|localhost|pages\.dev|www\.tryslate/);
+});
+
+test('explicitly unconfigured domain helpers still fail closed', async () => {
+  const { canonicalUrl, sitemapXml, robotsText } =
+    await import('../src/data/site.ts');
+  assert.equal(canonicalUrl('/', null), null);
+  assert.equal(sitemapXml(null), null);
+  assert.equal(robotsText(null), 'User-agent: *\nDisallow: /\n');
 });
 
 test('preview omits the caption and feature cards prioritize capture without breaking flow', () => {
