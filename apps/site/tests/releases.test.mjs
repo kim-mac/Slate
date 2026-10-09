@@ -25,14 +25,29 @@ test('Windows artifact metadata is centralized and matches the frozen release', 
   assert.equal(release.extensionVersion, '0.1.1');
 });
 
-test('the site has centralized, fail-closed release destinations', async () => {
+test('published Windows destinations resolve to the exact approved release assets', async () => {
   assert.ok(
     existsSync(releaseModule),
     'Central release configuration must exist',
   );
   const { release, downloadUrl } = await import(releaseModule.href);
   assert.equal(release.version, '0.1.0');
-  for (const destination of Object.values(release.downloads)) {
+  for (const [id, filename] of [
+    ['windowsX64', 'Slate-0.1.0-Windows-x64.exe'],
+    ['windowsARM64', 'Slate-0.1.0-Windows-ARM64.exe'],
+  ]) {
+    const destination = release.downloads[id];
+    const expected = `https://github.com/kim-mac/Slate/releases/download/v0.1.0/${filename}`;
+    assert.equal(destination.state, 'verified');
+    assert.equal(destination.url, expected);
+    assert.equal(downloadUrl(destination), expected);
+  }
+});
+
+test('unpublished Chrome and macOS destinations remain fail-closed', async () => {
+  const { release, downloadUrl } = await import(releaseModule.href);
+  for (const id of ['chrome', 'macOSAppleSilicon']) {
+    const destination = release.downloads[id];
     assert.equal(destination.state, 'unverified');
     assert.equal(destination.url, null);
     assert.equal(downloadUrl(destination), null);

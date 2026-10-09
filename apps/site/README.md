@@ -52,7 +52,7 @@ Astro 7 uses a separate Vite `prerender` environment. Its build-only `cookie` de
 
 ## Downloads and domain
 
-`src/data/releases.ts` is the only source for release destinations. Windows x64, ARM64, Chrome Web Store and future macOS Apple Silicon all begin unverified with null URLs. The hero shows Download for Windows (disabled until a destination is verified) and a disabled informational Coming soon for macOS secondary button. The macOS button does not navigate or imply that a build exists. Later, verify each actual public HTTPS URL, then explicitly set its state to verified. The shared `downloadUrl()` helper fails closed. Never copy installers into public.
+`src/data/releases.ts` is the only source for release destinations. Windows x64 and ARM64 use verified GitHub Release v0.1.0 installer URLs and retain the frozen SHA-256 hashes. Chrome Web Store and future macOS Apple Silicon remain unverified with null URLs. The hero's Download for Windows action leads to the two architecture-specific downloads; Coming soon for macOS remains a disabled informational button. The Chrome extension is not yet publicly available, and its CWS upload ZIP must not be linked as a manual unpacked installation download. Verify each actual public HTTPS destination before setting its state to verified. The shared `downloadUrl()` helper still fails closed. Never copy installers into public.
 
 `src/data/site.ts` sets the canonical production origin to `https://tryslate.tech`. Canonicals, Open Graph URLs, absolute sharing-image URLs, robots' sitemap reference, and sitemap entries use this apex origin for /, /privacy/ and /support/. These three public routes are indexable; the 404 stays noindex and is excluded. Privacy/support navigation remains relative to the current origin. An explicitly unset or invalid origin still fails closed in the metadata helpers.
 
@@ -108,7 +108,7 @@ No desktop/extension artwork was edited. [SCREENSHOTS.md](SCREENSHOTS.md) specif
 
 Check widths 1440, 1280, 1024, 768, 430 and 390. Narrow layouts stack the three feature summaries while keeping the GitHub/star link and Download action visible. The single product preview scales without horizontal overflow. Inline navigation works without a hamburger script.
 
-Keyboard-check skip link, GitHub, the download anchor and privacy. Downloads remain intentionally disabled. Focus rings and reduced-motion CSS are included; no essential content relies on motion or JavaScript.
+Keyboard-check skip link, GitHub, the download anchor, both Windows installer links and privacy. Chrome and macOS remain intentionally disabled. Focus rings and reduced-motion CSS are included; no essential content relies on motion or JavaScript.
 
 The compact navbar sun/moon button switches the entire site between neutral light and dark themes. First visits use the system preference; explicit choices are saved locally as `slate-site-theme`, separate from desktop preferences. A small local inline controller initializes before paint and still toggles when storage is unavailable. No framework hydration, tracking, or remote script is added. Without JavaScript, content remains available and the inactive toggle is hidden.
 

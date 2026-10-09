@@ -242,13 +242,20 @@ test('local navigation and asset destinations resolve in static output', () => {
   }
 });
 
-test('unverified releases never become installer or store links', () => {
+test('published Windows assets are linked without exposing the CWS upload ZIP or store', () => {
   const html = page();
-  assert.doesNotMatch(
-    html,
-    /href="[^"]*(?:\.exe|chromewebstore\.google\.com|releases\/download)/,
+  const installers = [...html.matchAll(/href="([^"]+\.exe)"/g)].map(
+    (match) => match[1],
   );
-  assert.match(html, /disabled/);
+  assert.deepEqual(installers.sort(), [
+    'https://github.com/kim-mac/Slate/releases/download/v0.1.0/Slate-0.1.0-Windows-ARM64.exe',
+    'https://github.com/kim-mac/Slate/releases/download/v0.1.0/Slate-0.1.0-Windows-x64.exe',
+  ]);
+  assert.doesNotMatch(html, /href="[^"]*(?:\.zip|chromewebstore\.google\.com)/);
+  assert.match(
+    html,
+    /<button[^>]*disabled[^>]*title="Store listing not available yet"[^>]*>[\s\S]*?Add to Chrome/,
+  );
   assert.doesNotMatch(html, /Public download links are not live yet/);
   assert.doesNotMatch(html, /Download for macOS|Apple Silicon/);
 });

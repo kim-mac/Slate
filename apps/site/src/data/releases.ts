@@ -7,8 +7,8 @@ export const release = {
   extensionVersion: '0.1.1',
   downloads: {
     windowsX64: {
-      state: 'unverified',
-      url: null,
+      state: 'verified',
+      url: 'https://github.com/kim-mac/Slate/releases/download/v0.1.0/Slate-0.1.0-Windows-x64.exe',
       architecture: 'x64',
       title: 'Windows x64',
       description: 'For Intel & AMD PCs',
@@ -17,11 +17,11 @@ export const release = {
         'EE3A0832A002905CCBC5567401093CB1F5D6ED1D209F521B04F418D39594E5DA',
     },
     windowsARM64: {
-      state: 'unverified',
-      url: null,
+      state: 'verified',
+      url: 'https://github.com/kim-mac/Slate/releases/download/v0.1.0/Slate-0.1.0-Windows-ARM64.exe',
       architecture: 'ARM64',
       title: 'Windows ARM64',
-      description: 'For Snapdragon & ARM PCs',
+      description: 'For Windows-on-ARM PCs',
       filename: 'Slate-0.1.0-Windows-ARM64.exe',
       sha256:
         'EDD641A2231AE846B224FCE0BAA4B7E11FCFBAA63E75D08B2F6FCD9117CFF57C',

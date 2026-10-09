@@ -92,8 +92,23 @@ test('all launch routes preserve accessible structure, safe links, themes and co
     for (const [, attrs] of html.matchAll(
       /<a\b([^>]*href="https:\/\/github\.com[^>]*)>/g,
     )) {
-      assert.match(attrs, /target="_blank"/);
-      assert.match(attrs, /rel="noopener noreferrer"/);
+      if (attrs.includes('/releases/download/')) {
+        const filename = attrs.match(/download="([^"]+)"/)?.[1];
+        assert.ok(
+          [
+            'Slate-0.1.0-Windows-x64.exe',
+            'Slate-0.1.0-Windows-ARM64.exe',
+          ].includes(filename),
+        );
+        assert.ok(
+          attrs.includes(
+            `href="https://github.com/kim-mac/Slate/releases/download/v0.1.0/${filename}"`,
+          ),
+        );
+      } else {
+        assert.match(attrs, /target="_blank"/);
+        assert.match(attrs, /rel="noopener noreferrer"/);
+      }
     }
     assert.equal(
       (html.match(/<script\b/g) ?? []).length,
@@ -101,6 +116,14 @@ test('all launch routes preserve accessible structure, safe links, themes and co
     );
     assert.doesNotMatch(html, /<form|astro-island|<iframe|googletagmanager/);
   }
+});
+
+test('homepage and Support do not imply that the Chrome extension is publicly installable', () => {
+  const home = page('index.html').replace(/\s+/g, ' ');
+  const support = page('support/index.html').replace(/\s+/g, ' ');
+  assert.match(home, /Not yet available on the Chrome Web Store\./);
+  assert.match(support, /not yet publicly available on the Chrome Web Store/);
+  assert.doesNotMatch(support, /<li>\s*Install the Slate Chrome extension\./);
 });
 
 test('download area explains desktop pairing and uses the centralized release version', () => {

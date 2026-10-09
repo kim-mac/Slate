@@ -220,7 +220,7 @@ test('detection fails closed when Client Hints are absent, withheld, rejected or
   );
 });
 
-test('built download panel includes both architectures, public hashes and unavailable controls', () => {
+test('built download panel enables the exact Windows assets and preserves hashes and unavailable Chrome', () => {
   const html = readFileSync(
     new URL('../dist/index.html', import.meta.url),
     'utf8',
@@ -229,15 +229,17 @@ test('built download panel includes both architectures, public hashes and unavai
     /<section\b[^>]*id="download"[\s\S]*?<\/section>/,
   )?.[0];
   assert.ok(section);
-  for (const [id, name, hash] of [
+  for (const [id, name, filename, hash] of [
     [
       'windowsX64',
       'Windows x64',
+      'Slate-0.1.0-Windows-x64.exe',
       'EE3A0832A002905CCBC5567401093CB1F5D6ED1D209F521B04F418D39594E5DA',
     ],
     [
       'windowsARM64',
       'Windows ARM64',
+      'Slate-0.1.0-Windows-ARM64.exe',
       'EDD641A2231AE846B224FCE0BAA4B7E11FCFBAA63E75D08B2F6FCD9117CFF57C',
     ],
   ]) {
@@ -248,16 +250,29 @@ test('built download panel includes both architectures, public hashes and unavai
     )?.[0];
     assert.ok(card, `${name} must always be rendered`);
     assert.ok(card.includes(hash));
-    assert.match(card, /<button[^>]*class="button secondary"[^>]*disabled/);
+    const download = card.match(
+      /<a\b([^>]*class="button secondary"[^>]*)>([\s\S]*?)<\/a>/,
+    );
+    assert.ok(download, `${name} must have an enabled download link`);
+    assert.ok(
+      download[1].includes(
+        `href="https://github.com/kim-mac/Slate/releases/download/v0.1.0/${filename}"`,
+      ),
+    );
+    assert.ok(download[1].includes(`download="${filename}"`));
+    assert.doesNotMatch(download[1], /\bdisabled\b|aria-disabled="true"/);
+    assert.doesNotMatch(card, /title="Download not available yet"/);
     assert.match(card, new RegExp(`aria-label="Copy SHA-256 for ${name}"`));
     assert.match(card, /data-recommendation[^>]*hidden/);
   }
   assert.match(section, /For Intel &amp; AMD PCs/);
-  assert.match(section, /For Snapdragon &amp; ARM PCs/);
+  assert.match(section, /For Windows-on-ARM PCs/);
   assert.match(section, /Chrome extension/);
-  assert.doesNotMatch(
+  assert.doesNotMatch(section, /href="[^"]*(?:\.zip|chromewebstore)/);
+  assert.match(
     section,
-    /href="[^"]*(?:\.exe|releases\/download|chromewebstore)/,
+    /<button[^>]*disabled[^>]*title="Store listing not available yet"[^>]*>[\s\S]*?Add to Chrome/,
   );
+  assert.match(section, /Not yet available on the Chrome Web Store\./);
   assert.match(section, /<p class="small-note download-safety">/);
 });
