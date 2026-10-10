@@ -1,6 +1,8 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { site } from '../data/site';
+import { release, downloadUrl } from '../data/releases';
+const chromeUrl = downloadUrl(release.downloads.chrome);
 ---
 
 <BaseLayout
@@ -21,16 +23,18 @@ import { site } from '../data/site';
           Install <a href="/#download">Slate for Windows</a>.
         </li>
         <li>
-          Browser capture requires the Slate Chrome extension, which is not yet
-          publicly available on the Chrome Web Store.
+          Install the{' '}
+          {chromeUrl ? (
+            <a href={chromeUrl}>Slate Chrome extension</a>
+          ) : (
+            'Slate Chrome extension'
+          )}{' '}
+          from the Chrome Web Store.
         </li>
         <li>
           Keep the Slate desktop app installed. Browser capture requires it.
         </li>
-        <li>
-          Once the extension is available, save from Chrome to your local Slate
-          library.
-        </li>
+        <li>Save from Chrome to your local Slate library.</li>
       </ol>
     </section>
     <section>

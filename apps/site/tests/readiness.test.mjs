@@ -118,12 +118,28 @@ test('all launch routes preserve accessible structure, safe links, themes and co
   }
 });
 
-test('homepage and Support do not imply that the Chrome extension is publicly installable', () => {
+test('homepage and Support link to the published Chrome extension and require Slate Desktop', () => {
   const home = page('index.html').replace(/\s+/g, ' ');
   const support = page('support/index.html').replace(/\s+/g, ' ');
-  assert.match(home, /Not yet available on the Chrome Web Store\./);
-  assert.match(support, /not yet publicly available on the Chrome Web Store/);
-  assert.doesNotMatch(support, /<li>\s*Install the Slate Chrome extension\./);
+  const expected =
+    'href="https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh"';
+  for (const html of [home, support]) {
+    assert.ok(html.includes(expected));
+    assert.doesNotMatch(html, /href="[^"]*\.zip/);
+    assert.doesNotMatch(
+      html,
+      /not yet (?:publicly )?available|Once the extension is available/i,
+    );
+  }
+  assert.match(home, /Requires Slate Desktop to save to your local library\./);
+  assert.match(
+    support,
+    /Keep the Slate desktop app installed\. Browser capture requires it\./,
+  );
+  assert.match(
+    support,
+    /Install[\s\S]*?Slate Chrome extension[\s\S]*?Chrome Web Store/,
+  );
 });
 
 test('download area explains desktop pairing and uses the centralized release version', () => {

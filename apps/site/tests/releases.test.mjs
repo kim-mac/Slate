@@ -44,14 +44,22 @@ test('published Windows destinations resolve to the exact approved release asset
   }
 });
 
-test('unpublished Chrome and macOS destinations remain fail-closed', async () => {
+test('published Chrome destination resolves to the official Slate Web Store listing', async () => {
   const { release, downloadUrl } = await import(releaseModule.href);
-  for (const id of ['chrome', 'macOSAppleSilicon']) {
-    const destination = release.downloads[id];
-    assert.equal(destination.state, 'unverified');
-    assert.equal(destination.url, null);
-    assert.equal(downloadUrl(destination), null);
-  }
+  const expected =
+    'https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh';
+  assert.equal(release.downloads.chrome.state, 'verified');
+  assert.equal(release.downloads.chrome.url, expected);
+  assert.equal(downloadUrl(release.downloads.chrome), expected);
+  assert.equal(release.extensionVersion, '0.1.1');
+});
+
+test('unpublished macOS destination remains fail-closed', async () => {
+  const { release, downloadUrl } = await import(releaseModule.href);
+  const destination = release.downloads.macOSAppleSilicon;
+  assert.equal(destination.state, 'unverified');
+  assert.equal(destination.url, null);
+  assert.equal(downloadUrl(destination), null);
 });
 
 test('only explicitly verified HTTPS destinations become links', async () => {

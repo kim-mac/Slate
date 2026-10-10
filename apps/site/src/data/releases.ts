@@ -26,7 +26,10 @@ export const release = {
       sha256:
         'EDD641A2231AE846B224FCE0BAA4B7E11FCFBAA63E75D08B2F6FCD9117CFF57C',
     },
-    chrome: { state: 'unverified', url: null },
+    chrome: {
+      state: 'verified',
+      url: 'https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh',
+    },
     macOSAppleSilicon: { state: 'unverified', url: null },
   },
 } as const satisfies {

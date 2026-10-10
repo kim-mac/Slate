@@ -242,7 +242,7 @@ test('local navigation and asset destinations resolve in static output', () => {
   }
 });
 
-test('published Windows assets are linked without exposing the CWS upload ZIP or store', () => {
+test('published Windows assets and official Chrome listing are linked without exposing the CWS upload ZIP', () => {
   const html = page();
   const installers = [...html.matchAll(/href="([^"]+\.exe)"/g)].map(
     (match) => match[1],
@@ -251,11 +251,16 @@ test('published Windows assets are linked without exposing the CWS upload ZIP or
     'https://github.com/kim-mac/Slate/releases/download/v0.1.0/Slate-0.1.0-Windows-ARM64.exe',
     'https://github.com/kim-mac/Slate/releases/download/v0.1.0/Slate-0.1.0-Windows-x64.exe',
   ]);
-  assert.doesNotMatch(html, /href="[^"]*(?:\.zip|chromewebstore\.google\.com)/);
-  assert.match(
-    html,
-    /<button[^>]*disabled[^>]*title="Store listing not available yet"[^>]*>[\s\S]*?Add to Chrome/,
+  assert.doesNotMatch(html, /href="[^"]*\.zip/);
+  assert.deepEqual(
+    [
+      ...html.matchAll(/href="(https:\/\/chromewebstore\.google\.com[^"]*)"/g),
+    ].map((match) => match[1]),
+    [
+      'https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh',
+    ],
   );
+  assert.doesNotMatch(html, /not yet available on the Chrome Web Store/i);
   assert.doesNotMatch(html, /Public download links are not live yet/);
   assert.doesNotMatch(html, /Download for macOS|Apple Silicon/);
 });

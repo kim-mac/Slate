@@ -99,7 +99,7 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
           </div>
         </div>
         <p class="extension-description">
-          Pairs with the desktop app. Not yet available on the Chrome Web Store.
+          Requires Slate Desktop to save to your local library.
         </p>
         {chromeUrl ? (
           <a class="button secondary" href={chromeUrl}>
@@ -111,7 +111,7 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
             class="button secondary"
             type="button"
             disabled
-            title="Store listing not available yet"
+            title="Chrome installation unavailable"
           >
             Add to Chrome
             <Icon name="arrow" />

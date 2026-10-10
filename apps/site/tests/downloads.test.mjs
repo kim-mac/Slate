@@ -220,7 +220,7 @@ test('detection fails closed when Client Hints are absent, withheld, rejected or
   );
 });
 
-test('built download panel enables the exact Windows assets and preserves hashes and unavailable Chrome', () => {
+test('built download panel enables official Windows and Chrome destinations while preserving hashes and Desktop pairing', () => {
   const html = readFileSync(
     new URL('../dist/index.html', import.meta.url),
     'utf8',
@@ -268,11 +268,27 @@ test('built download panel enables the exact Windows assets and preserves hashes
   assert.match(section, /For Intel &amp; AMD PCs/);
   assert.match(section, /For Windows-on-ARM PCs/);
   assert.match(section, /Chrome extension/);
-  assert.doesNotMatch(section, /href="[^"]*(?:\.zip|chromewebstore)/);
+  assert.doesNotMatch(section, /href="[^"]*\.zip/);
+  const chromeLink = section.match(
+    /<a\b([^>]*href="https:\/\/chromewebstore\.google\.com\/detail\/slate\/hgbfaclkpmcecikjepoejgjccddjbekh"[^>]*)>([\s\S]*?)<\/a>/,
+  );
+  assert.ok(
+    chromeLink,
+    'Add to Chrome must link to the official store listing',
+  );
+  assert.match(chromeLink[1], /class="button secondary"/);
+  assert.doesNotMatch(
+    chromeLink[1],
+    /\bdisabled\b|aria-disabled="true"|\bdownload=/,
+  );
+  assert.match(chromeLink[2], /Add to Chrome/);
   assert.match(
     section,
-    /<button[^>]*disabled[^>]*title="Store listing not available yet"[^>]*>[\s\S]*?Add to Chrome/,
+    /Requires Slate Desktop to save to your local library\./,
   );
-  assert.match(section, /Not yet available on the Chrome Web Store\./);
+  assert.doesNotMatch(
+    section,
+    /not yet available|Store listing not available yet/i,
+  );
   assert.match(section, /<p class="small-note download-safety">/);
 });
