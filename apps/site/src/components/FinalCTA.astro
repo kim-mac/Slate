@@ -48,12 +48,6 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
                     class="button secondary"
                     href={url}
                     download={artifact.filename}
-                    data-analytics-event={
-                      id === 'windowsX64'
-                        ? 'download_windows_x64'
-                        : 'download_windows_arm64'
-                    }
-                    data-analytics-location="downloads"
                   >
                     Download {artifact.architecture}
                     <Icon name="download" />
@@ -108,12 +102,7 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
           Requires Slate Desktop to save to your local library.
         </p>
         {chromeUrl ? (
-          <a
-            class="button secondary"
-            href={chromeUrl}
-            data-analytics-event="chrome_store_click"
-            data-analytics-location="downloads"
-          >
+          <a class="button secondary" href={chromeUrl}>
             Add to Chrome
             <Icon name="arrow" />
           </a>

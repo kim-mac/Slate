@@ -112,7 +112,7 @@ test('all launch routes preserve accessible structure, safe links, themes and co
     }
     assert.equal(
       (html.match(/<script\b/g) ?? []).length,
-      route === 'index.html' ? 4 : 2,
+      route === 'index.html' ? 3 : 1,
     );
     assert.doesNotMatch(html, /<form|astro-island|<iframe|googletagmanager/);
   }

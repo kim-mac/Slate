@@ -48,10 +48,7 @@ test('built homepage keeps the approved compact hierarchy', () => {
     supportingCopy?.replace(/\s+/g, ' ').trim(),
     'Save useful information from ChatGPT, Claude, the web, and your desktop directly to your private local library without having to copy and paste.',
   );
-  const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/)?.[1];
-  assert.ok(main);
-  assert.equal((main.match(/<section(?:\s|>)/g) ?? []).length, 3);
-  assert.doesNotMatch(main, /data-analytics-consent/);
+  assert.equal((html.match(/<section(?:\s|>)/g) ?? []).length, 3);
   assert.doesNotMatch(html, /id="(?:local-first|workflows)"/);
 });
 
@@ -406,14 +403,19 @@ test('preview omits the caption and feature cards prioritize capture without bre
   );
 });
 
-test('site ships no hydrated app or forms and bundles consent-gated analytics locally', () => {
-  for (const path of ['index.html', 'privacy/index.html']) {
+test('site ships only its existing UI scripts with no application tracking or consent controls', () => {
+  for (const path of [
+    'index.html',
+    'privacy/index.html',
+    'support/index.html',
+    '404.html',
+  ]) {
     const html = page(path);
     assert.doesNotMatch(html, /astro-island|<iframe|<form/);
     const scripts = [
       ...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g),
     ];
-    assert.equal(scripts.length, path === 'index.html' ? 4 : 2);
+    assert.equal(scripts.length, path === 'index.html' ? 3 : 1);
     assert.match(scripts[0][1], /data-slate-theme/);
     assert.doesNotMatch(scripts[0][1], /\bsrc=/);
     if (path === 'index.html') {
@@ -430,21 +432,48 @@ test('site ships no hydrated app or forms and bundles consent-gated analytics lo
             script[2],
             /requestAnimationFrame|setInterval|fetch\(/,
           );
-        } else if (index === 1) {
+        } else {
           assert.match(script[2], /getHighEntropyValues/);
           assert.match(script[2], /clipboard\.writeText/);
-        } else {
-          assert.match(script[2], /data-slate-analytics/);
         }
       }
     }
     assert.doesNotMatch(
       html,
-      /googletagmanager|google-analytics|plausible\.io|segment\.com/,
+      /posthog|googletagmanager|google-analytics|plausible\.io|segment\.com/i,
     );
-    assert.match(html, /data-analytics-consent/);
+    assert.doesNotMatch(
+      html,
+      /data-(?:slate-analytics|analytics-)|Analytics preferences/,
+    );
     assert.doesNotMatch(html, /<script[^>]*src="https?:\/\//);
   }
+  for (const path of readdirSync(output, { recursive: true })) {
+    if (!/\.(?:html|js)$/.test(path)) continue;
+    const content = readFileSync(resolve(output, path), 'utf8');
+    assert.doesNotMatch(
+      content,
+      /posthog|PUBLIC_POSTHOG_KEY|data-analytics-|slate-site-analytics-consent|phc_[A-Za-z0-9_-]+/i,
+      'Unexpected application analytics in ' + path,
+    );
+  }
+});
+
+test('website privacy disclosure retains hosting analytics and theme storage without consent claims', () => {
+  const html = page('privacy/index.html').replace(/\s+/g, ' ');
+  assert.match(html, /Cloudflare Web Analytics/);
+  assert.match(
+    html,
+    /website traffic and performance without analytics cookies/,
+  );
+  assert.ok(
+    /theme preference in browser localStorage/.test(html),
+    'Privacy disclosure must retain theme preference storage',
+  );
+  assert.doesNotMatch(
+    html,
+    /PostHog|withdraw consent|analytics consent preferences/i,
+  );
 });
 
 test('both pages expose an accessible compact theme toggle and dark surfaces', () => {

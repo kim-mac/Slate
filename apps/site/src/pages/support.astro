@@ -25,13 +25,7 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
         <li>
           Install the{' '}
           {chromeUrl ? (
-            <a
-              href={chromeUrl}
-              data-analytics-event="chrome_store_click"
-              data-analytics-location="support"
-            >
-              Slate Chrome extension
-            </a>
+            <a href={chromeUrl}>Slate Chrome extension</a>
           ) : (
             'Slate Chrome extension'
           )}{' '}
@@ -105,8 +99,6 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
         Visit
         <a
           href={site.repositoryUrl}
-          data-analytics-event="github_click"
-          data-analytics-location="support"
           target="_blank"
           rel="noopener noreferrer"
           title="Open Slate on GitHub in a new tab"

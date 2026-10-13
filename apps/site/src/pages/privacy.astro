@@ -131,9 +131,10 @@ import { release } from '../data/releases';
       <p>
         Slate Desktop and the Chrome extension have no account or authentication
         service, cloud sync, application analytics, or telemetry SDK. They do
-        not upload usage events, diagnostics, or crash reports. Optional website
-        analytics is separate and described below. This does not control
-        telemetry from your browser, operating system, or other software.
+        not upload usage events, diagnostics, or crash reports. Hosting
+        analytics for this website is separate and described below. This does
+        not control telemetry from your browser, operating system, or other
+        software.
       </p>
     </section>
     <section>
@@ -154,38 +155,16 @@ import { release } from '../data/releases';
     <section>
       <h2>This website</h2>
       <p>
-        This site saves your theme and analytics consent preferences in browser
-        localStorage. It has no account forms. Optional PostHog website
-        analytics loads only after you accept. You can decline or withdraw
-        consent using Analytics preferences in the footer. A browser Do Not
-        Track or Global Privacy Control signal prevents PostHog collection even
-        if you previously accepted.
-      </p>
-      <p>
-        With consent, PostHog US Cloud receives page visits and clicks on
-        Windows downloads, Chrome Web Store installation, and GitHub links.
-        Events include a public page path, the link's location and platform, and
-        limited campaign labels (utm_source, utm_medium, utm_campaign) when
-        present. Full URL queries, fragments, and referrer URLs are not sent.
-        Campaign labels must not contain personal information. No saved clips,
+        This site saves your theme preference in browser localStorage. It has no
+        account forms or application-managed analytics tracking. No saved clips,
         selected text, clipboard content, or desktop library data is accessed by
-        website analytics.
-      </p>
-      <p>
-        PostHog uses a temporary in-memory event identifier, not a persistent
-        visitor identifier or identified user profile. Session replay, heatmaps,
-        automatic interaction capture, and web-vitals collection are disabled.
-        We request that PostHog discard IP-derived analytics information;
-        network requests still expose ordinary connection information to service
-        providers. Withdrawing consent stops future collection, but does not
-        delete events already received by PostHog.
+        this website.
       </p>
       <p>
         Cloudflare Web Analytics is enabled separately through our hosting
         provider. It measures website traffic and performance without analytics
-        cookies and is not controlled by the PostHog consent preference.
-        Cloudflare also receives ordinary request information to serve and
-        protect this site. These website services are separate from Slate's
+        cookies. Cloudflare also receives ordinary request information to serve
+        and protect this site. These website services are separate from Slate's
         local clip storage.
       </p>
     </section>
