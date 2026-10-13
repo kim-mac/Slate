@@ -15,12 +15,22 @@ import { site } from '../data/site';
       <a href="/support/">Support</a>
       <a
         href={site.repositoryUrl}
+        data-analytics-event="github_click"
+        data-analytics-location="footer"
         target="_blank"
         rel="noopener noreferrer"
         title="Open Slate on GitHub in a new tab"
       >
         GitHub <span aria-hidden="true">↗</span>
       </a>
+      <button
+        class="analytics-settings"
+        type="button"
+        data-analytics-settings
+        hidden
+      >
+        Analytics preferences
+      </button>
       <span>v{release.version}</span>
     </nav>
   </div>

@@ -1,0 +1,60 @@
+---
+import '../styles/analytics.css';
+const token = import.meta.env.PUBLIC_POSTHOG_KEY ?? '';
+---
+
+<div data-slate-analytics data-project-token={token} data-project-id="659159">
+  <section
+    class="analytics-consent"
+    data-analytics-consent
+    aria-labelledby="analytics-title"
+    hidden
+  >
+    <h2 id="analytics-title">Optional website analytics</h2>
+    <p data-analytics-status role="status"></p>
+    <p class="analytics-note">
+      Your choice applies to PostHog. Cloudflare Web Analytics is managed
+      separately by our hosting provider.{' '}
+      <a href="/privacy/">Privacy details</a>
+    </p>
+    <div class="analytics-actions">
+      <button class="button secondary" type="button" data-analytics-decline>
+        Decline
+      </button>
+      <button
+        class="button secondary"
+        type="button"
+        data-analytics-withdraw
+        hidden
+      >
+        Withdraw consent
+      </button>
+      <button class="button primary" type="button" data-analytics-accept>
+        Accept analytics
+      </button>
+      <button class="analytics-dismiss" type="button" data-analytics-close>
+        Close
+      </button>
+    </div>
+  </section>
+</div>
+
+<script>
+  import { initializeAnalytics } from '../scripts/analytics';
+  const root = document.querySelector<HTMLElement>('[data-slate-analytics]');
+  if (root) {
+    const dispose = initializeAnalytics(
+      document,
+      window,
+      root.dataset.projectToken ?? '',
+      async () => {
+        const { default: posthog } = await import('posthog-js/no-external');
+        return posthog;
+      },
+    );
+    // Normal Astro full-document navigation: exactly one initialization per page.
+    window.addEventListener('pagehide', (event) => {
+      if (!event.persisted) dispose();
+    });
+  }
+</script>
