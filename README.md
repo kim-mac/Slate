@@ -6,6 +6,8 @@ then find and reuse it from your own private, local-first library.
 
 **Capture → find → reuse.** No Slate account required.
 
+**[Website](https://tryslate.tech/) · [Download for Windows](https://github.com/kim-mac/Slate/releases) · [Chrome extension](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh)**
+
 ## What Slate does
 
 - **Save from AI conversations:** use the floating Save control on supported
@@ -28,30 +30,37 @@ refreshes approximately every two seconds while visible in Search mode. Create
 and Edit drafts are not refreshed. Manual Refresh remains available in the main
 library; the main window does not continuously poll.
 
-## Platforms and release status
+## Download and availability
 
-Slate is preparing its first public release:
+Slate is publicly available for Windows, with a companion extension published on
+the Chrome Web Store. The [source repository](https://github.com/kim-mac/Slate)
+is public.
 
-| Component        | Release candidate | Platform                                                |
-| ---------------- | ----------------- | ------------------------------------------------------- |
-| Desktop          | 0.1.0             | Windows 11 x64 (Intel/AMD) and ARM64                    |
-| Chrome extension | 0.1.1             | Chrome; Microsoft Edge uses the same CWS package for V1 |
-| macOS            | Coming soon       | Not released                                            |
+| Component | Current public version | Availability |
+| --- | --- | --- |
+| Desktop | 0.1.0 | Windows 11 x64 (Intel/AMD) and ARM64 |
+| Chrome extension | 0.1.1 | [Chrome Web Store](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh) |
+| macOS | Not released | Planned |
 
-The GitHub repository is currently private. The GitHub Release, Chrome Web Store
-listing, and website are not published yet. Verified download and store links
-will be added after publication. Unpacked extension instructions are for
-development and testing, not a substitute for the public store release.
+**Get started:**
+
+1. Download the appropriate Windows installer from [GitHub Releases](https://github.com/kim-mac/Slate/releases).
+2. Install and launch Slate. The desktop app is required to save browser captures.
+3. Install the [Slate Chrome extension](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh) to capture content from supported AI conversations and webpages.
 
 Browser capture requires the installed Slate native host, provided by the Windows
 installer. WebView2 is required for the desktop UI; if missing, setup downloads
 Microsoft's bootstrapper. Windows 10 and x86/32-bit Windows are not verified
-release targets.
+release targets. Microsoft Edge uses the Chromium extension package, but is not
+listed here as a separately verified store release.
 
 The initial Windows installers are unsigned. Microsoft Defender SmartScreen may
-show a warning or an unknown publisher. After publication, use verified official
-downloads and compare their SHA-256 checksums. Do not disable Windows security
-protections.
+show a warning or an unknown publisher. Use official downloads and compare any
+published SHA-256 checksums. Do not disable Windows security protections.
+
+**Updates:** Desktop v0.1.0 does not include automatic updates. Download newer
+releases manually from GitHub Releases when available. Automatic updating is
+under development and is not enabled in the public v0.1.0 release.
 
 ## How it works and privacy
 
