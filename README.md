@@ -44,7 +44,7 @@ is public.
 
 **Get started:**
 
-1. Download the appropriate Windows installer from [GitHub Releases](https://github.com/kim-mac/Slate/releases).
+1. Download the appropriate Windows installer from [Slate Website](https://tryslate.tech/) or [GitHub Releases](https://github.com/kim-mac/Slate/releases).
 2. Install and launch Slate. The desktop app is required to save browser captures.
 3. Install the [Slate Chrome extension](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh) to capture content from supported AI conversations and webpages.
 
