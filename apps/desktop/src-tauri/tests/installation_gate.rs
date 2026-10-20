@@ -71,20 +71,40 @@ fn fixture() -> PathBuf {
         .join("dist")
         .join("test")
         .join("updater-maintenance-gate")
-        .join(format!(
-            "{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        .join(format!("{}-{}", std::process::id(), uuid::Uuid::new_v4()));
     std::fs::create_dir_all(root.parent().unwrap()).unwrap();
     InstallationGate::create_test_profile(&root).expect("secure fixture profile must be new");
     root
 }
 fn gate_path(root: &std::path::Path) -> PathBuf {
     InstallationGate::prepare_test_namespace(root).unwrap()
+}
+
+#[test]
+fn concurrent_fixture_creation_uses_distinct_secure_profiles() {
+    let barrier = Arc::new(std::sync::Barrier::new(16));
+    let workers: Vec<_> = (0..16)
+        .map(|_| {
+            let barrier = Arc::clone(&barrier);
+            std::thread::spawn(move || {
+                barrier.wait();
+                (0..4).map(|_| fixture()).collect::<Vec<_>>()
+            })
+        })
+        .collect();
+    let roots: Vec<_> = workers
+        .into_iter()
+        .flat_map(|worker| worker.join().expect("fixture worker must succeed"))
+        .collect();
+    assert_eq!(roots.len(), 64);
+    assert_eq!(
+        roots.iter().collect::<std::collections::HashSet<_>>().len(),
+        64
+    );
+    for root in roots {
+        let gate = InstallationGate::for_test_root(&root).unwrap();
+        let _activity = gate.admit().unwrap();
+    }
 }
 
 #[test]
