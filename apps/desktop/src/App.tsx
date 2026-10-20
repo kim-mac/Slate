@@ -10,6 +10,12 @@ import { ListFilter, Moon, Plus, RefreshCw, Search, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useClipLibrary } from './hooks/useClipLibrary';
+import { useInstallationSafety } from './hooks/useInstallationSafety';
+import {
+  tauriInstallationSafetyClient,
+  type InstallationSafetyClient,
+  type SafetyLease,
+} from './installationSafetyClient';
 import {
   hasSameSourceHint,
   libraryItemRef,
@@ -46,6 +52,8 @@ import {
 
 import { tauriClipClient, type ClipClient } from './clipClient';
 import { tauriStartupClient, type StartupClient } from './startupClient';
+import { tauriUpdaterClient, type UpdaterClient } from './updaterClient';
+import { useUpdater } from './hooks/useUpdater';
 import { AppSidebar, type AppView } from './components/AppSidebar';
 import { ClipDetail } from './components/ClipDetail';
 import { MergedClipDetail } from './components/MergedClipDetail';
@@ -98,6 +106,8 @@ type DetailOrigin = {
 interface AppProps {
   client?: ClipClient;
   startupClient?: StartupClient;
+  updaterClient?: UpdaterClient;
+  safetyClient?: InstallationSafetyClient;
 }
 
 function safeErrorMessage(error: unknown): string {
@@ -117,7 +127,15 @@ function safeErrorMessage(error: unknown): string {
 export function App({
   client = tauriClipClient,
   startupClient = tauriStartupClient,
+  updaterClient = tauriUpdaterClient,
+  safetyClient = tauriInstallationSafetyClient,
 }: AppProps) {
+  const safety = useInstallationSafety(safetyClient);
+  const editorLease = useRef<SafetyLease | null>(null);
+  const confirmationLease = useRef<SafetyLease | null>(null);
+  const editorOpening = useRef(false);
+  const editorClosing = useRef(false);
+  const confirmationOpening = useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<AppView>('all');
   const [expandedSection, setExpandedSection] = useState<Exclude<
@@ -140,6 +158,10 @@ export function App({
   const [isSaving, setIsSaving] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const operationPending = useRef(false);
+  const updateBlocked = Boolean(
+    formMode || deleteTarget || isSaving || isBusy || safety.frozen,
+  );
+  const updater = useUpdater(updaterClient, updateBlocked);
   const [contentType, setContentType] = useState<ClipContentType | 'all'>(
     'all',
   );
@@ -178,7 +200,8 @@ export function App({
     setStatus({ message, id: ++noticeId.current });
   }
   function beginOperation() {
-    if (operationPending.current || isRefreshing || isLoading) return false;
+    if (operationPending.current || isRefreshing || isLoading || safety.frozen)
+      return false;
     operationPending.current = true;
     invalidate();
     setIsBusy(true);
@@ -302,15 +325,110 @@ export function App({
     setWorkspaceMode('calendar');
   }
 
+  async function openEditor(mode: FormMode) {
+    if (
+      editorOpening.current ||
+      editorClosing.current ||
+      formMode ||
+      operationPending.current
+    )
+      return;
+    editorOpening.current = true;
+    try {
+      // A completed save may have lost its release acknowledgement. Retry only
+      // the lease cleanup, never the already-confirmed database mutation.
+      if (editorLease.current) {
+        if (!(await safety.release(editorLease.current))) return;
+        editorLease.current = null;
+      }
+      const lease = await safety.acquire('editor');
+      if (!lease) {
+        setActionError('Slate is not ready to open an editor. Try again.');
+        return;
+      }
+      editorLease.current = lease;
+      setFormError(null);
+      if (mode.type === 'create') {
+        exitSelectionMode();
+        setActiveView('all');
+        setExpandedSection('all');
+      }
+      setFormMode(mode);
+    } finally {
+      editorOpening.current = false;
+    }
+  }
   function editClip(clip: Clip) {
+    void openEditor({ type: 'edit', clip });
+  }
+  async function cancelEditor() {
+    if (
+      operationPending.current ||
+      isSaving ||
+      editorOpening.current ||
+      editorClosing.current
+    )
+      return false;
+    editorClosing.current = true;
+    // Cancellation is explicit. End editing before awaiting lease cleanup so
+    // input cannot change after the user has chosen to discard the draft.
+    setFormMode(null);
     setFormError(null);
-    setFormMode({ type: 'edit', clip });
+    try {
+      if (!(await safety.release(editorLease.current))) return false;
+      editorLease.current = null;
+      return true;
+    } finally {
+      editorClosing.current = false;
+    }
+  }
+  async function requestDelete(target: DeleteTarget) {
+    if (confirmationOpening.current || deleteTarget || operationPending.current)
+      return;
+    confirmationOpening.current = true;
+    try {
+      if (confirmationLease.current) {
+        if (!(await releaseConfirmation())) return;
+      }
+      const lease = await safety.acquire('confirmation');
+      if (!lease) {
+        setActionError('Slate is not ready to open a confirmation. Try again.');
+        return;
+      }
+      confirmationLease.current = lease;
+      setDeleteTarget(target);
+    } finally {
+      confirmationOpening.current = false;
+    }
+  }
+  async function releaseConfirmation() {
+    if (!(await safety.release(confirmationLease.current))) return false;
+    confirmationLease.current = null;
+    return true;
+  }
+
+  function afterEditorClosed(navigate: () => void) {
+    if (
+      editorOpening.current ||
+      editorClosing.current ||
+      operationPending.current
+    )
+      return;
+    if (!editorLease.current) {
+      navigate();
+      return;
+    }
+    void cancelEditor().then((closed) => {
+      if (closed) navigate();
+    });
   }
 
   function showLibrary(view: Exclude<AppView, 'settings'>) {
-    setActiveView(view);
-    setExpandedSection(view);
-    setFormMode(null);
+    afterEditorClosed(() => {
+      setActiveView(view);
+      setExpandedSection(view);
+      setFormMode(null);
+    });
   }
 
   useEffect(() => {
@@ -321,9 +439,11 @@ export function App({
   }, [clips]);
 
   function toggleLibrarySection(view: Exclude<AppView, 'settings'>) {
-    setActiveView(view);
-    setExpandedSection((current) => (current === view ? null : view));
-    setFormMode(null);
+    afterEditorClosed(() => {
+      setActiveView(view);
+      setExpandedSection((current) => (current === view ? null : view));
+      setFormMode(null);
+    });
   }
 
   async function saveClip(input: ClipInput) {
@@ -350,6 +470,7 @@ export function App({
         if (createdMonth) setVisibleMonth(createdMonth);
         openClip(created.id, { type: 'create' });
       }
+      if (await safety.release(editorLease.current)) editorLease.current = null;
       setFormMode(null);
       setFormError(null);
       notify('Clip saved.');
@@ -401,6 +522,7 @@ export function App({
     } catch (deleteError) {
       setActionError(safeErrorMessage(deleteError));
     } finally {
+      await releaseConfirmation();
       finishOperation();
     }
   }
@@ -468,6 +590,7 @@ export function App({
     } catch (error) {
       setActionError(safeErrorMessage(error));
     } finally {
+      await releaseConfirmation();
       finishOperation();
     }
   }
@@ -492,6 +615,7 @@ export function App({
     } catch (error) {
       setActionError(safeErrorMessage(error));
     } finally {
+      await releaseConfirmation();
       finishOperation();
     }
   }
@@ -666,6 +790,8 @@ export function App({
           onOpenChange={setSidebarOpen}
         >
           <AppSidebar
+            updater={updater}
+            updateBlocked={updateBlocked}
             activeView={activeView}
             allCount={clips.length}
             clips={sidebarClips}
@@ -688,9 +814,11 @@ export function App({
             onToggleSelection={toggleSelection}
             onSelectView={(view) => {
               if (view === 'settings') {
-                exitSelectionMode();
-                setActiveView('settings');
-                setFormMode(null);
+                afterEditorClosed(() => {
+                  exitSelectionMode();
+                  setActiveView('settings');
+                  setFormMode(null);
+                });
               } else {
                 showLibrary(view);
               }
@@ -773,13 +901,7 @@ export function App({
                       <>
                         <Button
                           size="sm"
-                          onClick={() => {
-                            exitSelectionMode();
-                            setActiveView('all');
-                            setExpandedSection('all');
-                            setFormMode({ type: 'create' });
-                            setFormError(null);
-                          }}
+                          onClick={() => void openEditor({ type: 'create' })}
                           disabled={isLoading || isRefreshing || isBusy}
                         >
                           <Plus aria-hidden="true" />
@@ -911,7 +1033,7 @@ export function App({
                       onBack={() => returnToCalendar()}
                       onCopy={() => void copyClip(selectedClip.clip)}
                       onDelete={() =>
-                        setDeleteTarget({
+                        void requestDelete({
                           type: 'clip',
                           clip: selectedClip.clip,
                         })
@@ -936,7 +1058,7 @@ export function App({
                         void unmergeMember(selectedClip.group, clip)
                       }
                       onDeleteMember={(clip) =>
-                        setDeleteTarget({
+                        void requestDelete({
                           type: 'member',
                           groupId: selectedClip.group.id,
                           clip,
@@ -946,7 +1068,7 @@ export function App({
                         void unmergeGroup(selectedClip.group)
                       }
                       onDeleteGroup={() =>
-                        setDeleteTarget({
+                        void requestDelete({
                           type: 'group',
                           group: selectedClip.group,
                         })
@@ -975,7 +1097,7 @@ export function App({
                       }}
                       onCopyClip={(clip) => void copyClip(clip)}
                       onDeleteItem={(item) =>
-                        setDeleteTarget(
+                        void requestDelete(
                           item.kind === 'clip'
                             ? { type: 'clip', clip: item.clip }
                             : { type: 'group', group: item.group },
@@ -1055,7 +1177,7 @@ export function App({
               )}
 
               {activeView === 'settings' && (
-                <SettingsView startupClient={startupClient} />
+                <SettingsView startupClient={startupClient} updater={updater} />
               )}
             </div>
           </SidebarInset>
@@ -1077,8 +1199,7 @@ export function App({
             open
             onOpenChange={(open) => {
               if (!open) {
-                setFormMode(null);
-                setFormError(null);
+                void cancelEditor();
               }
             }}
             onSubmit={saveClip}
@@ -1088,7 +1209,11 @@ export function App({
         <AlertDialog
           open={deleteTarget !== null}
           onOpenChange={(open) => {
-            if (!open) setDeleteTarget(null);
+            if (!open && !operationPending.current) {
+              void releaseConfirmation().then((released) => {
+                if (released) setDeleteTarget(null);
+              });
+            }
           }}
         >
           <AlertDialogContent>
@@ -1110,7 +1235,8 @@ export function App({
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 variant="destructive"
-                onClick={() => {
+                onClick={(event) => {
+                  event.preventDefault();
                   if (deleteTarget?.type === 'clip')
                     void deleteClip(deleteTarget.clip);
                   else if (deleteTarget?.type === 'member')

@@ -16,7 +16,7 @@ fn permissions(value: &Value) -> BTreeSet<String> {
 }
 
 #[test]
-fn main_has_only_library_launcher_status_and_autostart_commands() {
+fn main_has_only_library_launcher_status_autostart_and_guarded_updater_commands() {
     let main = config("capabilities/default.json");
     assert_eq!(main["windows"], json!(["main"]));
     assert_eq!(
@@ -39,6 +39,19 @@ fn main_has_only_library_launcher_status_and_autostart_commands() {
                 "allow-get-launcher-status",
                 "allow-get-autostart-enabled",
                 "allow-set-autostart-enabled",
+                "allow-get-update-status",
+                "allow-check-for-updates",
+                "allow-download-update",
+                "allow-cancel-update",
+                "allow-dismiss-update",
+                "allow-restart-to-update",
+                "allow-connect-installation-safety",
+                "allow-get-installation-safety-status",
+                "allow-acquire-installation-lease",
+                "allow-release-installation-lease",
+                "allow-acknowledge-installation-safety",
+                "core:event:allow-listen",
+                "core:event:allow-unlisten",
                 "core:app:allow-version",
             ]
             .map(str::to_owned)
@@ -63,6 +76,11 @@ fn launcher_has_only_create_update_delete_read_copy_lifecycle_and_event_subscrip
                 "allow-launcher-ready",
                 "allow-hide-launcher",
                 "allow-open-tin-from-launcher",
+                "allow-connect-installation-safety",
+                "allow-get-installation-safety-status",
+                "allow-acquire-installation-lease",
+                "allow-release-installation-lease",
+                "allow-acknowledge-installation-safety",
                 "core:event:allow-listen",
                 "core:event:allow-unlisten",
                 "core:window:allow-start-dragging",
@@ -96,6 +114,17 @@ fn every_application_command_is_registered_in_generated_acl_metadata() {
         "open_tin_from_launcher",
         "get_autostart_enabled",
         "set_autostart_enabled",
+        "get_update_status",
+        "check_for_updates",
+        "download_update",
+        "cancel_update",
+        "dismiss_update",
+        "restart_to_update",
+        "connect_installation_safety",
+        "get_installation_safety_status",
+        "acquire_installation_lease",
+        "release_installation_lease",
+        "acknowledge_installation_safety",
     ] {
         let allow = format!("allow-{}", command.replace('_', "-"));
         assert_eq!(

@@ -4,12 +4,78 @@ use std::process::{Command, Output};
 
 use serde_json::Value;
 
-const RELEASE_VERSION: &str = "0.1.0";
+const RELEASE_VERSION: &str = "0.3.0";
 const HOST_NAME: &str = "com.aiclipmemory.bridge";
 const HOST_EXECUTABLE: &str = "ai-clip-memory-native-host.exe";
 const CHROME_ID: &str = "jjfaegknedfakmidhhdlmbebnjafcjfi";
 const CHROME_WEB_STORE_ID: &str = "hgbfaclkpmcecikjepoejgjccddjbekh";
 const EDGE_ID: &str = "jcfcmapapjlgpbkcgcaeggeblgpidkoo";
+
+#[test]
+fn nsis_owns_independent_maintenance_and_never_forces_processes() {
+    let root = repository_root().join("apps/desktop/src-tauri/windows");
+    let template = read(root.join("installer.nsi"));
+    assert!(!template.contains("!insertmacro CheckIfAppIsRunning"));
+    let gate = read(root.join("maintenance-gate.nsh"));
+    for required in [
+        "--export-maintenance-handle",
+        "LockFileEx",
+        "30000",
+        "RmStartSession",
+        "RmRegisterResources",
+        "RmGetList",
+        "RmEndSession",
+        "ai-clip-memory-native-host.exe",
+    ] {
+        assert!(gate.contains(required), "missing {required}");
+    }
+    for forbidden in [
+        "RmShutdown",
+        "taskkill",
+        "nsProcess",
+        "WM_CLOSE",
+        "TerminateProcess",
+    ] {
+        assert!(!gate.contains(forbidden));
+    }
+    for (init, call) in [
+        ("Function .onInit", "Call SlateAcquireMaintenance"),
+        ("Function un.onInit", "Call un.SlateAcquireMaintenance"),
+    ] {
+        let body = template
+            .split_once(init)
+            .unwrap()
+            .1
+            .split_once("FunctionEnd")
+            .unwrap()
+            .0;
+        assert!(body.contains(call));
+    }
+    let reinstall = template
+        .split_once("  reinst_uninstall:")
+        .unwrap()
+        .1
+        .split_once("  reinst_done:")
+        .unwrap()
+        .0;
+    assert!(!reinstall.contains("ExecWait"));
+    assert!(reinstall.contains("Abort"));
+    let restart = template
+        .split_once("Function RunMainBinary")
+        .unwrap()
+        .1
+        .split_once("FunctionEnd")
+        .unwrap()
+        .0;
+    assert!(
+        restart.find("Call CreateOrUpdateDesktopShortcut").unwrap()
+            < restart.find("Call SlateReleaseMaintenance").unwrap()
+    );
+    assert!(
+        restart.find("Call SlateReleaseMaintenance").unwrap() < restart.find("RunAsUser").unwrap()
+    );
+    assert!(restart.contains("${BST_UNCHECKED}"));
+}
 
 fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -104,19 +170,27 @@ fn release_versions_preserve_desktop_and_independent_extension_version() {
     for path in [
         root.join("package.json"),
         root.join("apps/desktop/package.json"),
-        root.join("apps/extension/package.json"),
-        root.join("packages/shared/package.json"),
         root.join("apps/desktop/src-tauri/tauri.conf.json"),
     ] {
         let document = read_json(&path);
         assert_eq!(
             document["version"].as_str(),
             Some(RELEASE_VERSION),
-            "{} must use the MVP release version",
+            "{} must use the desktop release version",
             path.display()
         );
     }
 
+    // Workspace library/extension package versions are independent of Desktop.
+    for path in [
+        "apps/extension/package.json",
+        "packages/shared/package.json",
+    ] {
+        assert_eq!(
+            read_json(root.join(path))["version"].as_str(),
+            Some("0.1.0")
+        );
+    }
     let desktop_version = read_json(root.join("package.json"));
     let extension_version = read_json(root.join("apps/extension/public/manifest.json"));
     for document in [&desktop_version, &extension_version] {
@@ -140,6 +214,12 @@ fn release_versions_preserve_desktop_and_independent_extension_version() {
     let cargo_manifest = read(root.join("apps/desktop/src-tauri/Cargo.toml"));
     assert_eq!(package_version(&cargo_manifest), RELEASE_VERSION);
     assert_eq!(env!("CARGO_PKG_VERSION"), RELEASE_VERSION);
+    let lock = read(root.join("apps/desktop/src-tauri/Cargo.lock"));
+    let entry = lock
+        .split("[[package]]")
+        .find(|entry| entry.contains("name = \"ai-clip-memory-desktop\""))
+        .expect("desktop Cargo.lock entry must exist");
+    assert!(entry.contains(&format!("version = \"{RELEASE_VERSION}\"")));
 }
 
 #[test]
@@ -359,7 +439,7 @@ fn nsis_public_presentation_uses_slate_without_renaming_installed_identity() {
 
     assert_eq!(configuration["productName"], "AI Clip Memory");
     assert_eq!(configuration["identifier"], "com.aiclipmemory.desktop");
-    assert_eq!(configuration["version"], "0.1.0");
+    assert_eq!(configuration["version"], RELEASE_VERSION);
     assert_eq!(
         configuration["bundle"]["windows"]["nsis"]["customLanguageFiles"]["English"],
         "windows/installer-english.nsh"
@@ -372,12 +452,9 @@ fn nsis_public_presentation_uses_slate_without_renaming_installed_identity() {
     assert!(
         template.contains("WriteRegStr SHCTX \"${UNINSTKEY}\" \"DisplayName\" \"${PUBLICNAME}\"")
     );
-    assert_eq!(
-        template
-            .matches("!insertmacro CheckIfAppIsRunning \"${MAINBINARYNAME}.exe\" \"${PUBLICNAME}\"")
-            .count(),
-        2
-    );
+    assert!(!template.contains("!insertmacro CheckIfAppIsRunning"));
+    assert!(template.contains("Call SlateWaitForProcesses"));
+    assert!(template.contains("Call un.SlateWaitForProcesses"));
     assert!(template.contains("\"Open with ${PUBLICNAME}\""));
 
     assert!(template.contains("!define UNINSTKEY \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${PRODUCTNAME}\""));
@@ -510,19 +587,19 @@ fn installer_migrates_only_its_own_start_menu_shortcut_to_slate() {
 }
 
 #[test]
-fn nsis_desktop_shortcut_uses_a_documented_cli_2_11_4_template() {
+fn nsis_desktop_shortcut_uses_a_documented_cli_2_12_2_template() {
     let root = repository_root();
     let configuration = read_json(root.join("apps/desktop/src-tauri/tauri.conf.json"));
     let template = read(root.join("apps/desktop/src-tauri/windows/installer.nsi"));
 
     assert_eq!(configuration["productName"], "AI Clip Memory");
     assert_eq!(configuration["identifier"], "com.aiclipmemory.desktop");
-    assert_eq!(configuration["version"], "0.1.0");
+    assert_eq!(configuration["version"], RELEASE_VERSION);
     assert_eq!(
         configuration["bundle"]["windows"]["nsis"]["template"],
         "windows/installer.nsi"
     );
-    assert!(template.contains("tauri-cli-v2.11.4"));
+    assert!(template.contains("tauri-cli-v2.12.2"));
     assert!(template.contains("diff-reviewed against upstream"));
     assert!(template
         .contains("!define MUI_FINISHPAGE_SHOWREADME_FUNCTION CreateOrUpdateDesktopShortcut"));
@@ -530,6 +607,128 @@ fn nsis_desktop_shortcut_uses_a_documented_cli_2_11_4_template() {
     assert!(template.contains("${OrIf} ${Silent}"));
     assert!(template.contains("!define PRODUCTNAME \"{{product_name}}\""));
     assert!(template.contains("!define BUNDLEID \"{{bundle_id}}\""));
+}
+
+#[test]
+fn nsis_restart_manager_checks_only_exact_installed_desktop_and_host_paths() {
+    let template = read(repository_root().join("apps/desktop/src-tauri/windows/installer.nsi"));
+    let restart_manager = template
+        .find("!include \"Win\\RestartManager.nsh\"")
+        .expect("RestartManager declarations must remain compatible with the template");
+    assert!(restart_manager < template.find("!include \"utils.nsh\"").unwrap());
+
+    assert!(!template.contains("!insertmacro CheckIfAppIsRunning"));
+    let gate = read(repository_root().join("apps/desktop/src-tauri/windows/maintenance-gate.nsh"));
+    assert!(gate.contains("$INSTDIR\\${MAINBINARYNAME}.exe"));
+    assert!(gate.contains("$INSTDIR\\ai-clip-memory-native-host.exe"));
+    for (section, path_check) in [
+        ("Section Install", "Call SlateWaitForProcesses"),
+        ("Section Uninstall", "Call un.SlateWaitForProcesses"),
+    ] {
+        let body = template
+            .split_once(section)
+            .unwrap()
+            .1
+            .split_once("SectionEnd")
+            .unwrap()
+            .0;
+        assert_eq!(body.matches(path_check).count(), 1, "{section}");
+    }
+    assert!(!template.contains("CheckIfAppIsRunning \"${MAINBINARYNAME}.exe\""));
+}
+
+#[test]
+fn nsis_unattended_downgrades_are_rejected_during_initialization() {
+    let template = read(repository_root().join("apps/desktop/src-tauri/windows/installer.nsi"))
+        .replace("\r\n", "\n");
+    let on_init = template
+        .split_once("Function .onInit")
+        .unwrap()
+        .1
+        .split_once("FunctionEnd")
+        .unwrap()
+        .0;
+    let guard_start = on_init
+        .find("!if \"${ALLOWDOWNGRADES}\" == \"false\"")
+        .expect("unattended downgrade protection must run in .onInit");
+    let guard_end = guard_start + on_init[guard_start..].find("!endif").unwrap();
+    let guard = &on_init[guard_start..guard_end];
+
+    assert!(guard.contains(concat!(
+        "${If} ${Silent}\n",
+        "  ${OrIf} $PassiveMode = 1\n",
+        "  ${OrIf} $UpdateMode = 1"
+    )));
+    assert!(guard.contains(concat!(
+        "ReadRegStr $R0 SHCTX \"${UNINSTKEY}\" \"DisplayVersion\"\n",
+        "    nsis_tauri_utils::SemverCompare \"${VERSION}\" $R0\n",
+        "    Pop $R0\n",
+        "    ; If downgrading\n",
+        "    ${If} $R0 = -1"
+    )));
+    let comparison = guard.find("nsis_tauri_utils::SemverCompare").unwrap();
+    assert!(comparison < guard.find("Abort").unwrap());
+    assert!(guard.contains("FileWrite $0 \"$(silentDowngrades)\""));
+    assert!(guard.contains("MessageBox MB_ICONSTOP \"$(silentDowngrades)\""));
+    assert!(on_init.find("!insertmacro SetContext").unwrap() < guard_start);
+    assert!(on_init.find("!insertmacro MULTIUSER_INIT").unwrap() < guard_start);
+    assert!(
+        guard_end
+            < on_init
+                .find("Call PreflightDesktopShortcutCollision")
+                .unwrap()
+    );
+    assert!(!template.contains("Section EarlyChecks"));
+
+    // Initialization rejects unattended downgrades before the reinstall page
+    // can uninstall anything or sections can change application state.
+    for mutation in [
+        "ExecWait ",
+        "WriteRegStr ",
+        "DeleteReg",
+        "Delete ",
+        "File ",
+        "CreateShortcut ",
+    ] {
+        assert!(
+            !on_init.contains(mutation),
+            "unexpected initialization mutation: {mutation}"
+        );
+    }
+}
+
+#[test]
+fn nsis_update_preserves_autostart_and_app_data() {
+    let template = read(repository_root().join("apps/desktop/src-tauri/windows/installer.nsi"))
+        .replace("\r\n", "\n");
+    let uninstall = template
+        .split_once("Section Uninstall")
+        .unwrap()
+        .1
+        .split_once("SectionEnd")
+        .unwrap()
+        .0;
+    let autostart_delete =
+        "DeleteRegValue HKCU \"Software\\Microsoft\\Windows\\CurrentVersion\\Run\" \"${PRODUCTNAME}\"";
+    assert_eq!(template.matches(autostart_delete).count(), 1);
+    assert!(uninstall.contains(&format!(
+        "${{If}} $UpdateMode <> 1\n    {autostart_delete}\n  ${{EndIf}}"
+    )));
+
+    let data_guard = uninstall
+        .split_once("${If} $DeleteAppDataCheckboxState = 1\n  ${AndIf} $UpdateMode <> 1")
+        .expect("application data deletion requires opt-in and a non-update uninstall")
+        .1
+        .split_once("${EndIf}")
+        .unwrap()
+        .0;
+    for path in ["$APPDATA\\${BUNDLEID}", "$LOCALAPPDATA\\${BUNDLEID}"] {
+        let deletion = format!("RmDir /r \"{path}\"");
+        assert_eq!(template.matches(&deletion).count(), 1);
+        assert!(data_guard.contains(&deletion));
+    }
+    assert!(data_guard.contains("DeleteRegKey SHCTX \"${MANUPRODUCTKEY}\""));
+    assert!(data_guard.contains("SetShellVarContext current"));
 }
 
 #[test]
@@ -1109,8 +1308,8 @@ fn staging_copies_installers_byte_for_byte_and_writes_deterministic_checksums() 
     let output = temporary.path().join("release");
     fs::create_dir_all(&source).expect("the source directory should exist");
 
-    let x64_source = source.join("AI Clip Memory_0.1.0_x64-setup.exe");
-    let arm64_source = source.join("AI Clip Memory_0.1.0_arm64-setup.exe");
+    let x64_source = source.join(format!("AI Clip Memory_{RELEASE_VERSION}_x64-setup.exe"));
+    let arm64_source = source.join(format!("AI Clip Memory_{RELEASE_VERSION}_arm64-setup.exe"));
     fs::write(&x64_source, b"synthetic x64 installer bytes")
         .expect("the x64 fixture should be written");
     fs::write(&arm64_source, b"synthetic arm64 installer bytes")
@@ -1140,8 +1339,8 @@ fn staging_copies_installers_byte_for_byte_and_writes_deterministic_checksums() 
         String::from_utf8_lossy(&result.stderr)
     );
 
-    let x64_public = output.join("Slate-0.1.0-Windows-x64.exe");
-    let arm64_public = output.join("Slate-0.1.0-Windows-ARM64.exe");
+    let x64_public = output.join(format!("Slate-{RELEASE_VERSION}-Windows-x64.exe"));
+    let arm64_public = output.join(format!("Slate-{RELEASE_VERSION}-Windows-ARM64.exe"));
     assert_eq!(
         fs::read(&x64_public).unwrap(),
         fs::read(&x64_source).unwrap()
@@ -1154,8 +1353,8 @@ fn staging_copies_installers_byte_for_byte_and_writes_deterministic_checksums() 
     let sums = read(output.join("SHA256SUMS.txt"));
     let lines: Vec<_> = sums.lines().collect();
     assert_eq!(lines.len(), 2);
-    assert!(lines[0].ends_with("  Slate-0.1.0-Windows-ARM64.exe"));
-    assert!(lines[1].ends_with("  Slate-0.1.0-Windows-x64.exe"));
+    assert!(lines[0].ends_with(&format!("  Slate-{RELEASE_VERSION}-Windows-ARM64.exe")));
+    assert!(lines[1].ends_with(&format!("  Slate-{RELEASE_VERSION}-Windows-x64.exe")));
     assert!(lines.iter().all(|line| {
         let hash = line.split_once("  ").unwrap().0;
         hash.len() == 64

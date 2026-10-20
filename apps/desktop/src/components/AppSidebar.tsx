@@ -9,6 +9,8 @@ import {
 import type { RefObject } from 'react';
 
 import { ClipList } from '@/components/ClipList';
+import { UpdateNotice } from '@/components/UpdateNotice';
+import type { UpdateControls } from '@/updaterClient';
 import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
@@ -34,6 +36,8 @@ export type AppView = 'all' | 'pinned' | 'settings';
 type LibraryView = Exclude<AppView, 'settings'>;
 
 interface AppSidebarProps {
+  updater?: UpdateControls;
+  updateBlocked?: boolean;
   activeView: AppView;
   allCount: number;
   clips: LibraryItem[];
@@ -52,6 +56,8 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({
+  updater,
+  updateBlocked = false,
   activeView,
   allCount,
   clips,
@@ -68,7 +74,7 @@ export function AppSidebar({
   onToggleSelection,
   onSelectView,
 }: AppSidebarProps) {
-  const { state } = useSidebar();
+  const { state, setOpen } = useSidebar();
   const collapsed = state === 'collapsed';
   const sections = [
     {
@@ -161,6 +167,14 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      {updater && (
+        <UpdateNotice
+          controls={updater}
+          blocked={updateBlocked}
+          collapsed={collapsed}
+          onExpand={() => setOpen(true)}
+        />
+      )}
       <SidebarFooter>
         {collapsed ? (
           <Tooltip>

@@ -53,6 +53,15 @@ import {
   type LauncherClipDraft,
 } from './LauncherClipEditor';
 import { observeThemePreference } from '../themePreference';
+import {
+  useInstallationSafety,
+  type InstallationSafety,
+} from '../hooks/useInstallationSafety';
+import {
+  tauriInstallationSafetyClient,
+  type InstallationSafetyClient,
+  type SafetyLease,
+} from '../installationSafetyClient';
 
 type LauncherClient = Pick<
   ClipClient,
@@ -68,12 +77,27 @@ const VISIBLE_REFRESH_INTERVAL_MS = 2_000;
 interface Props {
   client?: LauncherClient;
   host?: LauncherHost;
+  safetyClient?: InstallationSafetyClient;
+}
+interface SessionLeases {
+  editor: SafetyLease | null;
+  confirmation: SafetyLease | null;
+  opening: boolean;
 }
 
 export function Launcher({
   client = tauriClipClient,
   host = tauriLauncherHost,
+  safetyClient = tauriInstallationSafetyClient,
 }: Props) {
+  // Lives above LauncherSession so a hidden window still participates.
+  const safety = useInstallationSafety(safetyClient);
+  const leases = useRef<SessionLeases>({
+    editor: null,
+    confirmation: null,
+    opening: false,
+  });
+  const [renderSession, setRenderSession] = useState(0);
   const [state, setState] = useState<LauncherState>({
     session: 0,
     visible: false,
@@ -81,12 +105,22 @@ export function Launcher({
   const [connectionError, setConnectionError] = useState(false);
   const [connectionAttempt, setConnectionAttempt] = useState(0);
   const focusActive = useRef<((session: number) => void) | null>(null);
+  const latestSession = useRef(0);
   useEffect(() => observeThemePreference(), []);
   useEffect(
     () =>
       connectLauncher(
         host,
         (next) => {
+          if (next.session < latestSession.current) return;
+          latestSession.current = next.session;
+          if (
+            next.visible &&
+            !leases.current.editor &&
+            !leases.current.confirmation &&
+            !leases.current.opening
+          )
+            setRenderSession(next.session);
           setState((current) =>
             next.session < current.session ? current : next,
           );
@@ -97,7 +131,12 @@ export function Launcher({
     [host, connectionAttempt],
   );
 
-  if (connectionError)
+  const retainDraft = Boolean(
+    leases.current.editor ||
+    leases.current.confirmation ||
+    leases.current.opening,
+  );
+  if (connectionError && !retainDraft)
     return (
       <main className="launcher-shell">
         <div className="launcher-state" role="alert">
@@ -116,12 +155,15 @@ export function Launcher({
         </div>
       </main>
     );
-  if (!state.visible) return null;
+  if (!state.visible && !retainDraft) return null;
   return (
     <TooltipProvider>
       <LauncherSession
-        key={state.session}
+        key={renderSession}
         session={state.session}
+        visible={state.visible}
+        safety={safety}
+        leases={leases}
         client={client}
         host={host}
         focusActive={focusActive}
@@ -236,11 +278,17 @@ function LauncherGroupView({
 
 function LauncherSession({
   session,
+  visible,
+  safety,
+  leases,
   client,
   host,
   focusActive,
 }: {
   session: number;
+  visible: boolean;
+  safety: InstallationSafety;
+  leases: React.RefObject<SessionLeases>;
   client: LauncherClient;
   host: LauncherHost;
   focusActive: React.RefObject<((session: number) => void) | null>;
@@ -249,11 +297,17 @@ function LauncherSession({
   const editorContentRef = useRef<HTMLTextAreaElement>(null);
   const selectedRef = useRef<HTMLDivElement>(null);
   const active = useRef(true);
+  const nativeSession = useRef(session);
+  nativeSession.current = session;
+  const visibleNow = useRef(visible);
+  visibleNow.current = visible;
   const loadingGeneration = useRef(0);
   const hasLoaded = useRef(false);
   const refreshInFlight = useRef(false);
   const copying = useRef(false);
   const openingTin = useRef(false);
+  const hiding = useRef(false);
+  const cancelling = useRef(false);
   const saving = useRef(false);
   const deleting = useRef(false);
   const focusSearchAfterDelete = useRef(false);
@@ -308,6 +362,8 @@ function LauncherSession({
   async function refreshVisibleClips() {
     if (
       !active.current ||
+      !visibleNow.current ||
+      safety.frozen ||
       !hasLoaded.current ||
       refreshInFlight.current ||
       modeRef.current.kind !== 'search' ||
@@ -337,6 +393,7 @@ function LauncherSession({
     active.current = true;
     let focusFrame = 0;
     const focus = () => {
+      if (!visibleNow.current) return;
       const focusCurrent = () => {
         if (modeRef.current.kind === 'search') searchRef.current?.focus();
         else editorContentRef.current?.focus();
@@ -349,25 +406,29 @@ function LauncherSession({
       });
     };
     focusActive.current = (requestedSession) => {
-      if (requestedSession === session) focus();
+      if (requestedSession === nativeSession.current) focus();
     };
     window.addEventListener('focus', focus);
-    const refreshTimer = window.setInterval(
-      () => void refreshVisibleClips(),
-      VISIBLE_REFRESH_INTERVAL_MS,
-    );
     focus();
     void load();
     return () => {
       active.current = false;
       window.removeEventListener('focus', focus);
-      window.clearInterval(refreshTimer);
       cancelAnimationFrame(focusFrame);
       loadingGeneration.current++;
       focusActive.current = null;
     };
     // A session is remounted on every opening; clients are stable for its lifetime.
   }, []);
+  useEffect(() => {
+    if (!visible || safety.frozen) return;
+    const refreshTimer = window.setInterval(
+      () => void refreshVisibleClips(),
+      VISIBLE_REFRESH_INTERVAL_MS,
+    );
+    return () => window.clearInterval(refreshTimer);
+    // Refresh reads current refs; retain the existing session across a hidden draft.
+  }, [visible, safety.frozen]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       if (!active.current) return;
@@ -381,10 +442,26 @@ function LauncherSession({
   }, [selectedId]);
 
   async function hide() {
+    if (
+      saving.current ||
+      deleting.current ||
+      hiding.current ||
+      openingTin.current ||
+      leases.current.opening ||
+      safety.frozen
+    )
+      return;
+    hiding.current = true;
+    const closingSession = nativeSession.current;
     try {
       await host.hide(session);
+      // A successful explicit Close is cancellation, not a preparation side effect.
+      if (active.current && nativeSession.current === closingSession)
+        await discardSessionDraft();
     } catch {
       if (active.current) setError('hide');
+    } finally {
+      hiding.current = false;
     }
   }
   async function copy(id: string) {
@@ -404,12 +481,23 @@ function LauncherSession({
     }
   }
   async function openTin() {
-    if (openingTin.current) return;
+    if (
+      openingTin.current ||
+      hiding.current ||
+      leases.current.opening ||
+      saving.current ||
+      deleting.current ||
+      safety.frozen
+    )
+      return;
     openingTin.current = true;
     setBusy(true);
     setError(null);
+    const closingSession = nativeSession.current;
     try {
       await host.openTin(session);
+      if (active.current && nativeSession.current === closingSession)
+        await discardSessionDraft();
     } catch {
       if (active.current) setError('open');
     } finally {
@@ -417,31 +505,108 @@ function LauncherSession({
       if (active.current) setBusy(false);
     }
   }
+  async function enterEditor(next: LauncherMode) {
+    if (
+      leases.current.opening ||
+      hiding.current ||
+      openingTin.current ||
+      cancelling.current ||
+      modeRef.current.kind === 'create' ||
+      modeRef.current.kind === 'edit' ||
+      saving.current ||
+      deleting.current
+    )
+      return;
+    leases.current.opening = true;
+    try {
+      if (leases.current.editor) {
+        if (!(await safety.release(leases.current.editor))) return;
+        leases.current.editor = null;
+      }
+      const lease = await safety.acquire('editor');
+      if (!lease) {
+        setError('open');
+        return;
+      }
+      leases.current.editor = lease;
+      setSaveError(null);
+      setError(null);
+      setFeedback(null);
+      setMode(next);
+    } finally {
+      leases.current.opening = false;
+    }
+  }
   function openCreate() {
-    setSaveError(null);
-    setError(null);
-    setFeedback(null);
-    setMode({ kind: 'create' });
+    void enterEditor({ kind: 'create' });
   }
   function openEdit(clipId: string) {
-    setSaveError(null);
-    setError(null);
-    setFeedback(null);
-    setMode({ kind: 'edit', clipId });
+    void enterEditor({ kind: 'edit', clipId });
   }
-  function cancelEditor() {
+  async function cancelEditor() {
+    if (saving.current || leases.current.opening || cancelling.current) return;
+    if (!leases.current.editor) {
+      setSaveError(null);
+      setMode({ kind: 'search' });
+      return;
+    }
+    cancelling.current = true;
+    // Explicit cancellation ends the editor before awaiting IPC. A newly shown
+    // native session must not accept edits to a draft already being discarded.
     setSaveError(null);
     setMode({ kind: 'search' });
+    try {
+      if (await safety.release(leases.current.editor))
+        leases.current.editor = null;
+    } finally {
+      cancelling.current = false;
+    }
+  }
+  async function cancelConfirmation() {
+    if (deleting.current) return;
+    if (!(await safety.release(leases.current.confirmation))) return;
+    leases.current.confirmation = null;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  }
+  async function discardSessionDraft() {
+    await cancelEditor();
+    await cancelConfirmation();
   }
   function openGroup(groupId: string) {
     setError(null);
     setMode({ kind: 'group', groupId });
   }
-  function openDelete(clip: Clip) {
-    focusSearchAfterDelete.current = false;
-    setDeleteError(null);
-    setFeedback(null);
-    setDeleteTarget(clip);
+  async function openDelete(clip: Clip) {
+    if (
+      leases.current.opening ||
+      hiding.current ||
+      openingTin.current ||
+      cancelling.current ||
+      deleteTarget ||
+      saving.current ||
+      deleting.current
+    )
+      return;
+    leases.current.opening = true;
+    try {
+      if (leases.current.confirmation) {
+        if (!(await safety.release(leases.current.confirmation))) return;
+        leases.current.confirmation = null;
+      }
+      const lease = await safety.acquire('confirmation');
+      if (!lease) {
+        setError('open');
+        return;
+      }
+      leases.current.confirmation = lease;
+      focusSearchAfterDelete.current = false;
+      setDeleteError(null);
+      setFeedback(null);
+      setDeleteTarget(clip);
+    } finally {
+      leases.current.opening = false;
+    }
   }
   async function deleteClip() {
     if (!deleteTarget || deleting.current) return;
@@ -466,6 +631,8 @@ function LauncherSession({
       setSelectedId(nextSelection ? libraryItemId(nextSelection) : null);
       setFeedback('deleted');
       focusSearchAfterDelete.current = true;
+      if (await safety.release(leases.current.confirmation))
+        leases.current.confirmation = null;
       setDeleteTarget(null);
     } catch {
       if (active.current) setDeleteError('Clip could not be deleted.');
@@ -529,6 +696,8 @@ function LauncherSession({
       setQuery('');
       setSelectedId(saved.id);
       setFeedback('saved');
+      if (await safety.release(leases.current.editor))
+        leases.current.editor = null;
       setMode({ kind: 'search' });
     } catch {
       if (active.current) setSaveError('Clip could not be saved.');
@@ -547,7 +716,7 @@ function LauncherSession({
     if (event.key === 'Escape') {
       if (deleteTarget) return;
       event.preventDefault();
-      if (modeRef.current.kind !== 'search') cancelEditor();
+      if (modeRef.current.kind !== 'search') void cancelEditor();
       else void hide();
       return;
     }
@@ -884,7 +1053,7 @@ function LauncherSession({
           isSaving={isSaving}
           error={saveError}
           contentRef={editorContentRef}
-          onCancel={cancelEditor}
+          onCancel={() => void cancelEditor()}
           onSave={(draft) => void saveDraft(draft)}
         />
       )}
@@ -892,8 +1061,7 @@ function LauncherSession({
         open={deleteTarget !== null}
         onOpenChange={(open) => {
           if (!open && !deleting.current) {
-            setDeleteTarget(null);
-            setDeleteError(null);
+            void cancelConfirmation();
           }
         }}
       >
@@ -920,7 +1088,10 @@ function LauncherSession({
             <AlertDialogAction
               variant="destructive"
               disabled={isDeleting}
-              onClick={() => void deleteClip()}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteClip();
+              }}
             >
               Delete
             </AlertDialogAction>

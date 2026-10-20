@@ -201,7 +201,9 @@ test('group detail exposes members and management actions', async () => {
     expect(client.unmergeMember).toHaveBeenCalledWith(mergedGroup.id, newer.id),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Delete Older note' }));
-  expect(screen.getByText(/Permanently delete “Older note”/)).toBeTruthy();
+  expect(
+    await screen.findByText(/Permanently delete “Older note”/),
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Delete clip' }));
   await waitFor(() =>
     expect(client.deleteGroupMember).toHaveBeenCalledWith(
@@ -236,7 +238,9 @@ test('whole-group delete uses its atomic client operation after confirmation', a
   await screen.findByRole('button', { name: 'Open Shared page' });
   fireEvent.click(screen.getByRole('button', { name: 'Open Shared page' }));
   fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
-  expect(screen.getByText(/Permanently delete all 2 clips/)).toBeTruthy();
+  expect(
+    await screen.findByText(/Permanently delete all 2 clips/),
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Delete all 2 clips' }));
   await waitFor(() =>
     expect(client.deleteGroup).toHaveBeenCalledWith(mergedGroup.id),

@@ -212,6 +212,10 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
         .build();
     let launcher_window_available = match window {
         Ok(window) => {
+            crate::installation_safety::windows::observe(
+                &window,
+                &app.state::<std::sync::Arc<crate::installation_safety::SafetyCoordinator>>(),
+            );
             let handle = app.clone();
             window.on_window_event(move |event| match event {
                 WindowEvent::CloseRequested { api, .. } => {
@@ -222,7 +226,12 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
             });
             true
         }
-        Err(_) => false,
+        Err(_) => {
+            let _ = app
+                .state::<std::sync::Arc<crate::installation_safety::SafetyCoordinator>>()
+                .launcher_creation_failed();
+            false
+        }
     };
 
     let launcher_binding = launcher_shortcut();

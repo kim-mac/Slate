@@ -13,6 +13,11 @@
     "allow-launcher-ready",
     "allow-hide-launcher",
     "allow-open-tin-from-launcher",
+    "allow-connect-installation-safety",
+    "allow-get-installation-safety-status",
+    "allow-acquire-installation-lease",
+    "allow-release-installation-lease",
+    "allow-acknowledge-installation-safety",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:window:allow-start-dragging"

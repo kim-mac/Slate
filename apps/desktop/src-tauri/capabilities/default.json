@@ -20,6 +20,19 @@
     "allow-get-launcher-status",
     "allow-get-autostart-enabled",
     "allow-set-autostart-enabled",
+    "allow-get-update-status",
+    "allow-check-for-updates",
+    "allow-download-update",
+    "allow-cancel-update",
+    "allow-dismiss-update",
+    "allow-restart-to-update",
+    "allow-connect-installation-safety",
+    "allow-get-installation-safety-status",
+    "allow-acquire-installation-lease",
+    "allow-release-installation-lease",
+    "allow-acknowledge-installation-safety",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
     "core:app:allow-version"
   ]
 }

@@ -2,13 +2,14 @@
 param(
     [string]$X64InstallerPath,
     [string]$Arm64InstallerPath,
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+    [string]$ReleaseVersion
 )
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
-$rootPackage = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'package.json') | ConvertFrom-Json
-$releaseVersion = $rootPackage.version
+. (Join-Path $PSScriptRoot 'Windows-ReleaseContract.ps1')
+$releaseVersion = Get-WindowsReleaseVersion -RepositoryRoot $repositoryRoot -ReleaseVersion $ReleaseVersion
 
 function Get-Sha256 {
     param([string]$Path)
@@ -49,21 +50,34 @@ $artifacts = @(
     }
 )
 
-[System.IO.Directory]::CreateDirectory($OutputDirectory) | Out-Null
+Assert-WindowsReleaseOutputPath -Path $OutputDirectory
+if (Test-Path -LiteralPath $OutputDirectory) {
+    if (-not (Test-Path -LiteralPath $OutputDirectory -PathType Container) -or
+        @(Get-ChildItem -LiteralPath $OutputDirectory -Force).Count -ne 0) {
+        throw 'Release output must be a new or empty directory; existing artifacts are never overwritten.'
+    }
+}
 
 foreach ($artifact in $artifacts) {
     if (-not (Test-Path -LiteralPath $artifact.Source -PathType Leaf)) {
         throw "Required installer not found: $($artifact.Source)"
     }
+    $suffix = if ($artifact.Name.EndsWith('-x64.exe')) { 'x64' } else { 'arm64' }
+    if ([System.IO.Path]::GetFileName($artifact.Source) -cne "AI Clip Memory_${releaseVersion}_${suffix}-setup.exe") {
+        throw 'Source installer filename must match the candidate version and architecture.'
+    }
+}
+
+[System.IO.Directory]::CreateDirectory($OutputDirectory) | Out-Null
+foreach ($artifact in $artifacts) {
 
     $sourcePath = (Resolve-Path -LiteralPath $artifact.Source).Path
     $destinationPath = Join-Path $OutputDirectory $artifact.Name
-    Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Force
+    [System.IO.File]::Copy($sourcePath, $destinationPath, $false)
 
     $sourceHash = Get-Sha256 -Path $sourcePath
     $destinationHash = Get-Sha256 -Path $destinationPath
     if ($sourceHash -cne $destinationHash) {
-        Remove-Item -LiteralPath $destinationPath -Force -ErrorAction SilentlyContinue
         throw "The staged installer is not byte-for-byte identical: $($artifact.Name)"
     }
 

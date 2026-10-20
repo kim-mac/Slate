@@ -1,4 +1,6 @@
+use crate::installation_safety::SafetyCoordinator;
 use serde::Serialize;
+use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
@@ -15,7 +17,16 @@ const MAX_CONTENT_BYTES: usize = 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 16 * 1024;
 
 #[tauri::command]
-pub async fn get_autostart_enabled(app: AppHandle) -> Result<bool, CommandError> {
+pub async fn get_autostart_enabled(
+    app: AppHandle,
+    safety: State<'_, Arc<SafetyCoordinator>>,
+) -> Result<bool, CommandError> {
+    let _permit = safety.admit().map_err(|_| {
+        CommandError::new(
+            "installation_preparing",
+            "Startup status is temporarily unavailable.",
+        )
+    })?;
     platform::get_autostart_enabled(&app).map_err(|_| {
         CommandError::new(
             "startup_state_unavailable",
@@ -25,7 +36,17 @@ pub async fn get_autostart_enabled(app: AppHandle) -> Result<bool, CommandError>
 }
 
 #[tauri::command]
-pub async fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<bool, CommandError> {
+pub async fn set_autostart_enabled(
+    app: AppHandle,
+    safety: State<'_, Arc<SafetyCoordinator>>,
+    enabled: bool,
+) -> Result<bool, CommandError> {
+    let _permit = safety.admit().map_err(|_| {
+        CommandError::new(
+            "installation_preparing",
+            "Startup changes are temporarily unavailable.",
+        )
+    })?;
     platform::set_autostart_enabled(&app, enabled).map_err(|_| {
         CommandError::new(
             "startup_update_failed",
@@ -426,8 +447,9 @@ pub fn copy_clip_content(
     id: String,
 ) -> Result<(), CommandError> {
     validate_clip_id(&id)?;
+    let permit = storage.admit_operation().map_err(bootstrap_error)?;
     let content = storage
-        .with_service(|service| service.get(&id))
+        .with_admitted_service(permit.as_ref(), |service| service.get(&id))
         .map_err(bootstrap_error)?
         .ok_or_else(not_found_error)?
         .content;

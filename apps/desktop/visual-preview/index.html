@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:1421 ws://127.0.0.1:1421; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slate Updater UX Preview</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/test/updaterVisualPreviewMain.tsx"></script>
+  </body>
+</html>

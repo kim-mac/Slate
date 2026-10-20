@@ -89,6 +89,31 @@ These settings follow Cloudflare's [build image](https://developers.cloudflare.c
 
 Ensure the build image uses pinned pnpm; don't let automatic installation/building include unrelated workspace apps. `_headers` provides static security headers. No Workers, functions, auth, database or runtime service is needed.
 
+## Desktop update manifest (prepared, not published)
+
+The approved permanent endpoint is `https://tryslate.tech/updates/windows/latest.json`.
+The existing static Astro/Pages deployment can serve the matching file from
+`public/updates/windows/latest.json`, copied unchanged into `dist`. A `.gitkeep`
+preserves the directory, but **no manifest is supplied yet**. Site builds must work
+without one. Do not create a fake/placeholder response or enable 0.3.0 download links:
+the website continues linking the existing published 0.1.0 installers.
+
+`public/_headers` sets JSON content type and `Cache-Control: no-store` for this exact
+path. No auth, redirect, Function, environment secret or new hosting service is added.
+Before publication, a missing manifest should return 404, never HTML with HTTP 200.
+Cloudflare dashboard security/cache rules still require live verification after an
+approved deployment; source headers cannot guarantee absence of challenges.
+
+Insert a real manifest only after separate approval of final production signing and
+both GitHub installer assets. Follow `docs/DESKTOP_UPDATE_RELEASE_CONTRACT.md` at the
+repository root: authenticate version 0.3.0 and exact bytes for `windows-x86_64` and
+`windows-aarch64` using the production public key and Gate A1, then add only those
+approved JSON bytes to `public/updates/windows/latest.json`. Do not copy installers,
+private keys, TEST keys, R2 endpoints or private URLs into public assets. Build/tests
+must preserve the source manifest byte-for-byte in `dist` once it exists. Keep it in
+source for every subsequent site deployment, and publish a changed manifest only
+after the corresponding complete GitHub assets are verified.
+
 ## Product visuals
 
 The hero is an HTML product illustration containing sample content, not a real screenshot or interactive app embed. Its accessible figure description identifies it as such; the approved design has no visible illustration/sample-content caption. Decorative controls are excluded from the accessibility tree. Site controls are semantic links/buttons.

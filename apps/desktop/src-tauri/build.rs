@@ -1,4 +1,14 @@
 fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
+        && std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc")
+        && (std::path::Path::new("tests/installation_safety_contract.rs").is_file()
+            || std::path::Path::new("tests/updater_security.rs").is_file())
+    {
+        // Integration-test names can trigger Windows installer detection. These
+        // Cargo directives apply only to test targets, never application binaries.
+        println!("cargo:rustc-link-arg-tests=/MANIFEST:EMBED,ID=1");
+        println!("cargo:rustc-link-arg-tests=/MANIFESTUAC:level='asInvoker' uiAccess='false'");
+    }
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "list_clips",
@@ -20,6 +30,17 @@ fn main() {
             "get_launcher_status",
             "get_autostart_enabled",
             "set_autostart_enabled",
+            "get_update_status",
+            "check_for_updates",
+            "download_update",
+            "cancel_update",
+            "dismiss_update",
+            "restart_to_update",
+            "connect_installation_safety",
+            "get_installation_safety_status",
+            "acquire_installation_lease",
+            "release_installation_lease",
+            "acknowledge_installation_safety",
         ]),
     ))
     .expect("failed to build application permissions");
