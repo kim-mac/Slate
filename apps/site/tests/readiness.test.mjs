@@ -96,13 +96,13 @@ test('all launch routes preserve accessible structure, safe links, themes and co
         const filename = attrs.match(/download="([^"]+)"/)?.[1];
         assert.ok(
           [
-            'Slate-0.1.0-Windows-x64.exe',
-            'Slate-0.1.0-Windows-ARM64.exe',
+            'Slate-0.3.0-Windows-x64.exe',
+            'Slate-0.3.0-Windows-ARM64.exe',
           ].includes(filename),
         );
         assert.ok(
           attrs.includes(
-            `href="https://github.com/kim-mac/Slate/releases/download/v0.1.0/${filename}"`,
+            `href="https://github.com/kim-mac/Slate/releases/download/v0.3.0/${filename}"`,
           ),
         );
       } else {

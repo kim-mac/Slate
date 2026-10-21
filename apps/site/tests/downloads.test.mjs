@@ -233,14 +233,14 @@ test('built download panel enables official Windows and Chrome destinations whil
     [
       'windowsX64',
       'Windows x64',
-      'Slate-0.1.0-Windows-x64.exe',
-      'EE3A0832A002905CCBC5567401093CB1F5D6ED1D209F521B04F418D39594E5DA',
+      'Slate-0.3.0-Windows-x64.exe',
+      '5E29B49ADA57F8926F5A05B69FD3DC6819E81587B188F867EA8529F2F2697623',
     ],
     [
       'windowsARM64',
       'Windows ARM64',
-      'Slate-0.1.0-Windows-ARM64.exe',
-      'EDD641A2231AE846B224FCE0BAA4B7E11FCFBAA63E75D08B2F6FCD9117CFF57C',
+      'Slate-0.3.0-Windows-ARM64.exe',
+      'A691B3D6BB02E5EB002A02501A987228D5E38EF2E1CBD992BE5952E0AF17FEB7',
     ],
   ]) {
     const card = section.match(
@@ -256,7 +256,7 @@ test('built download panel enables official Windows and Chrome destinations whil
     assert.ok(download, `${name} must have an enabled download link`);
     assert.ok(
       download[1].includes(
-        `href="https://github.com/kim-mac/Slate/releases/download/v0.1.0/${filename}"`,
+        `href="https://github.com/kim-mac/Slate/releases/download/v0.3.0/${filename}"`,
       ),
     );
     assert.ok(download[1].includes(`download="${filename}"`));

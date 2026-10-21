@@ -1,6 +1,6 @@
 # Slate landing page
 
-An independent static Astro site for current Slate 0.1.0 functionality. This is a local preview, not a deployment or an announcement that downloads are available.
+An independent static Astro site prepared for Slate Desktop 0.3.0 and Chrome extension 0.1.1. The immutable GitHub v0.3.0 release is public; these website and updater-manifest changes remain local until separately approved for deployment.
 
 ## Local development
 
@@ -52,7 +52,7 @@ Astro 7 uses a separate Vite `prerender` environment. Its build-only `cookie` de
 
 ## Downloads and domain
 
-`src/data/releases.ts` is the only source for release destinations. Windows x64 and ARM64 use verified GitHub Release v0.1.0 installer URLs and retain the frozen SHA-256 hashes. Chrome extension 0.1.1 is published at `https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh`; the homepage's Add to Chrome action and Support installation step use this verified destination. The extension requires Slate Desktop to save to the local library. Its CWS upload ZIP must not be linked as a manual unpacked installation download. Future macOS Apple Silicon remains unverified with a null URL. The hero's Download for Windows action leads to the two architecture-specific downloads; Coming soon for macOS remains a disabled informational button. Verify each actual public HTTPS destination before setting its state to verified. The shared `downloadUrl()` helper still fails closed. Never copy installers into public.
+`src/data/releases.ts` is the only source for release destinations. Windows x64 and ARM64 use verified immutable GitHub Release v0.3.0 installer URLs and their approved SHA-256 hashes. The download panel discloses that the installers are not Authenticode-signed and SmartScreen may show an Unknown Publisher warning; updater signatures do not remove that warning. Chrome extension 0.1.1 is published at `https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh`; the homepage's Add to Chrome action and Support installation step use this verified destination. The extension requires Slate Desktop to save to the local library. Its CWS upload ZIP must not be linked as a manual unpacked installation download. Future macOS Apple Silicon remains unverified with a null URL. The hero's Download for Windows action leads to the two architecture-specific downloads; Coming soon for macOS remains a disabled informational button. Verify each actual public HTTPS destination before setting its state to verified. The shared `downloadUrl()` helper still fails closed. Never copy installers into public.
 
 `src/data/site.ts` sets the canonical production origin to `https://tryslate.tech`. Canonicals, Open Graph URLs, absolute sharing-image URLs, robots' sitemap reference, and sitemap entries use this apex origin for /, /privacy/ and /support/. These three public routes are indexable; the 404 stays noindex and is excluded. Privacy/support navigation remains relative to the current origin. An explicitly unset or invalid origin still fails closed in the metadata helpers.
 
@@ -64,9 +64,9 @@ Routes: /, /privacy/, /support/, and /404.html (also shown for missing pages). S
 
 The limited privacy page describes current plaintext local storage, user-initiated capture, clipboard behavior and uninstall retention. It does not claim encryption or broad legal guarantees. Reconfirm hosting-specific details before publication.
 
-## Future Cloudflare Pages setup
+## Cloudflare Pages build settings
 
-No Cloudflare project or DNS change is made by this implementation.
+No Cloudflare project, deployment or DNS change is made by this preparation. Verify the existing project's actual production branch, connected repository, build settings and deployment method before approving a push or deployment; they are not defined in this repository. Do not switch the site's production branch to the desktop release branch or merge all desktop work merely to deploy this site.
 
 | Setting                   | Value                                                                                                     |
 | ------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -88,6 +88,58 @@ pnpm install --frozen-lockfile --filter @slate/site --filter ai-clip-memory --ig
 These settings follow Cloudflare's [build image](https://developers.cloudflare.com/pages/configuration/build-image/) and [build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/) documentation. The scoped install/build commands are verified locally; no Cloudflare deployment has been tested or performed. Do not use CF_PAGES_URL as the canonical production domain. No runtime variables or secrets are required.
 
 Ensure the build image uses pinned pnpm; don't let automatic installation/building include unrelated workspace apps. `_headers` provides static security headers. No Workers, functions, auth, database or runtime service is needed.
+
+## Desktop update manifest (prepared locally, not deployed)
+
+The approved permanent endpoint is `https://tryslate.tech/updates/windows/latest.json`.
+The static Astro/Pages build copies `public/updates/windows/latest.json` unchanged
+into `dist`. The file is the approved Checkpoint 7E manifest, advertising 0.3.0
+with actual production signatures and immutable GitHub installer URLs for
+`windows-x86_64` and `windows-aarch64`. Its SHA-256 is
+`C12D5475652AFE4269A9A826B26705A4D936EFA2A6DC893DD1EB5F7190ED0B05`.
+The source manifest and the exact byte-preservation tests must accompany every
+subsequent website build. No credentials or signing keys are deployed.
+
+`public/_headers` sets JSON content type and `Cache-Control: no-store` for this exact
+path. No auth, redirect, Function, environment secret or new hosting service is added.
+Before deployment, a missing live manifest should return 404, never HTML with HTTP 200.
+Cloudflare dashboard security/cache rules still require live verification after an
+approved deployment; source headers cannot guarantee absence of challenges.
+
+Local schema tests reuse `scripts/windows/validate-desktop-update-release.mjs`;
+retain that standalone, offline module when reconciling a site-only source change
+onto a branch that does not yet contain it. Website validation uses its own
+centralized release version, not unrelated root/Desktop metadata. Authenticate
+both public installers and their signed version with Gate A1 before deployment;
+schema tests alone are not cryptographic verification. Do not copy installers,
+private keys, TEST keys, R2 endpoints or private URLs into public assets.
+
+After deployment, a standard 0.3.0 installation sees an equal version and offers no
+update. Startup checks remain metadata-only; Settings can check manually. Nothing
+downloads or installs automatically. Historical TEST/R2 builds keep their original
+channels; publishing this endpoint does not replace their embedded configuration.
+
+### Deployment approval gate and rollback
+
+Before any Git operation, confirm the live Pages project's production branch and
+automatic-deployment controls. Prefer a reviewed site-only commit/PR onto that
+existing branch; include the manifest, `_headers`, website tests and their offline
+validator dependency, without replacing desktop source or changing the branch's
+root versions. Pushing a production branch may itself trigger deployment and needs
+explicit deployment approval. Do not introduce a second hosting pipeline.
+
+After an approved deployment, verify the exact live manifest bytes, JSON content
+type, `Cache-Control: no-store`, absence of challenges/redirects, both download
+links, privacy and support. Rebuild from that same reconciled source to prove the
+manifest remains present on future deployments. Archive the approved static bundle
+and record the prior production deployment before release.
+
+For a website-only regression, restore a verified Pages production deployment or
+revert only the site changes after approval. A rollback to a deployment without a
+manifest makes update checks fail safely; it does not downgrade or uninstall Slate.
+Do not alter immutable GitHub assets or advertise a lower application version as
+an update. A faulty desktop release requires a separately approved higher-version
+fix, not replacement of 0.3.0 assets.
 
 ## Product visuals
 

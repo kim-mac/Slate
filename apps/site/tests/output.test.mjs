@@ -248,8 +248,8 @@ test('published Windows assets and official Chrome listing are linked without ex
     (match) => match[1],
   );
   assert.deepEqual(installers.sort(), [
-    'https://github.com/kim-mac/Slate/releases/download/v0.1.0/Slate-0.1.0-Windows-ARM64.exe',
-    'https://github.com/kim-mac/Slate/releases/download/v0.1.0/Slate-0.1.0-Windows-x64.exe',
+    'https://github.com/kim-mac/Slate/releases/download/v0.3.0/Slate-0.3.0-Windows-ARM64.exe',
+    'https://github.com/kim-mac/Slate/releases/download/v0.3.0/Slate-0.3.0-Windows-x64.exe',
   ]);
   assert.doesNotMatch(html, /href="[^"]*\.zip/);
   assert.deepEqual(
@@ -278,7 +278,7 @@ test('launch copy keeps only the platform label and a secondary SmartScreen disc
   );
   assert.match(
     html,
-    /<p class="small-note download-safety">\s*Unsigned Windows installers may trigger Microsoft Defender SmartScreen\.\s*<\/p>/,
+    /<p class="small-note download-safety">\s*Windows installers are not Authenticode-signed\. Microsoft Defender SmartScreen\s+may show an Unknown Publisher warning\.\s*<\/p>/,
   );
 });
 
