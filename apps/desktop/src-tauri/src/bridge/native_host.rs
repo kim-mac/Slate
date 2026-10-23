@@ -52,3 +52,27 @@ pub fn write_response<W: Write>(writer: &mut W, response: &BridgeResponse) -> io
     writer.write_all(&body)?;
     writer.flush()
 }
+
+/// Own admission through bootstrap, SQL, response writes, and the final flush.
+/// The executable supplies admission from the token-derived per-user authority.
+pub fn run_with_storage<R: Read, W: Write, P>(
+    reader: &mut R,
+    writer: &mut W,
+    application_data: std::path::PathBuf,
+    admission: io::Result<P>,
+) -> io::Result<()> {
+    let Ok(_permit) = admission else {
+        return write_response(
+            writer,
+            &BridgeResponse::failure(BridgeErrorCode::StorageUnavailable),
+        );
+    };
+    let storage = crate::storage::StorageState::new(application_data);
+    let Ok(service) = storage.service() else {
+        return write_response(
+            writer,
+            &BridgeResponse::failure(BridgeErrorCode::StorageUnavailable),
+        );
+    };
+    run_once(reader, writer, &service)
+}

@@ -13,6 +13,49 @@ fn ordinary_close_hides_until_an_explicit_quit_is_requested() {
 }
 
 #[test]
+fn main_close_prevents_native_dismissal_before_requesting_the_existing_save() {
+    let lib = include_str!("../src/lib.rs");
+    let close = lib
+        .split("tauri::WindowEvent::CloseRequested")
+        .nth(1)
+        .unwrap()
+        .split(".invoke_handler")
+        .next()
+        .unwrap();
+    assert!(
+        close.find("api.prevent_close()").unwrap()
+            < close.find("background::close_main_window(window)").unwrap()
+    );
+    assert!(!close.contains("window.hide()"));
+    let background = include_str!("../src/background.rs");
+    let close = background
+        .split("pub(crate) fn close_main_window")
+        .nth(1)
+        .unwrap()
+        .split("#[tauri::command]")
+        .next()
+        .unwrap();
+    assert!(close.contains("main_close_needs_save()"));
+    assert!(close.contains("emit_to(\"main\", \"slate:inline-close-requested\", ())"));
+    assert!(close.contains("with_main_close_hide(|| window.hide())"));
+    assert!(!close.contains("request_quit"));
+}
+
+#[test]
+fn denied_quit_preserves_runtime_and_reports_recovery_before_any_exit() {
+    let source = include_str!("../src/background.rs");
+    let quit = source.split("pub fn quit_app").nth(1).unwrap();
+    let check = quit.find("safety.begin_quit()").unwrap();
+    let message = quit.find("slate:quit-blocked").unwrap();
+    let request = quit.find(".request_quit()").unwrap();
+    let exit = quit.find("app.exit(0)").unwrap();
+    assert!(check < message && message < request && request < exit);
+    assert!(quit[..request].contains("return;"));
+    assert!(quit[..request].contains("show_main_window(app)"));
+    assert!(quit[..request].contains("press Escape"));
+}
+
+#[test]
 fn tray_initialization_can_only_be_claimed_once_per_process() {
     let policy = RuntimePolicy::default();
 
@@ -83,7 +126,7 @@ fn single_instance_interception_is_registered_before_other_runtime_plugins_and_s
     let autostart = source
         .find("tauri_plugin_autostart::Builder")
         .expect("autostart plugin registration");
-    let setup = source.find(".setup(|app|").expect("application setup");
+    let setup = source.find(".setup(move |app|").expect("application setup");
 
     assert!(single_instance < autostart);
     assert!(single_instance < setup);

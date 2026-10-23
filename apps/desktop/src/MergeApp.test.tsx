@@ -5,6 +5,7 @@ import type {
   LibraryItem,
 } from '@ai-clip-memory/shared';
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -16,6 +17,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { App } from './App';
 import type { ClipClient } from './clipClient';
 import type { StartupClient } from './startupClient';
+import { installationSafetyFixture } from './test/installationSafety';
 
 const month = new Date();
 const timestamp = (day: number) =>
@@ -50,8 +52,12 @@ const mergedGroup: ClipGroup = {
   members: [newer, older],
 };
 
-function setup(initial: LibraryItem[] = [clipItem(older), clipItem(newer)]) {
+function setup(
+  initial: LibraryItem[] = [clipItem(older), clipItem(newer)],
+  safety = installationSafetyFixture(),
+) {
   const client: ClipClient = {
+    renameGroup: vi.fn(),
     list: vi.fn().mockResolvedValue(initial),
     create: vi.fn().mockImplementation(async (input: ClipInput) => ({
       ...input,
@@ -78,7 +84,13 @@ function setup(initial: LibraryItem[] = [clipItem(older), clipItem(newer)]) {
     getEnabled: vi.fn().mockResolvedValue(false),
     setEnabled: vi.fn().mockResolvedValue(false),
   };
-  render(<App client={client} startupClient={startupClient} />);
+  render(
+    <App
+      client={client}
+      startupClient={startupClient}
+      safetyClient={safety.client}
+    />,
+  );
   return client;
 }
 
@@ -91,6 +103,11 @@ function calendarSelect(title: string): HTMLButtonElement {
   return within(
     document.querySelector<HTMLElement>('.memory-calendar')!,
   ).getByRole('button', { name: `Select ${title}` }) as HTMLButtonElement;
+}
+
+async function memberAction(title: string, action: string) {
+  fireEvent.click(screen.getByRole('button', { name: `Actions for ${title}` }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: action }));
 }
 
 afterEach(() => {
@@ -124,7 +141,7 @@ test('Escape exits Merge mode', async () => {
   expect(screen.getByRole('button', { name: 'Merge' })).toBeTruthy();
 });
 
-test('Merge directly creates one persistent group in deterministic top-level order', async () => {
+test('Merge sends the user selection order rather than sorting titles by library order', async () => {
   const client = setup();
   await enterMergeMode();
   fireEvent.click(calendarSelect('Older note'));
@@ -132,12 +149,134 @@ test('Merge directly creates one persistent group in deterministic top-level ord
   fireEvent.click(screen.getByRole('button', { name: 'Merge selected' }));
   await waitFor(() => expect(client.merge).toHaveBeenCalledTimes(1));
   expect(client.merge).toHaveBeenCalledWith([
-    { kind: 'clip', id: newer.id },
     { kind: 'clip', id: older.id },
+    { kind: 'clip', id: newer.id },
   ]);
   expect(screen.queryByRole('dialog', { name: 'Create clip' })).toBeNull();
   expect(await screen.findByText('2 clips merged')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Open Shared page' })).toBeTruthy();
+});
+
+test('Create reconciles automatic membership and opens the containing group', async () => {
+  const client = setup([clipItem(older)]);
+  await screen.findByRole('button', { name: 'Open Older note' });
+  vi.mocked(client.create).mockResolvedValue(newer);
+  vi.mocked(client.list).mockResolvedValue([
+    { kind: 'group', group: mergedGroup },
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Create clip' });
+  fireEvent.change(within(dialog).getByLabelText('Content'), {
+    target: { value: newer.content },
+  });
+  fireEvent.change(within(dialog).getByLabelText('Source URL'), {
+    target: { value: newer.sourceUrl },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save clip' }));
+  expect(
+    await screen.findByRole('heading', { name: mergedGroup.title }),
+  ).toBeTruthy();
+  expect(client.create).toHaveBeenCalledTimes(1);
+  expect(
+    screen.getByText(newer.content, { selector: '.clip-content' }),
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Open Newer note' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Open Older note' })).toBeNull();
+});
+
+test('a committed Create survives refresh failure without offering a duplicate save', async () => {
+  const client = setup();
+  await screen.findByRole('button', { name: 'Open Older note' });
+  vi.mocked(client.list).mockRejectedValue(new Error('private SQL details'));
+  fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Create clip' });
+  fireEvent.change(within(dialog).getByLabelText('Content'), {
+    target: { value: 'Committed capture' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save clip' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(
+    await screen.findByText(/Clip saved, but the library could not refresh/),
+  ).toBeTruthy();
+  expect(client.create).toHaveBeenCalledTimes(1);
+  vi.mocked(client.list).mockResolvedValue([
+    { kind: 'group', group: mergedGroup },
+  ]);
+  await act(async () => fireEvent.focus(window));
+  await screen.findByRole('button', { name: 'Open Shared page' });
+  expect(client.create).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByText(/Clip saved, but the library could not refresh/),
+    ).toBeNull(),
+  );
+});
+
+test('member Edit reuses the full dialog and preserves group identity and title', async () => {
+  const client = setup([{ kind: 'group', group: mergedGroup }]);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Open Shared page' }),
+  );
+  await memberAction('Older note', 'Edit');
+  const dialog = await screen.findByRole('dialog', { name: 'Edit clip' });
+  expect(within(dialog).getByLabelText('Content')).toHaveProperty(
+    'value',
+    older.content,
+  );
+  const updated = { ...older, content: 'Updated member' };
+  vi.mocked(client.update).mockResolvedValue(updated);
+  vi.mocked(client.list).mockResolvedValue([
+    { kind: 'group', group: { ...mergedGroup, members: [newer, updated] } },
+  ]);
+  fireEvent.change(within(dialog).getByLabelText('Content'), {
+    target: { value: updated.content },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(client.update).toHaveBeenCalledExactlyOnceWith(older.id, {
+    content: updated.content,
+    contentType: older.contentType,
+    title: older.title,
+    sourceApp: older.sourceApp,
+    sourceUrl: older.sourceUrl,
+    sourcePageTitle: older.sourcePageTitle,
+  });
+  expect(screen.getByRole('heading', { name: mergedGroup.title })).toBeTruthy();
+  expect(
+    screen.getByText(updated.content, { selector: '.clip-content' }),
+  ).toBeTruthy();
+  expect(
+    screen.getByText(newer.content, { selector: '.clip-content' }),
+  ).toBeTruthy();
+  expect(client.unmergeMember).not.toHaveBeenCalled();
+});
+
+test('member Edit retains the draft and its lease after persistence failure', async () => {
+  const safety = installationSafetyFixture();
+  const client = setup([{ kind: 'group', group: mergedGroup }], safety);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Open Shared page' }),
+  );
+  await memberAction('Older note', 'Edit');
+  const dialog = await screen.findByRole('dialog', { name: 'Edit clip' });
+  vi.mocked(client.update).mockRejectedValue(new Error('private SQL failure'));
+  fireEvent.change(within(dialog).getByLabelText('Content'), {
+    target: { value: 'Keep this draft' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+  await within(dialog).findByRole('alert');
+  expect(within(dialog).getByLabelText('Content')).toHaveProperty(
+    'value',
+    'Keep this draft',
+  );
+  expect(safety.client.acquire).toHaveBeenCalledWith(1, 'editor');
+  expect(safety.client.release).not.toHaveBeenCalled();
+  expect(client.unmergeMember).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(safety.client.release).toHaveBeenCalledOnce();
+  expect(screen.getByRole('heading', { name: mergedGroup.title })).toBeTruthy();
 });
 
 test('search and calendar navigation hide selected items without changing membership', async () => {
@@ -169,14 +308,14 @@ test('refresh keeps valid IDs, ignores arrivals, and prunes a missing selected i
     clipItem(newer),
     external,
   ]);
-  fireEvent.focus(window);
+  await act(async () => fireEvent.focus(window));
   await waitFor(() => expect(calendarSelect('External clip')).toBeTruthy());
   expect(screen.getByText('2 selected')).toBeTruthy();
   expect(calendarSelect('External clip').getAttribute('aria-pressed')).toBe(
     'false',
   );
   vi.mocked(client.list).mockResolvedValue([clipItem(newer), external]);
-  fireEvent.focus(window);
+  await act(async () => fireEvent.focus(window));
   await waitFor(() => expect(screen.getByText('1 selected')).toBeTruthy());
 });
 
@@ -196,12 +335,14 @@ test('group detail exposes members and management actions', async () => {
   expect(screen.getByRole('heading', { name: 'Shared page' })).toBeTruthy();
   expect(screen.getByText('Newer content')).toBeTruthy();
   expect(screen.getByText('Older content')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Unmerge Newer note' }));
+  await memberAction('Newer note', 'Unmerge');
   await waitFor(() =>
     expect(client.unmergeMember).toHaveBeenCalledWith(mergedGroup.id, newer.id),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Delete Older note' }));
-  expect(screen.getByText(/Permanently delete “Older note”/)).toBeTruthy();
+  await memberAction('Older note', 'Delete');
+  expect(
+    await screen.findByText(/Permanently delete “Older note”/),
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Delete clip' }));
   await waitFor(() =>
     expect(client.deleteGroupMember).toHaveBeenCalledWith(
@@ -236,7 +377,9 @@ test('whole-group delete uses its atomic client operation after confirmation', a
   await screen.findByRole('button', { name: 'Open Shared page' });
   fireEvent.click(screen.getByRole('button', { name: 'Open Shared page' }));
   fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
-  expect(screen.getByText(/Permanently delete all 2 clips/)).toBeTruthy();
+  expect(
+    await screen.findByText(/Permanently delete all 2 clips/),
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Delete all 2 clips' }));
   await waitFor(() =>
     expect(client.deleteGroup).toHaveBeenCalledWith(mergedGroup.id),

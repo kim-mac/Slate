@@ -1,6 +1,6 @@
 {
   "name": "@ai-clip-memory/desktop",
-  "version": "0.1.0",
+  "version": "0.3.1",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -23,7 +23,7 @@
     "@ai-clip-memory/shared": "workspace:*",
     "@base-ui/react": "^1.7.0",
     "@fontsource-variable/geist": "^5.3.0",
-    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/api": "2.12.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.39.0",
@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@tauri-apps/cli": "2.11.4",
+    "@tauri-apps/cli": "2.12.2",
     "@testing-library/react": "16.3.3",
     "@types/node": "^26.4.1",
     "@types/react": "19.2.18",

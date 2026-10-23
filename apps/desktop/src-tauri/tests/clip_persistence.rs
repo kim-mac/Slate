@@ -41,12 +41,17 @@ fn concurrent_first_open_applies_migrations_once_without_racing() {
 }
 
 fn new_clip(content: &str) -> CreateClip {
+    let fixture_source: String = url::form_urlencoded::byte_serialize(content.as_bytes()).collect();
     CreateClip {
         content: content.to_owned(),
         content_type: "text".to_owned(),
         title: Some("Useful answer".to_owned()),
         source_app: Some("Web".to_owned()),
-        source_url: Some("https://example.com/conversation".to_owned()),
+        // Manual-organization fixtures represent distinct source pages. Reusing
+        // one URL would now auto-group them before these manual actions run.
+        source_url: Some(format!(
+            "https://example.com/conversation?fixture={fixture_source}"
+        )),
         source_page_title: Some("Example conversation".to_owned()),
     }
 }
@@ -78,7 +83,7 @@ fn migration_creates_the_documented_schema_and_indexes_idempotently() {
     let user_version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("the migration version should be readable");
-    assert_eq!(user_version, 2);
+    assert_eq!(user_version, 3);
 
     let mut columns = connection
         .prepare("PRAGMA table_info(clips)")
@@ -101,6 +106,8 @@ fn migration_creates_the_documented_schema_and_indexes_idempotently() {
             "is_pinned",
             "created_at",
             "updated_at",
+            "auto_source_key",
+            "auto_group_excluded",
         ]
     );
 
@@ -116,6 +123,12 @@ fn migration_creates_the_documented_schema_and_indexes_idempotently() {
         .iter()
         .any(|name| name == "idx_clips_created_at"));
     assert!(index_names.iter().any(|name| name == "idx_clips_is_pinned"));
+    assert!(index_names
+        .iter()
+        .any(|name| name == "idx_clips_auto_source_key"));
+    assert!(index_names
+        .iter()
+        .any(|name| name == "idx_clips_eligible_source_url"));
 }
 
 #[test]
@@ -170,7 +183,7 @@ fn migration_from_populated_v1_preserves_every_clip_field_and_adds_group_schema(
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("the migration version should be readable");
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
     for table in ["clip_groups", "clip_group_members"] {
         let exists: i64 = connection
             .query_row(
@@ -269,7 +282,7 @@ fn group_title_and_pin_are_independent_while_member_metadata_is_preserved() {
             LibraryItemRef::clip(second.id.clone()),
         ])
         .unwrap();
-    assert_eq!(group.title, "Example conversation");
+    assert_eq!(group.title, "Useful answer");
     assert!(!group.is_pinned);
     assert_eq!(
         group
@@ -295,9 +308,10 @@ fn group_title_and_pin_are_independent_while_member_metadata_is_preserved() {
 }
 
 #[test]
-fn automatic_group_title_requires_exact_trimmed_nonempty_page_titles() {
+fn legacy_null_group_title_requires_exact_trimmed_nonempty_page_titles() {
     let temp_directory = tempfile::tempdir().expect("a temporary directory should be created");
-    let service = open_service(&database_path(&temp_directory));
+    let path = database_path(&temp_directory);
+    let service = open_service(&path);
     let first = service.create(new_clip("First")).unwrap();
     let mut different = new_clip("Second");
     different.source_page_title = Some("Different page".to_owned());
@@ -308,7 +322,19 @@ fn automatic_group_title_requires_exact_trimmed_nonempty_page_titles() {
             LibraryItemRef::clip(second.id),
         ])
         .unwrap();
-    assert_eq!(group.title, "Merged clips");
+    // A pre-migration group's NULL title must retain its original derived
+    // fallback, even though newly merged groups persist a selection title.
+    Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE clip_groups SET title = NULL WHERE id = ?1",
+            [&group.id],
+        )
+        .unwrap();
+    assert_eq!(
+        service.get_group(&group.id).unwrap().unwrap().title,
+        "Merged clips"
+    );
 }
 
 #[test]

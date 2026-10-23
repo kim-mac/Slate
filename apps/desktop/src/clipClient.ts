@@ -10,10 +10,16 @@ import { invoke } from '@tauri-apps/api/core';
 export interface ClipClient {
   list(): Promise<LibraryItem[]>;
   create(input: ClipInput): Promise<Clip>;
-  update(id: string, input: ClipInput): Promise<Clip>;
+  update(
+    id: string,
+    input: ClipInput,
+    guard?:
+      | { expectedContent: string }
+      | { titleEdit: { expectedTitle: string | null } },
+  ): Promise<Clip>;
   delete(id: string): Promise<void>;
   setPinned(id: string, isPinned: boolean): Promise<Clip>;
-  copyContent(id: string): Promise<void>;
+  copyContent(id: string, memberIds?: string[]): Promise<void>;
   openSource(id: string): Promise<void>;
   merge(selected: LibraryItemRef[]): Promise<ClipGroup>;
   unmergeMember(groupId: string, clipId: string): Promise<void>;
@@ -21,16 +27,30 @@ export interface ClipClient {
   deleteGroupMember(groupId: string, clipId: string): Promise<void>;
   deleteGroup(groupId: string): Promise<void>;
   setGroupPinned(groupId: string, isPinned: boolean): Promise<ClipGroup>;
+  renameGroup(
+    groupId: string,
+    title: string,
+    expectedState: string,
+  ): Promise<ClipGroup>;
 }
 
 export const tauriClipClient: ClipClient = {
   list: () => invoke<LibraryItem[]>('list_clips'),
   create: (input) => invoke<Clip>('create_clip', { input }),
-  update: (id, input) => invoke<Clip>('update_clip', { id, input }),
+  update: (id, input, guard) =>
+    invoke<Clip>('update_clip', {
+      id,
+      input,
+      ...guard,
+    }),
   delete: (id) => invoke<void>('delete_clip', { id }),
   setPinned: (id, isPinned) =>
     invoke<Clip>('set_clip_pinned', { id, isPinned }),
-  copyContent: (id) => invoke<void>('copy_clip_content', { id }),
+  copyContent: (id, memberIds) =>
+    invoke<void>('copy_clip_content', {
+      id,
+      ...(memberIds === undefined ? {} : { memberIds }),
+    }),
   openSource: (id) => invoke<void>('open_clip_source', { id }),
   merge: (selected) => invoke<ClipGroup>('merge_clips', { selected }),
   unmergeMember: (groupId, clipId) =>
@@ -41,4 +61,6 @@ export const tauriClipClient: ClipClient = {
   deleteGroup: (groupId) => invoke<void>('delete_group', { groupId }),
   setGroupPinned: (groupId, isPinned) =>
     invoke<ClipGroup>('set_group_pinned', { groupId, isPinned }),
+  renameGroup: (groupId, title, expectedState) =>
+    invoke<ClipGroup>('rename_group', { groupId, title, expectedState }),
 };

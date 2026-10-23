@@ -1,0 +1,13 @@
+[package]
+name = "slate-update-signature-verifier"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone release tooling: not a desktop dependency, plugin, or installer binary.
+[dependencies]
+base64 = "=0.22.1"
+minisign-verify = "=0.3.0"
+semver = "=1.0.28"
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"

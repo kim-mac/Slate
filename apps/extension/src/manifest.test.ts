@@ -310,7 +310,7 @@ describe('extension manifest', () => {
         'utf8',
       ),
     ) as { version: string };
-    expect(desktopRelease.version).toBe('0.1.0');
+    expect(desktopRelease.version).toBe('0.3.1');
   });
 
   test('has a deterministic unpacked Chrome extension identity', () => {

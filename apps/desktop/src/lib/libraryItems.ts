@@ -26,6 +26,62 @@ export function libraryItemMembers(item: LibraryItem): Clip[] {
   return item.kind === 'clip' ? [item.clip] : item.group.members;
 }
 
+export function libraryItemContainingClip(
+  items: readonly LibraryItem[],
+  id: string,
+): LibraryItem | undefined {
+  return items.find((item) =>
+    libraryItemMembers(item).some((clip) => clip.id === id),
+  );
+}
+
+export function findLibraryClip(
+  items: readonly LibraryItem[],
+  id: string,
+): Clip | undefined {
+  const item = libraryItemContainingClip(items, id);
+  return item
+    ? libraryItemMembers(item).find((clip) => clip.id === id)
+    : undefined;
+}
+
+export function replaceLibraryClip(
+  items: readonly LibraryItem[],
+  updated: Clip,
+): LibraryItem[] {
+  return items.map((item) =>
+    item.kind === 'clip'
+      ? item.clip.id === updated.id
+        ? { kind: 'clip', clip: updated }
+        : item
+      : !item.group.members.some((clip) => clip.id === updated.id)
+        ? item
+        : {
+            ...item,
+            group: {
+              ...item.group,
+              members: item.group.members.map((clip) =>
+                clip.id === updated.id ? updated : clip,
+              ),
+            },
+          },
+  );
+}
+
+export function removeLibraryClip(
+  items: readonly LibraryItem[],
+  id: string,
+): LibraryItem[] {
+  return items.flatMap((item): LibraryItem[] => {
+    if (item.kind === 'clip') return item.clip.id === id ? [] : [item];
+    const members = item.group.members.filter((clip) => clip.id !== id);
+    if (members.length === item.group.members.length) return [item];
+    if (members.length === 0) return [];
+    if (members.length === 1) return [{ kind: 'clip', clip: members[0]! }];
+    return [{ kind: 'group', group: { ...item.group, members } }];
+  });
+}
+
 export function recentLibraryItems(
   items: readonly LibraryItem[],
 ): LibraryItem[] {
@@ -46,7 +102,12 @@ export function matchesLibraryItemSearch(
   searchText: string,
 ): boolean {
   return libraryItemMembers(item).some((clip) =>
-    matchesSearch(clip, searchText),
+    matchesSearch(
+      item.kind === 'group'
+        ? { ...clip, title: `${item.group.title} ${clip.title ?? ''}` }
+        : clip,
+      searchText,
+    ),
   );
 }
 

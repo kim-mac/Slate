@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-acknowledge-installation-safety"
+description = "Enables the acknowledge_installation_safety command without any pre-configured scope."
+commands.allow = ["acknowledge_installation_safety"]
+
+[[permission]]
+identifier = "deny-acknowledge-installation-safety"
+description = "Denies the acknowledge_installation_safety command without any pre-configured scope."
+commands.deny = ["acknowledge_installation_safety"]

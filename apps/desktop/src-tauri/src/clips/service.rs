@@ -71,6 +71,7 @@ impl ClipService {
             &ClipGroup {
                 id: Uuid::new_v4().to_string(),
                 title: String::new(),
+                title_state: String::new(),
                 is_pinned: false,
                 created_at: timestamp.clone(),
                 updated_at: timestamp,
@@ -101,6 +102,36 @@ impl ClipService {
             .set_group_pinned(group_id, is_pinned, &current_timestamp())
     }
 
+    /// Trusted foundation API. IPC callers must use the guarded variant.
+    pub fn rename_group(&self, group_id: &str, title: &str) -> Result<Option<ClipGroup>> {
+        let title = normalize_title(Some(title))?.ok_or(rusqlite::Error::InvalidQuery)?;
+        self.repository
+            .rename_group(group_id, &title, None, &current_timestamp())
+    }
+
+    pub fn rename_group_if_current(
+        &self,
+        group_id: &str,
+        title: &str,
+        expected_state: &str,
+    ) -> Result<Option<ClipGroup>> {
+        let title = normalize_title(Some(title))?.ok_or(rusqlite::Error::InvalidQuery)?;
+        self.repository
+            .rename_group(group_id, &title, Some(expected_state), &current_timestamp())
+    }
+
+    /// Compare the nullable stored title and write only title and updated_at.
+    pub fn update_title(
+        &self,
+        id: &str,
+        expected_title: Option<&str>,
+        title: Option<&str>,
+    ) -> Result<Option<Clip>> {
+        let title = normalize_title(title)?;
+        self.repository
+            .update_title(id, expected_title, title.as_deref(), &current_timestamp())
+    }
+
     pub fn update(&self, id: &str, input: UpdateClip) -> Result<Option<Clip>> {
         let Some(existing_clip) = self.repository.get(id)? else {
             return Ok(None);
@@ -117,8 +148,21 @@ impl ClipService {
             created_at: existing_clip.created_at,
             updated_at: current_timestamp(),
         };
-        self.repository.update(&updated_clip)?;
+        if !self.repository.update(&updated_clip)? {
+            return Ok(None);
+        }
         Ok(Some(updated_clip))
+    }
+
+    /// Compare and write only content against the row currently in storage.
+    pub fn update_content(
+        &self,
+        id: &str,
+        expected_content: &str,
+        content: &str,
+    ) -> Result<Option<Clip>> {
+        self.repository
+            .update_content(id, expected_content, content, &current_timestamp())
     }
 
     pub fn pin(&self, id: &str) -> Result<Option<Clip>> {
@@ -146,4 +190,14 @@ impl ClipService {
 
 fn current_timestamp() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
+}
+
+fn normalize_title(title: Option<&str>) -> Result<Option<String>> {
+    if title.is_some_and(|title| title.len() > 16 * 1024 || title.contains(['\r', '\n'])) {
+        return Err(rusqlite::Error::InvalidQuery);
+    }
+    Ok(title
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .map(str::to_owned))
 }

@@ -5,14 +5,17 @@ param(
 
     [string]$OutputDirectory,
 
-    [switch]$ManifestOnly
+    [switch]$ManifestOnly,
+
+    [string]$ReleaseVersion,
+
+    [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = 'Stop'
 $hostName = 'com.aiclipmemory.bridge'
 $hostExecutable = 'ai-clip-memory-native-host.exe'
 $extensionIdPattern = '^[a-p]{32}$'
-$releaseVersion = '0.1.0'
 
 function Assert-ExtensionId {
     param(
@@ -86,6 +89,16 @@ $defaultOutputDirectory = Join-Path $tauriDirectory 'windows\generated'
 $extensionManifestPath = Join-Path $repositoryRoot 'apps\extension\public\manifest.json'
 $releaseIdentityPath = Join-Path $repositoryRoot 'apps\extension\release-identity.json'
 
+. (Join-Path $PSScriptRoot 'Windows-ReleaseContract.ps1')
+$releaseVersion = Get-WindowsReleaseVersion -RepositoryRoot $repositoryRoot -ReleaseVersion $ReleaseVersion
+if ($ValidateOnly) {
+    if ($ManifestOnly -or -not [string]::IsNullOrWhiteSpace($OutputDirectory)) {
+        throw 'ValidateOnly cannot be combined with manifest output options.'
+    }
+    [pscustomobject]@{ Version = $releaseVersion; Target = $architectureConfiguration.TargetTriple; Profile = 'release' } | ConvertTo-Json -Compress
+    return
+}
+
 $extensionManifest = Get-Content -Raw -LiteralPath $extensionManifestPath | ConvertFrom-Json
 $releaseIdentity = Get-Content -Raw -LiteralPath $releaseIdentityPath | ConvertFrom-Json
 $chromeExtensionId = ConvertTo-ChromiumExtensionId -PublicKey $extensionManifest.key
@@ -106,6 +119,7 @@ if (-not [string]::IsNullOrWhiteSpace($OutputDirectory) -and -not $ManifestOnly)
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = $defaultOutputDirectory
 }
+Assert-WindowsReleaseOutputPath -Path $OutputDirectory
 
 $allowedOrigins = @(
     "chrome-extension://$chromeExtensionId/"

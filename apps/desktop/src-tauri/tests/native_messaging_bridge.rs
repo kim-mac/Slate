@@ -3,7 +3,7 @@ use std::io::{self, Cursor, Read};
 
 use ai_clip_memory_desktop_lib::app_paths::clip_database_path;
 use ai_clip_memory_desktop_lib::bridge::native_host::{run_once, MAX_MESSAGE_BYTES};
-use ai_clip_memory_desktop_lib::clips::ClipService;
+use ai_clip_memory_desktop_lib::clips::{ClipService, LibraryItem};
 use serde_json::{json, Value};
 
 fn request(content: &str) -> Vec<u8> {
@@ -93,6 +93,51 @@ fn persists_a_valid_capture_in_the_same_database_path_used_by_the_gui() {
         result,
         json!({ "version": 1, "ok": true, "clipId": clip_id })
     );
+}
+
+#[test]
+fn repeated_native_captures_preserve_protocol_and_only_succeed_after_atomic_grouping() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("clips.sqlite3");
+    let service = service_at(&path);
+    let mut ids = Vec::new();
+    for _ in 0..3 {
+        let mut output = Vec::new();
+        run_once(
+            &mut Cursor::new(frame(&request("same content"))),
+            &mut output,
+            &service,
+        )
+        .unwrap();
+        let result = response(&output);
+        let id = result["clipId"].as_str().unwrap().to_owned();
+        assert_eq!(result, json!({"version": 1, "ok": true, "clipId": id}));
+        assert!(service.get(&id).unwrap().is_some());
+        ids.push(id);
+    }
+    let items = service.list_library_items().unwrap();
+    assert_eq!(items.len(), 1);
+    let LibraryItem::Group { group } = &items[0] else {
+        panic!("native capture must use the shared grouping transaction")
+    };
+    assert_eq!(group.members.len(), 3);
+    assert!(ids
+        .iter()
+        .all(|id| group.members.iter().any(|clip| &clip.id == id)));
+    rusqlite::Connection::open(&path).unwrap().execute_batch("CREATE TRIGGER fail_append BEFORE INSERT ON clip_group_members BEGIN SELECT RAISE(ABORT, 'injected failure'); END;").unwrap();
+    let mut output = Vec::new();
+    run_once(
+        &mut Cursor::new(frame(&request("failed capture"))),
+        &mut output,
+        &service,
+    )
+    .unwrap();
+    assert_eq!(
+        response(&output),
+        json!({"version": 1, "ok": false, "error": "storage_unavailable"})
+    );
+    assert_eq!(service.list().unwrap().len(), 3);
+    assert_eq!(service.get_group(&group.id).unwrap().unwrap(), *group);
 }
 
 #[test]

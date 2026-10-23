@@ -165,6 +165,208 @@ pub fn persist_capture(
     .map_err(|()| CaptureFailure::Storage)
 }
 
+pub(crate) fn capture_and_persist(
+    storage: &StorageState,
+    capture: impl FnOnce() -> Result<CapturedSelection, CaptureFailure>,
+) -> Result<(), CaptureFailure> {
+    let permit = storage
+        .admit_operation()
+        .map_err(|_| CaptureFailure::Unavailable)?;
+    struct AdmittedSink<'a> {
+        storage: &'a StorageState,
+        permit: Option<&'a crate::installation_safety::OperationPermit>,
+    }
+    impl ClipSink for AdmittedSink<'_> {
+        fn create(&self, input: CreateClip) -> Result<(), ()> {
+            self.storage
+                .with_admitted_service(self.permit, |service| service.create(input))
+                .map(|_| ())
+                .map_err(|_| ())
+        }
+    }
+    let sink = AdmittedSink {
+        storage,
+        permit: permit.as_ref(),
+    };
+    persist_capture(capture(), &sink)
+}
+
+#[cfg(test)]
+mod safety_tests {
+    use super::*;
+    use crate::installation_safety::SafetyCoordinator;
+    use std::cell::Cell;
+
+    fn selection() -> CapturedSelection {
+        CapturedSelection {
+            content: "admitted selection".into(),
+            source_app: None,
+            source_page_title: None,
+        }
+    }
+
+    #[test]
+    fn closed_admission_never_touches_the_clipboard_and_does_not_queue_capture() {
+        let directory = tempfile::tempdir().unwrap();
+        let safety = SafetyCoordinator::new();
+        let storage = StorageState::with_safety(directory.path().into(), safety.clone());
+        let attempt = safety.begin_preparation().unwrap();
+        let called = Cell::new(false);
+        assert!(capture_and_persist(&storage, || {
+            called.set(true);
+            Ok(selection())
+        })
+        .is_err());
+        assert!(!called.get());
+        drop(attempt);
+        assert!(!called.get());
+        assert!(storage.with_service(|s| s.list()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn admitted_capture_holds_permit_through_restoration_and_persists_after_closure() {
+        let directory = tempfile::tempdir().unwrap();
+        let safety = SafetyCoordinator::new();
+        let main = safety.connect("main").unwrap();
+        let launcher = safety.connect("launcher").unwrap();
+        let storage = StorageState::with_safety(directory.path().into(), safety.clone());
+        let mut attempt = None;
+        let mut restored = false;
+        capture_and_persist(&storage, || {
+            let a = safety.begin_preparation().unwrap();
+            let epoch = safety.status().unwrap().generation;
+            safety.acknowledge("main", main, epoch).unwrap();
+            safety.acknowledge("launcher", launcher, epoch).unwrap();
+            let (_, a) = a
+                .try_freeze()
+                .err()
+                .expect("capture lifecycle must drain first");
+            // The entire platform capture closure owns the permit, including the
+            // ClipboardRestorationGuard's finish/Drop before returning selection.
+            restored = true;
+            assert!(safety.admit().is_err());
+            attempt = Some(a);
+            Ok(selection())
+        })
+        .unwrap();
+        assert!(restored);
+        let a = attempt.take().unwrap();
+        let guard = match a.try_freeze() {
+            Ok(g) => g,
+            Err(_) => panic!("capture must drain"),
+        };
+        assert!(storage.with_service(|s| s.list()).is_err());
+        drop(guard);
+        assert_eq!(
+            storage.with_service(|s| s.list()).unwrap()[0].content,
+            "admitted selection"
+        );
+    }
+
+    #[test]
+    fn capture_panic_releases_operation_permit() {
+        let directory = tempfile::tempdir().unwrap();
+        let safety = SafetyCoordinator::new();
+        let storage = StorageState::with_safety(directory.path().into(), safety.clone());
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = capture_and_persist(&storage, || panic!("capture backend panic"));
+        }))
+        .is_err());
+        let main = safety.connect("main").unwrap();
+        let launcher = safety.connect("launcher").unwrap();
+        let a = safety.begin_preparation().unwrap();
+        let epoch = safety.status().unwrap().generation;
+        safety.acknowledge("main", main, epoch).unwrap();
+        safety.acknowledge("launcher", launcher, epoch).unwrap();
+        assert!(a.try_freeze().is_ok());
+    }
+
+    struct ProbedBackend<F: FnMut(&'static str)>(F);
+    impl<F: FnMut(&'static str)> ClipboardCaptureBackend for ProbedBackend<F> {
+        type Snapshot = ();
+        fn foreground_metadata(&mut self) -> Result<SourceMetadata, CaptureFailure> {
+            (self.0)("foreground");
+            Ok(SourceMetadata {
+                source_app: None,
+                source_page_title: None,
+            })
+        }
+        fn clipboard_sequence(&mut self) -> Result<u32, CaptureFailure> {
+            (self.0)("sequence");
+            Ok(1)
+        }
+        fn preserve_clipboard(&mut self) -> Result<(), CaptureFailure> {
+            (self.0)("snapshot");
+            Ok(())
+        }
+        fn wait_for_modifiers_released(&mut self) -> Result<(), CaptureFailure> {
+            (self.0)("modifiers");
+            Ok(())
+        }
+        fn foreground_is_unchanged(&mut self) -> bool {
+            (self.0)("check-foreground");
+            true
+        }
+        fn send_copy(&mut self) -> Result<(), CaptureFailure> {
+            (self.0)("copy");
+            Ok(())
+        }
+        fn wait_for_clipboard_change(&mut self, _: u32) -> Result<bool, CaptureFailure> {
+            (self.0)("changed");
+            Ok(true)
+        }
+        fn read_text(&mut self) -> Result<Option<String>, CaptureFailure> {
+            (self.0)("read");
+            Ok(Some("admitted selection".into()))
+        }
+        fn restore_clipboard(&mut self, _: ()) -> Result<(), CaptureFailure> {
+            (self.0)("restore");
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn real_capture_pipeline_remains_admitted_at_every_stage_including_clipboard_restore() {
+        let directory = tempfile::tempdir().unwrap();
+        let safety = SafetyCoordinator::new();
+        let main = safety.connect("main").unwrap();
+        let launcher = safety.connect("launcher").unwrap();
+        let storage = StorageState::with_safety(directory.path().into(), safety.clone());
+        let mut attempt = None;
+        let mut stages = Vec::new();
+        let mut backend = ProbedBackend(|stage| {
+            if attempt.is_none() {
+                let a = safety.begin_preparation().unwrap();
+                let epoch = safety.status().unwrap().generation;
+                safety.acknowledge("main", main, epoch).unwrap();
+                safety.acknowledge("launcher", launcher, epoch).unwrap();
+                attempt = Some(a);
+            }
+            let a = attempt.take().unwrap();
+            let (_, a) = a
+                .try_freeze()
+                .err()
+                .expect("platform lifecycle is still admitted");
+            attempt = Some(a);
+            stages.push(stage);
+        });
+        capture_and_persist(&storage, || capture_clipboard_selection(&mut backend)).unwrap();
+        assert_eq!(stages.first(), Some(&"foreground"));
+        assert_eq!(stages.last(), Some(&"restore"));
+        assert_eq!(stages.len(), 9);
+        let a = attempt.take().unwrap();
+        let guard = match a.try_freeze() {
+            Ok(guard) => guard,
+            Err(_) => panic!("capture drained"),
+        };
+        drop(guard);
+        assert_eq!(
+            storage.with_service(|s| s.list()).unwrap()[0].content,
+            "admitted selection"
+        );
+    }
+}
+
 pub fn capture_feedback_message(result: Result<(), CaptureFailure>) -> &'static str {
     match result {
         Ok(()) => "Saved to Slate",
@@ -254,10 +456,9 @@ pub(crate) fn shortcut_event(app: &tauri::AppHandle, pressed: bool) {
 
     let handle = app.clone();
     std::thread::spawn(move || {
-        let result = persist_capture(
-            crate::platform::capture_selected_text(&handle),
-            &*handle.state::<StorageState>(),
-        );
+        let result = capture_and_persist(&*handle.state::<StorageState>(), || {
+            crate::platform::capture_selected_text(&handle)
+        });
         let _ = handle
             .notification()
             .builder()

@@ -10,11 +10,20 @@ import { ListFilter, Moon, Plus, RefreshCw, Search, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useClipLibrary } from './hooks/useClipLibrary';
+import { useInstallationSafety } from './hooks/useInstallationSafety';
+import { useInlineClipContent } from './hooks/useInlineClipContent';
+import { tauriExtensionClient, type ExtensionClient } from './extensionClient';
+import {
+  tauriInstallationSafetyClient,
+  type InstallationSafetyClient,
+  type SafetyLease,
+} from './installationSafetyClient';
 import {
   hasSameSourceHint,
   libraryItemRef,
   reconcileSelectedIds,
   selectedItemsInLibraryOrder,
+  selectedItemsInSelectionOrder,
 } from './lib/mergeClips';
 import {
   displayTitle,
@@ -27,6 +36,11 @@ import {
   matchesLibraryItemContentType,
   matchesLibraryItemSearch,
   recentLibraryItems,
+  libraryItemContainingClip,
+  replaceLibraryClip,
+  removeLibraryClip,
+  asLibraryItem,
+  findLibraryClip,
 } from './lib/libraryItems';
 import { ClipFeedback } from './components/ClipFeedback';
 import { LauncherAvailability } from './components/LauncherAvailability';
@@ -46,6 +60,8 @@ import {
 
 import { tauriClipClient, type ClipClient } from './clipClient';
 import { tauriStartupClient, type StartupClient } from './startupClient';
+import { tauriUpdaterClient, type UpdaterClient } from './updaterClient';
+import { useUpdater } from './hooks/useUpdater';
 import { AppSidebar, type AppView } from './components/AppSidebar';
 import { ClipDetail } from './components/ClipDetail';
 import { MergedClipDetail } from './components/MergedClipDetail';
@@ -96,8 +112,11 @@ type DetailOrigin = {
 };
 
 interface AppProps {
+  extensionClient?: ExtensionClient;
   client?: ClipClient;
   startupClient?: StartupClient;
+  updaterClient?: UpdaterClient;
+  safetyClient?: InstallationSafetyClient;
 }
 
 function safeErrorMessage(error: unknown): string {
@@ -115,9 +134,18 @@ function safeErrorMessage(error: unknown): string {
 }
 
 export function App({
+  extensionClient = tauriExtensionClient,
   client = tauriClipClient,
   startupClient = tauriStartupClient,
+  updaterClient = tauriUpdaterClient,
+  safetyClient = tauriInstallationSafetyClient,
 }: AppProps) {
+  const safety = useInstallationSafety(safetyClient);
+  const editorLease = useRef<SafetyLease | null>(null);
+  const confirmationLease = useRef<SafetyLease | null>(null);
+  const editorOpening = useRef(false);
+  const editorClosing = useRef(false);
+  const confirmationOpening = useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<AppView>('all');
   const [expandedSection, setExpandedSection] = useState<Exclude<
@@ -132,6 +160,7 @@ export function App({
     loadError,
     refresh,
     invalidate,
+    readLatest,
   } = useClipLibrary(client);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -140,6 +169,127 @@ export function App({
   const [isSaving, setIsSaving] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const operationPending = useRef(false);
+  const actionResolving = useRef(false);
+  const [isActionResolving, setIsActionResolving] = useState(false);
+  const latestLibrary = useRef(clips);
+  latestLibrary.current = clips;
+  const [inlineGroup, setInlineGroup] = useState<ClipGroup | null>(null);
+  const inline = useInlineClipContent({
+    client,
+    safety,
+    beginOperation,
+    finishOperation,
+    onSaved: async (updated) => {
+      if (updated.kind === 'clip') {
+        setClips((current) => replaceLibraryClip(current, updated.clip));
+        await reconcileSavedClip(updated.clip);
+      } else {
+        setClips((current) =>
+          current.map((item) =>
+            item.kind === 'group' && item.group.id === updated.group.id
+              ? updated
+              : item,
+          ),
+        );
+        try {
+          const latest = await readLatest();
+          if (!latest) return;
+          latestLibrary.current = latest;
+          setClips(latest);
+        } catch {
+          setActionError(
+            'Title saved, but the library could not refresh. Refresh the library to see its current state.',
+          );
+        }
+      }
+    },
+    onFinished: async (edited, kind) => {
+      if (!inlineGroup && kind === 'content') return;
+      try {
+        const latest = await readLatest();
+        if (!latest) {
+          setInlineGroup(null);
+          return;
+        }
+        latestLibrary.current = latest;
+        setClips(latest);
+      } catch {
+        setActionError(
+          'Editing finished, but the library could not refresh. Refresh the library to see its current group.',
+        );
+      }
+      const containing =
+        edited.kind === 'clip'
+          ? libraryItemContainingClip(latestLibrary.current, edited.clip.id)
+          : (latestLibrary.current.find(
+              (item) =>
+                item.kind === 'group' && item.group.id === edited.group.id,
+            ) ??
+            edited.group.members
+              .map((member) =>
+                libraryItemContainingClip(latestLibrary.current, member.id),
+              )
+              .find(Boolean));
+      updateSelectedId(containing ? libraryItemId(containing) : null);
+      if (!containing) {
+        setDetailOrigin(null);
+        currentWorkspaceMode.current = 'calendar';
+        setWorkspaceMode('calendar');
+      }
+      setInlineGroup(null);
+    },
+  });
+  const updateBlocked = Boolean(
+    formMode ||
+    deleteTarget ||
+    isSaving ||
+    isBusy ||
+    isActionResolving ||
+    safety.frozen ||
+    inline.draft ||
+    inline.isOpening,
+  );
+  const updater = useUpdater(updaterClient, updateBlocked);
+  const closeRequested = useRef<() => void>(() => undefined);
+  closeRequested.current = () => {
+    if (!inline.isActive()) {
+      setActionError('Finish the current editor before closing Slate.');
+      return;
+    }
+    inline.afterSave(async () => {
+      try {
+        if (!safetyClient.hideMainAfterSave)
+          throw new Error('Hide unavailable');
+        await safetyClient.hideMainAfterSave();
+      } catch {
+        setActionError(
+          'Your content is saved, but Slate could not hide. Try closing the window again.',
+        );
+      }
+    });
+  };
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | undefined;
+    void safetyClient
+      .onCloseRequested?.(() => {
+        if (active) closeRequested.current();
+      })
+      .then((stop) => {
+        if (active) unlisten = stop;
+        else stop();
+      })
+      .catch(() => {
+        if (active)
+          setActionError(
+            'Slate could not connect its close safeguard. Save or cancel editing before closing.',
+          );
+      });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, [safetyClient]);
   const [contentType, setContentType] = useState<ClipContentType | 'all'>(
     'all',
   );
@@ -177,12 +327,19 @@ export function App({
   function notify(message: string) {
     setStatus({ message, id: ++noticeId.current });
   }
-  function beginOperation() {
-    if (operationPending.current || isRefreshing || isLoading) return false;
+  function beginOperation(repeatedFeedback?: string) {
+    if (
+      operationPending.current ||
+      actionResolving.current ||
+      isRefreshing ||
+      isLoading ||
+      safety.frozen
+    )
+      return false;
     operationPending.current = true;
     invalidate();
     setIsBusy(true);
-    setStatus(null);
+    if (status?.message !== repeatedFeedback) setStatus(null);
     return true;
   }
   function finishOperation() {
@@ -213,8 +370,34 @@ export function App({
       ),
     [expandedSection, matchingClips],
   );
-  const selectedClip =
-    clips.find((clip) => libraryItemId(clip) === selectedId) ?? null;
+  // A background capture can group the selected clip while its inline draft is
+  // open. Keep that editor mounted until persistence/cancellation and lease
+  // cleanup finish, then resolve the containing group by the same clip ID.
+  const currentInlineGroup = inlineGroup
+    ? clips.find(
+        (item) => item.kind === 'group' && item.group.id === inlineGroup.id,
+      )
+    : undefined;
+  const selectedClip: LibraryItem | null =
+    inlineGroup &&
+    (inline.editingClip || inline.editingGroup) &&
+    inline.isActive()
+      ? {
+          kind: 'group',
+          group:
+            currentInlineGroup?.kind === 'group'
+              ? currentInlineGroup.group
+              : { ...inlineGroup, members: [] },
+        }
+      : inline.editingClip &&
+          inline.isActive() &&
+          inline.editingClip.id === selectedId
+        ? { kind: 'clip', clip: inline.editingClip }
+        : (clips.find((item) => libraryItemId(item) === selectedId) ??
+          (selectedId
+            ? libraryItemContainingClip(clips, selectedId)
+            : undefined) ??
+          null);
   const validSelectedCount = selectedItemsInLibraryOrder(
     clips,
     selectedClipIds,
@@ -232,13 +415,178 @@ export function App({
   const hasSearch = !!searchText.trim();
   const hasTypeFilter = contentType !== 'all';
   const hasFilters = hasSearch || hasTypeFilter;
-  const initialLoadFailure = !!loadError && clips.length === 0 && !isLoading;
+  const initialLoadFailure =
+    !!loadError && clips.length === 0 && !isLoading && !inline.isActive();
   const ThemeIcon = themeMode === 'light' ? Sun : Moon;
   const themeActionLabel =
     themeMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
   function clearFilters() {
     setSearchText('');
     setContentType('all');
+  }
+
+  function refreshLibrary() {
+    if (actionResolving.current) return;
+    if (inline.isActive()) {
+      inline.afterSave(refreshLibrary);
+      return;
+    }
+    if (!operationPending.current) {
+      setStatus(null);
+      setActionError(null);
+      void refresh();
+    }
+  }
+
+  function deferInlineAction(
+    action: (latest: LibraryItem[]) => void | Promise<void>,
+  ): boolean {
+    if (actionResolving.current) return true;
+    if (!inline.isActive()) return false;
+    inline.afterSave(async () => {
+      actionResolving.current = true;
+      setIsActionResolving(true);
+      try {
+        const latest = await readLatest();
+        if (!latest) {
+          unavailableAction();
+          return;
+        }
+        latestLibrary.current = latest;
+        setClips(latest);
+        actionResolving.current = false;
+        setIsActionResolving(false);
+        await action(latest);
+      } catch {
+        setStatus(null);
+        setActionError(
+          'Could not complete the requested action. Refresh the library and try again.',
+        );
+      } finally {
+        actionResolving.current = false;
+        setIsActionResolving(false);
+      }
+    });
+    return true;
+  }
+
+  function unavailableAction() {
+    setStatus(null);
+    setActionError(
+      'This clip or group changed or is no longer available. Refresh the library and try again.',
+    );
+  }
+
+  function groupIn(items: LibraryItem[], id: string) {
+    const item = items.find(
+      (candidate) => candidate.kind === 'group' && candidate.group.id === id,
+    );
+    return item?.kind === 'group' ? item.group : undefined;
+  }
+
+  async function beginInline(clip: Clip, group?: ClipGroup, title = false) {
+    if (
+      deferInlineAction(async (latest) => {
+        const current = findLibraryClip(latest, clip.id);
+        if (!current) {
+          unavailableAction();
+          return;
+        }
+        const containing = libraryItemContainingClip(latest, clip.id);
+        if (title && containing?.kind === 'group') {
+          unavailableAction();
+          return;
+        }
+        await beginInline(
+          current,
+          containing?.kind === 'group' ? containing.group : undefined,
+          title,
+        );
+      })
+    )
+      return;
+    if (
+      formMode ||
+      deleteTarget ||
+      editorOpening.current ||
+      editorClosing.current ||
+      confirmationOpening.current ||
+      editorLease.current ||
+      confirmationLease.current ||
+      operationPending.current
+    )
+      return;
+    setStatus(null);
+    setInlineGroup(group ?? null);
+    currentWorkspaceMode.current = 'detail';
+    setWorkspaceMode('detail');
+    if (group) updateSelectedId(group.id);
+    else updateSelectedId(clip.id);
+    if (!(await (title ? inline.beginTitle(clip) : inline.begin(clip))))
+      setInlineGroup(null);
+  }
+
+  async function beginGroupTitle(group: ClipGroup) {
+    if (
+      deferInlineAction(async (latest) => {
+        const current = groupIn(latest, group.id);
+        if (current) await beginGroupTitle(current);
+        else unavailableAction();
+      })
+    )
+      return;
+    if (
+      formMode ||
+      deleteTarget ||
+      editorOpening.current ||
+      editorClosing.current ||
+      confirmationOpening.current ||
+      editorLease.current ||
+      confirmationLease.current ||
+      operationPending.current
+    )
+      return;
+    if (!group.titleState) {
+      unavailableAction();
+      return;
+    }
+    setStatus(null);
+    setInlineGroup(group);
+    updateSelectedId(group.id);
+    currentWorkspaceMode.current = 'detail';
+    setWorkspaceMode('detail');
+    if (!(await inline.beginGroupTitle(group))) setInlineGroup(null);
+  }
+
+  function requestMemberMenu(group: ClipGroup, clip: Clip, open: () => void) {
+    const resolve = async (latest: LibraryItem[]) => {
+      const current = groupIn(latest, group.id);
+      if (current?.members.some((member) => member.id === clip.id)) open();
+      else unavailableAction();
+    };
+    if (
+      deferInlineAction(resolve) ||
+      operationPending.current ||
+      actionResolving.current
+    )
+      return;
+    actionResolving.current = true;
+    setIsActionResolving(true);
+    void readLatest()
+      .then((latest) => {
+        if (!latest) {
+          unavailableAction();
+          return;
+        }
+        latestLibrary.current = latest;
+        setClips(latest);
+        return resolve(latest);
+      })
+      .catch(unavailableAction)
+      .finally(() => {
+        actionResolving.current = false;
+        setIsActionResolving(false);
+      });
   }
 
   function exitSelectionMode() {
@@ -258,7 +606,7 @@ export function App({
   }
 
   async function startMerge() {
-    const selected = selectedItemsInLibraryOrder(clips, selectedClipIds);
+    const selected = selectedItemsInSelectionOrder(clips, selectedClipIds);
     if (selected.length < 2) {
       setMergeError('Select at least two clips to merge.');
       return;
@@ -275,6 +623,7 @@ export function App({
       notify(`${group.members.length} clips merged`);
     } catch (error) {
       setMergeError(safeErrorMessage(error));
+      setStatus(null);
     } finally {
       finishOperation();
     }
@@ -286,6 +635,16 @@ export function App({
   }
 
   function openClip(id: string, origin: DetailOrigin) {
+    if (
+      deferInlineAction((latest) => {
+        const target =
+          latest.find((item) => libraryItemId(item) === id) ??
+          libraryItemContainingClip(latest, id);
+        if (target) openClip(libraryItemId(target), origin);
+        else unavailableAction();
+      })
+    )
+      return;
     updateSelectedId(id);
     setDetailOrigin(origin);
     currentWorkspaceMode.current = 'detail';
@@ -293,6 +652,11 @@ export function App({
   }
 
   function returnToCalendar(origin: DetailOrigin | null = detailOrigin) {
+    if (actionResolving.current) return;
+    if (inline.isActive()) {
+      inline.afterSave(() => returnToCalendar(origin));
+      return;
+    }
     if (currentWorkspaceMode.current === 'calendar') return;
     currentWorkspaceMode.current = 'calendar';
     pendingCalendarFocus.current = {
@@ -302,15 +666,148 @@ export function App({
     setWorkspaceMode('calendar');
   }
 
+  async function openEditor(mode: FormMode) {
+    if (
+      deferInlineAction(async (latest) => {
+        if (mode.type === 'create') await openEditor(mode);
+        else {
+          const target = findLibraryClip(latest, mode.clip.id);
+          if (target) await openEditor({ type: 'edit', clip: target });
+          else unavailableAction();
+        }
+      })
+    )
+      return;
+    if (
+      editorOpening.current ||
+      editorClosing.current ||
+      formMode ||
+      operationPending.current
+    )
+      return;
+    editorOpening.current = true;
+    setStatus(null);
+    try {
+      // A completed save may have lost its release acknowledgement. Retry only
+      // the lease cleanup, never the already-confirmed database mutation.
+      if (editorLease.current) {
+        if (!(await safety.release(editorLease.current))) return;
+        editorLease.current = null;
+      }
+      const lease = await safety.acquire('editor');
+      if (!lease) {
+        setActionError('Slate is not ready to open an editor. Try again.');
+        return;
+      }
+      editorLease.current = lease;
+      setFormError(null);
+      if (mode.type === 'create') {
+        exitSelectionMode();
+        setActiveView('all');
+        setExpandedSection('all');
+      }
+      setFormMode(mode);
+    } finally {
+      editorOpening.current = false;
+    }
+  }
   function editClip(clip: Clip) {
+    void openEditor({ type: 'edit', clip });
+  }
+  async function cancelEditor() {
+    if (
+      operationPending.current ||
+      isSaving ||
+      editorOpening.current ||
+      editorClosing.current
+    )
+      return false;
+    editorClosing.current = true;
+    // Cancellation is explicit. End editing before awaiting lease cleanup so
+    // input cannot change after the user has chosen to discard the draft.
+    setFormMode(null);
     setFormError(null);
-    setFormMode({ type: 'edit', clip });
+    try {
+      if (!(await safety.release(editorLease.current))) return false;
+      editorLease.current = null;
+      return true;
+    } finally {
+      editorClosing.current = false;
+    }
+  }
+  async function requestDelete(target: DeleteTarget) {
+    if (
+      deferInlineAction(async (latest) => {
+        if (target.type === 'group') {
+          const group = groupIn(latest, target.group.id);
+          if (group) await requestDelete({ ...target, group });
+          else unavailableAction();
+        } else {
+          const clip = findLibraryClip(latest, target.clip.id);
+          if (
+            clip &&
+            (target.type === 'clip' ||
+              groupIn(latest, target.groupId)?.members.some(
+                (member) => member.id === clip.id,
+              ))
+          )
+            await requestDelete({ ...target, clip });
+          else unavailableAction();
+        }
+      })
+    )
+      return;
+    if (confirmationOpening.current || deleteTarget || operationPending.current)
+      return;
+    confirmationOpening.current = true;
+    try {
+      if (confirmationLease.current) {
+        if (!(await releaseConfirmation())) return;
+      }
+      const lease = await safety.acquire('confirmation');
+      if (!lease) {
+        setActionError('Slate is not ready to open a confirmation. Try again.');
+        return;
+      }
+      confirmationLease.current = lease;
+      setDeleteTarget(target);
+    } finally {
+      confirmationOpening.current = false;
+    }
+  }
+  async function releaseConfirmation() {
+    if (!(await safety.release(confirmationLease.current))) return false;
+    confirmationLease.current = null;
+    return true;
+  }
+
+  function afterEditorClosed(navigate: () => void) {
+    if (actionResolving.current) return;
+    if (inline.isActive()) {
+      inline.afterSave(navigate);
+      return;
+    }
+    if (
+      editorOpening.current ||
+      editorClosing.current ||
+      operationPending.current
+    )
+      return;
+    if (!editorLease.current) {
+      navigate();
+      return;
+    }
+    void cancelEditor().then((closed) => {
+      if (closed) navigate();
+    });
   }
 
   function showLibrary(view: Exclude<AppView, 'settings'>) {
-    setActiveView(view);
-    setExpandedSection(view);
-    setFormMode(null);
+    afterEditorClosed(() => {
+      setActiveView(view);
+      setExpandedSection(view);
+      setFormMode(null);
+    });
   }
 
   useEffect(() => {
@@ -321,9 +818,29 @@ export function App({
   }, [clips]);
 
   function toggleLibrarySection(view: Exclude<AppView, 'settings'>) {
-    setActiveView(view);
-    setExpandedSection((current) => (current === view ? null : view));
-    setFormMode(null);
+    afterEditorClosed(() => {
+      setActiveView(view);
+      setExpandedSection((current) => (current === view ? null : view));
+      setFormMode(null);
+    });
+  }
+
+  async function reconcileSavedClip(saved: Clip) {
+    try {
+      const latest = await readLatest();
+      if (!latest) return undefined;
+      latestLibrary.current = latest;
+      setClips(latest);
+      return libraryItemContainingClip(latest, saved.id);
+    } catch {
+      // The write has already committed. Never turn a refresh failure into a
+      // retryable Create/Edit form or invent standalone membership.
+      setClips((current) => replaceLibraryClip(current, saved));
+      setActionError(
+        'Clip saved, but the library could not refresh. Refresh the library to see its current group.',
+      );
+      return undefined;
+    }
   }
 
   async function saveClip(input: ClipInput) {
@@ -331,29 +848,30 @@ export function App({
     setFormError(null);
     setIsSaving(true);
     try {
-      if (formMode?.type === 'edit') {
-        const updated = await client.update(formMode.clip.id, input);
-        setClips((current) =>
-          current.map((item) =>
-            item.kind === 'clip' && item.clip.id === updated.id
-              ? { kind: 'clip', clip: updated }
-              : item,
-          ),
-        );
-        updateSelectedId(updated.id);
-      } else {
-        const created = await client.create(input);
-        setClips((current) => [{ kind: 'clip', clip: created }, ...current]);
+      const editing = formMode?.type === 'edit';
+      const saved = editing
+        ? await client.update(formMode.clip.id, input)
+        : await client.create(input);
+      const containing = await reconcileSavedClip(saved);
+      if (!editing) {
         setActiveView('all');
         setExpandedSection('all');
-        const createdMonth = calendarMonthFromTimestamp(created.createdAt);
+        const createdMonth = calendarMonthFromTimestamp(
+          containing?.kind === 'group'
+            ? containing.group.createdAt
+            : saved.createdAt,
+        );
         if (createdMonth) setVisibleMonth(createdMonth);
-        openClip(created.id, { type: 'create' });
+        if (containing) openClip(libraryItemId(containing), { type: 'create' });
+      } else if (containing) {
+        updateSelectedId(libraryItemId(containing));
       }
+      if (await safety.release(editorLease.current)) editorLease.current = null;
       setFormMode(null);
       setFormError(null);
       notify('Clip saved.');
     } catch (saveError) {
+      setStatus(null);
       setFormError(safeErrorMessage(saveError));
     } finally {
       setIsSaving(false);
@@ -362,19 +880,22 @@ export function App({
   }
 
   async function setPinned(clip: Clip, isPinned: boolean) {
+    if (
+      deferInlineAction(async (latest) => {
+        const current = findLibraryClip(latest, clip.id);
+        if (current) await setPinned(current, isPinned);
+        else unavailableAction();
+      })
+    )
+      return;
     if (!beginOperation()) return;
     setActionError(null);
     try {
       const updated = await client.setPinned(clip.id, isPinned);
-      setClips((current) =>
-        current.map((item) =>
-          item.kind === 'clip' && item.clip.id === updated.id
-            ? { kind: 'clip', clip: updated }
-            : item,
-        ),
-      );
+      setClips((current) => replaceLibraryClip(current, updated));
       notify(isPinned ? 'Clip pinned.' : 'Clip unpinned.');
     } catch (pinError) {
+      setStatus(null);
       setActionError(safeErrorMessage(pinError));
     } finally {
       finishOperation();
@@ -387,11 +908,19 @@ export function App({
     setActionError(null);
     try {
       await client.delete(clip.id);
-      setClips((current) =>
-        current.filter(
-          (item) => !(item.kind === 'clip' && item.clip.id === clip.id),
-        ),
-      );
+      setClips((current) => removeLibraryClip(current, clip.id));
+      if (libraryItemContainingClip(clips, clip.id)?.kind === 'group') {
+        try {
+          setClips(
+            recentLibraryItems((await client.list()).map(asLibraryItem)),
+          );
+        } catch {
+          // Deletion committed; keep its local result and offer a read retry.
+          setActionError(
+            'Clip deleted, but the library could not refresh. Refresh the library to see its current group.',
+          );
+        }
+      }
       if (currentSelectedId.current === clip.id) {
         updateSelectedId(null);
         setDetailOrigin(null);
@@ -399,13 +928,25 @@ export function App({
       }
       notify('Clip deleted.');
     } catch (deleteError) {
+      setStatus(null);
       setActionError(safeErrorMessage(deleteError));
     } finally {
+      await releaseConfirmation();
       finishOperation();
     }
   }
 
   async function setItemPinned(item: LibraryItem, isPinned: boolean) {
+    if (
+      deferInlineAction(async (latest) => {
+        const current = latest.find(
+          (candidate) => libraryItemId(candidate) === libraryItemId(item),
+        );
+        if (current) await setItemPinned(current, isPinned);
+        else unavailableAction();
+      })
+    )
+      return;
     if (item.kind === 'clip') return setPinned(item.clip, isPinned);
     if (!beginOperation()) return;
     setActionError(null);
@@ -421,12 +962,24 @@ export function App({
       notify(isPinned ? 'Merged clip pinned.' : 'Merged clip unpinned.');
     } catch (error) {
       setActionError(safeErrorMessage(error));
+      setStatus(null);
     } finally {
       finishOperation();
     }
   }
 
   async function unmergeMember(group: ClipGroup, clip: Clip) {
+    if (
+      deferInlineAction(async (latest) => {
+        const current = groupIn(latest, group.id);
+        const member = current?.members.find(
+          (candidate) => candidate.id === clip.id,
+        );
+        if (current && member) await unmergeMember(current, member);
+        else unavailableAction();
+      })
+    )
+      return;
     if (!beginOperation()) return;
     setActionError(null);
     try {
@@ -435,12 +988,21 @@ export function App({
       notify('Clip unmerged.');
     } catch (error) {
       setActionError(safeErrorMessage(error));
+      setStatus(null);
     } finally {
       finishOperation();
     }
   }
 
   async function unmergeGroup(group: ClipGroup) {
+    if (
+      deferInlineAction(async (latest) => {
+        const current = groupIn(latest, group.id);
+        if (current) await unmergeGroup(current);
+        else unavailableAction();
+      })
+    )
+      return;
     if (!beginOperation()) return;
     setActionError(null);
     try {
@@ -452,6 +1014,7 @@ export function App({
       notify(`${group.members.length} clips unmerged.`);
     } catch (error) {
       setActionError(safeErrorMessage(error));
+      setStatus(null);
     } finally {
       finishOperation();
     }
@@ -467,7 +1030,9 @@ export function App({
       notify('Clip deleted.');
     } catch (error) {
       setActionError(safeErrorMessage(error));
+      setStatus(null);
     } finally {
+      await releaseConfirmation();
       finishOperation();
     }
   }
@@ -491,18 +1056,55 @@ export function App({
       notify(`${group.members.length} clips deleted.`);
     } catch (error) {
       setActionError(safeErrorMessage(error));
+      setStatus(null);
     } finally {
+      await releaseConfirmation();
       finishOperation();
     }
   }
 
   async function copyClip(clip: Clip) {
-    if (!beginOperation()) return;
+    if (
+      deferInlineAction(async (latest) => {
+        const current = findLibraryClip(latest, clip.id);
+        if (current) await copyClip(current);
+        else unavailableAction();
+      })
+    )
+      return;
+    if (!beginOperation('Clip copied.')) return;
     setActionError(null);
     try {
       await client.copyContent(clip.id);
       notify('Clip copied.');
     } catch (copyError) {
+      setStatus(null);
+      setActionError(safeErrorMessage(copyError));
+    } finally {
+      finishOperation();
+    }
+  }
+
+  async function copyGroup(group: ClipGroup) {
+    if (
+      deferInlineAction(async (latest) => {
+        const current = groupIn(latest, group.id);
+        if (current) await copyGroup(current);
+        else unavailableAction();
+      })
+    )
+      return;
+    if (!beginOperation('All clips copied.')) return;
+    setActionError(null);
+    try {
+      // Explicitly carry the displayed order, never previews or unsaved drafts.
+      await client.copyContent(
+        group.id,
+        group.members.map((member) => member.id),
+      );
+      notify('All clips copied.');
+    } catch (copyError) {
+      setStatus(null);
       setActionError(safeErrorMessage(copyError));
     } finally {
       finishOperation();
@@ -510,11 +1112,20 @@ export function App({
   }
 
   async function openSource(clip: Clip) {
+    if (
+      deferInlineAction(async (latest) => {
+        const current = findLibraryClip(latest, clip.id);
+        if (current?.sourceUrl) await openSource(current);
+        else unavailableAction();
+      })
+    )
+      return;
     if (!beginOperation()) return;
     setActionError(null);
     try {
       await client.openSource(clip.id);
     } catch (openError) {
+      setStatus(null);
       setActionError(safeErrorMessage(openError));
     } finally {
       finishOperation();
@@ -522,6 +1133,7 @@ export function App({
   }
 
   function focusSearch() {
+    if (actionResolving.current) return;
     flushSync(() => {
       if (activeView === 'settings') {
         setActiveView('all');
@@ -532,6 +1144,9 @@ export function App({
     searchRef.current?.select();
   }
 
+  const detailIdentity = selectedClip
+    ? `${selectedClip.kind}:${libraryItemId(selectedClip)}`
+    : null;
   useEffect(() => {
     persistThemeMode(themeMode);
 
@@ -541,9 +1156,12 @@ export function App({
   }, [themeMode]);
 
   useEffect(() => {
-    if (workspaceMode !== 'detail' || !selectedClip) return;
-    detailBackRef.current?.focus();
-  }, [selectedId, selectedClip, workspaceMode]);
+    if (workspaceMode !== 'detail' || !selectedClip || inline.isActive())
+      return;
+    detailBackRef.current?.focus({ preventScroll: true });
+    // A refreshed record is not navigation. Refocusing Back on each new object
+    // steals focus from member controls and scrolls the detail to its header.
+  }, [selectedId, detailIdentity, workspaceMode]);
 
   useEffect(() => {
     if (
@@ -566,16 +1184,30 @@ export function App({
   useEffect(() => {
     if (
       workspaceMode !== 'detail' ||
+      inline.isActive() ||
       !selectedId ||
       isLoading ||
       isRefreshing ||
       clips.some((clip) => libraryItemId(clip) === selectedId)
     )
       return;
+    const containing = libraryItemContainingClip(clips, selectedId);
+    if (containing) {
+      updateSelectedId(libraryItemId(containing));
+      return;
+    }
     updateSelectedId(null);
     setDetailOrigin(null);
     returnToCalendar(null);
-  }, [clips, isLoading, isRefreshing, selectedId, workspaceMode]);
+  }, [
+    clips,
+    isLoading,
+    isRefreshing,
+    selectedId,
+    workspaceMode,
+    inline.draft,
+    inline.isOpening,
+  ]);
 
   useEffect(() => {
     const refreshOnFocus = () => {
@@ -659,13 +1291,35 @@ export function App({
 
   return (
     <TooltipProvider>
-      <div className="app-shell">
+      <div
+        className="app-shell"
+        onClickCapture={(event) => {
+          if (
+            inline.isActive() &&
+            event.target instanceof Element &&
+            !event.target.closest('[data-inline-content-editor]')
+          )
+            void inline.save();
+        }}
+      >
+        {safety.error && (
+          <p role="alert" className="error-message">
+            {safety.error}
+          </p>
+        )}
         <SidebarProvider
           className="workspace min-h-0"
           open={sidebarOpen}
           onOpenChange={setSidebarOpen}
         >
           <AppSidebar
+            onOpenExtension={async () => {
+              if (!(await inline.save()))
+                throw new Error('Resolve the inline edit first.');
+              await extensionClient.openListing();
+            }}
+            updater={updater}
+            updateBlocked={updateBlocked}
             activeView={activeView}
             allCount={clips.length}
             clips={sidebarClips}
@@ -688,9 +1342,11 @@ export function App({
             onToggleSelection={toggleSelection}
             onSelectView={(view) => {
               if (view === 'settings') {
-                exitSelectionMode();
-                setActiveView('settings');
-                setFormMode(null);
+                afterEditorClosed(() => {
+                  exitSelectionMode();
+                  setActiveView('settings');
+                  setFormMode(null);
+                });
               } else {
                 showLibrary(view);
               }
@@ -754,6 +1410,9 @@ export function App({
                         <Button
                           size="sm"
                           onClick={() => void startMerge()}
+                          pending={
+                            validSelectedCount >= 2 && (isBusy || isRefreshing)
+                          }
                           disabled={
                             validSelectedCount < 2 || isBusy || isRefreshing
                           }
@@ -773,14 +1432,16 @@ export function App({
                       <>
                         <Button
                           size="sm"
-                          onClick={() => {
-                            exitSelectionMode();
-                            setActiveView('all');
-                            setExpandedSection('all');
-                            setFormMode({ type: 'create' });
-                            setFormError(null);
-                          }}
-                          disabled={isLoading || isRefreshing || isBusy}
+                          onClick={() => void openEditor({ type: 'create' })}
+                          pending={
+                            !isLoading &&
+                            (isRefreshing || (isBusy && !inline.draft))
+                          }
+                          disabled={
+                            isLoading ||
+                            isRefreshing ||
+                            (isBusy && !inline.draft)
+                          }
                         >
                           <Plus aria-hidden="true" />
                           New clip
@@ -794,6 +1455,7 @@ export function App({
                               setMergeError(null);
                             }}
                             disabled={isLoading || isBusy || isRefreshing}
+                            pending={!isLoading && (isBusy || isRefreshing)}
                           >
                             Merge
                           </Button>
@@ -828,12 +1490,15 @@ export function App({
                             variant="outline"
                             size="icon-sm"
                             aria-label="Refresh"
-                            onClick={() => {
-                              if (!operationPending.current) void refresh();
-                            }}
+                            onClick={refreshLibrary}
+                            pending={
+                              !formMode &&
+                              !deleteTarget &&
+                              (isRefreshing || (isBusy && !inline.draft))
+                            }
                             disabled={
                               isRefreshing ||
-                              isBusy ||
+                              (isBusy && !inline.draft) ||
                               !!formMode ||
                               !!deleteTarget
                             }
@@ -874,9 +1539,7 @@ export function App({
                         size="sm"
                         variant="outline"
                         disabled={isRefreshing || isBusy}
-                        onClick={() => {
-                          if (!operationPending.current) void refresh();
-                        }}
+                        onClick={refreshLibrary}
                       >
                         Retry
                       </Button>
@@ -895,9 +1558,7 @@ export function App({
                         size="sm"
                         variant="outline"
                         disabled={isRefreshing || isBusy}
-                        onClick={() => {
-                          if (!operationPending.current) void refresh();
-                        }}
+                        onClick={refreshLibrary}
                       >
                         Retry
                       </Button>
@@ -906,12 +1567,36 @@ export function App({
                     selectedClip?.kind === 'clip' ? (
                     <ClipDetail
                       clip={selectedClip.clip}
-                      disabled={isBusy || isRefreshing}
+                      pending={(isBusy && !inline.draft) || isRefreshing}
+                      disabled={(isBusy && !inline.draft) || isRefreshing}
+                      inline={{
+                        draft:
+                          inline.editingKind === 'content'
+                            ? inline.draft
+                            : null,
+                        isOpening: inline.isOpening,
+                        onBegin: () => void beginInline(selectedClip.clip),
+                        onChange: inline.change,
+                        onSave: () => void inline.save(),
+                        onCancel: () => void inline.cancel(),
+                      }}
+                      inlineTitle={{
+                        draft:
+                          inline.editingKind === 'clip-title'
+                            ? inline.draft
+                            : null,
+                        isOpening: inline.isOpening,
+                        onBegin: () =>
+                          void beginInline(selectedClip.clip, undefined, true),
+                        onChange: inline.change,
+                        onSave: () => void inline.save(),
+                        onCancel: () => void inline.cancel(),
+                      }}
                       backButtonRef={detailBackRef}
                       onBack={() => returnToCalendar()}
                       onCopy={() => void copyClip(selectedClip.clip)}
                       onDelete={() =>
-                        setDeleteTarget({
+                        void requestDelete({
                           type: 'clip',
                           clip: selectedClip.clip,
                         })
@@ -926,7 +1611,44 @@ export function App({
                     selectedClip?.kind === 'group' ? (
                     <MergedClipDetail
                       group={selectedClip.group}
-                      disabled={isBusy || isRefreshing}
+                      pending={(isBusy && !inline.draft) || isRefreshing}
+                      disabled={(isBusy && !inline.draft) || isRefreshing}
+                      groupAvailable={clips.some(
+                        (item) =>
+                          item.kind === 'group' &&
+                          item.group.id === selectedClip.group.id,
+                      )}
+                      inline={{
+                        clip:
+                          inline.editingKind === 'content'
+                            ? inline.editingClip
+                            : null,
+                        draft:
+                          inline.editingKind === 'content'
+                            ? inline.draft
+                            : null,
+                        isOpening: inline.isOpening,
+                        onBegin: () => undefined,
+                        onBeginMember: (clip) =>
+                          void beginInline(clip, selectedClip.group),
+                        onChange: inline.change,
+                        onSave: () => void inline.save(),
+                        onCancel: () => void inline.cancel(),
+                      }}
+                      inlineTitle={{
+                        draft:
+                          inline.editingKind === 'group-title'
+                            ? inline.draft
+                            : null,
+                        isOpening: inline.isOpening,
+                        onBegin: () => void beginGroupTitle(selectedClip.group),
+                        onChange: inline.change,
+                        onSave: () => void inline.save(),
+                        onCancel: () => void inline.cancel(),
+                      }}
+                      onRequestMemberMenu={(clip, open) =>
+                        requestMemberMenu(selectedClip.group, clip, open)
+                      }
                       backButtonRef={detailBackRef}
                       onBack={() => returnToCalendar()}
                       onSetPinned={(isPinned) =>
@@ -936,7 +1658,7 @@ export function App({
                         void unmergeMember(selectedClip.group, clip)
                       }
                       onDeleteMember={(clip) =>
-                        setDeleteTarget({
+                        void requestDelete({
                           type: 'member',
                           groupId: selectedClip.group.id,
                           clip,
@@ -946,16 +1668,20 @@ export function App({
                         void unmergeGroup(selectedClip.group)
                       }
                       onDeleteGroup={() =>
-                        setDeleteTarget({
+                        void requestDelete({
                           type: 'group',
                           group: selectedClip.group,
                         })
                       }
                       onOpenSource={(clip) => void openSource(clip)}
+                      onEditMember={editClip}
+                      onCopyMember={(clip) => void copyClip(clip)}
+                      onCopyAll={() => void copyGroup(selectedClip.group)}
                     />
                   ) : (
                     <MemoryCalendar
                       actionsDisabled={isBusy || isRefreshing}
+                      actionsPending={isBusy || isRefreshing}
                       clips={visibleClips}
                       selectionMode={selectionMode}
                       selectedClipIds={selectedClipIds}
@@ -975,7 +1701,7 @@ export function App({
                       }}
                       onCopyClip={(clip) => void copyClip(clip)}
                       onDeleteItem={(item) =>
-                        setDeleteTarget(
+                        void requestDelete(
                           item.kind === 'clip'
                             ? { type: 'clip', clip: item.clip }
                             : { type: 'group', group: item.group },
@@ -1055,14 +1781,14 @@ export function App({
               )}
 
               {activeView === 'settings' && (
-                <SettingsView startupClient={startupClient} />
+                <SettingsView startupClient={startupClient} updater={updater} />
               )}
             </div>
           </SidebarInset>
         </SidebarProvider>
         {status && (
           <ClipFeedback
-            key={status.id}
+            notificationId={status.id}
             message={status.message}
             onDismiss={dismissStatus}
           />
@@ -1077,8 +1803,7 @@ export function App({
             open
             onOpenChange={(open) => {
               if (!open) {
-                setFormMode(null);
-                setFormError(null);
+                void cancelEditor();
               }
             }}
             onSubmit={saveClip}
@@ -1088,7 +1813,11 @@ export function App({
         <AlertDialog
           open={deleteTarget !== null}
           onOpenChange={(open) => {
-            if (!open) setDeleteTarget(null);
+            if (!open && !operationPending.current) {
+              void releaseConfirmation().then((released) => {
+                if (released) setDeleteTarget(null);
+              });
+            }
           }}
         >
           <AlertDialogContent>
@@ -1110,7 +1839,8 @@ export function App({
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 variant="destructive"
-                onClick={() => {
+                onClick={(event) => {
+                  event.preventDefault();
                   if (deleteTarget?.type === 'clip')
                     void deleteClip(deleteTarget.clip);
                   else if (deleteTarget?.type === 'member')

@@ -2,6 +2,72 @@
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/geist';
 
+/* Updater preview uses the same sidebar tokens in light and dark themes. */
+.sidebar-update-card {
+  min-width: 0;
+  flex-shrink: 0;
+  margin: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--sidebar-border);
+  border-radius: var(--radius);
+  background: var(--sidebar-accent);
+  color: var(--sidebar-foreground);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-update-card p {
+  margin: 0 0 0.5rem;
+}
+
+.sidebar-update-title {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 600;
+}
+
+.sidebar-update-title svg {
+  flex-shrink: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.sidebar-update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.sidebar-update-card progress {
+  display: block;
+  width: 100%;
+  height: 0.375rem;
+  margin: 0.5rem 0 0.75rem;
+  accent-color: var(--sidebar-foreground);
+}
+
+.sidebar-update-collapsed {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: center;
+  padding: 0.375rem 0;
+}
+
+.settings-update-control {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+
+.settings-update-control p {
+  margin: 0;
+}
+
 /* Base UI normally injects this rule at runtime. Keep it in the packaged
    stylesheet so the production CSP can remain style-src 'self'. */
 .base-ui-disable-scrollbar {
@@ -1285,4 +1351,89 @@
     min-height: 4.25rem;
     padding: 0.2rem;
   }
+}
+
+/* Rehearsal 0.2.3: enabled Delete must not resemble a disabled item. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])
+    [data-slot='dropdown-menu-item'][data-variant='destructive']:not(
+      [data-disabled]
+    ) {
+    color: var(--popover-foreground);
+  }
+}
+
+:root[data-theme='dark']
+  [data-slot='dropdown-menu-item'][data-variant='destructive']:not(
+    [data-disabled]
+  ) {
+  color: var(--popover-foreground);
+}
+
+/* Inline content editing: keep all established theme and menu rules intact. */
+.clip-content-card {
+  position: relative;
+}
+
+.clip-content-card .clip-content {
+  padding-right: 3rem;
+}
+
+.clip-content-edit-action {
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  color: var(--foreground);
+}
+
+.clip-content-actions {
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.clip-content-actions .clip-content-edit-action {
+  position: static;
+}
+
+.clip-content-card:has(.clip-content-actions) .clip-content {
+  padding-right: 5.5rem;
+}
+
+.clip-content-editor {
+  display: block;
+  width: 100%;
+  min-height: 6rem;
+  resize: vertical;
+  color: var(--foreground);
+}
+
+.clip-content-editor:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.inline-title {
+  min-width: 0;
+}
+.inline-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.inline-title-input {
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
+}
+.inline-title-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
