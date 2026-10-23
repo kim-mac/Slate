@@ -78,6 +78,8 @@ export interface Clip extends ClipInput {
 export interface ClipGroup {
   id: string;
   title: string;
+  /** Opaque authoritative title/membership snapshot. Missing legacy state cannot be renamed. */
+  titleState?: string;
   isPinned: boolean;
   createdAt: string;
   updatedAt: string;

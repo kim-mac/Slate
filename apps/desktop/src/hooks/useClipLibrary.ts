@@ -9,6 +9,26 @@ export function useClipLibrary(client: Pick<ClipClient, 'list'>) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const generation = useRef(0);
+  // Action reads share refresh ordering. A superseded snapshot is never safe
+  // either to render or to authorize a deferred membership-sensitive action.
+  const readLatest = useCallback(async () => {
+    const request = ++generation.current;
+    try {
+      const loaded = await client.list();
+      if (request !== generation.current) return null;
+      const latest = recentLibraryItems(loaded.map(asLibraryItem));
+      setClips(latest);
+      return latest;
+    } catch (error) {
+      if (request !== generation.current) return null;
+      throw error;
+    } finally {
+      if (request === generation.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    }
+  }, [client]);
   const refresh = useCallback(async () => {
     const request = ++generation.current;
     setIsRefreshing(true);
@@ -58,5 +78,6 @@ export function useClipLibrary(client: Pick<ClipClient, 'list'>) {
     loadError,
     refresh,
     invalidate,
+    readLatest,
   };
 }

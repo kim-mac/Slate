@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
-export type SafetyLeaseKind = 'editor' | 'confirmation';
+export type SafetyLeaseKind = 'editor' | 'confirmation' | 'inline';
 export interface SafetyLease {
   generation: number;
   leaseId: number;
@@ -11,6 +11,9 @@ export interface SafetySnapshot {
   preparing: boolean;
 }
 export interface InstallationSafetyClient {
+  onCloseRequested?(receive: () => void): Promise<() => void>;
+  hideMainAfterSave?(): Promise<void>;
+  onQuitBlocked?(receive: () => void): Promise<() => void>;
   listen(receive: (snapshot: SafetySnapshot) => void): Promise<() => void>;
   connect(): Promise<{ generation: number }>;
   status(): Promise<SafetySnapshot>;
@@ -24,6 +27,10 @@ export interface InstallationSafetyClient {
 
 // Safety accounting only. Deliberately no prepare/install or SDK command binding.
 export const tauriInstallationSafetyClient: InstallationSafetyClient = {
+  onCloseRequested: (receive) =>
+    listen('slate:inline-close-requested', receive),
+  hideMainAfterSave: () => invoke('hide_main_after_inline_save'),
+  onQuitBlocked: (receive) => listen('slate:quit-blocked', receive),
   listen: (receive) =>
     listen<SafetySnapshot>('slate:installation-safety', (event) =>
       receive(event.payload),

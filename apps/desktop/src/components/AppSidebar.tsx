@@ -1,4 +1,5 @@
 import type { LibraryItem } from '@ai-clip-memory/shared';
+import './sidebarDiscovery.css';
 import {
   Archive,
   ChevronRight,
@@ -6,12 +7,12 @@ import {
   Settings,
   ShieldCheck,
 } from 'lucide-react';
-import type { RefObject } from 'react';
+import { useRef, type RefObject } from 'react';
 
 import { ClipList } from '@/components/ClipList';
 import { UpdateNotice } from '@/components/UpdateNotice';
+import { ExtensionNotice } from '@/components/ExtensionNotice';
 import type { UpdateControls } from '@/updaterClient';
-import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
   TooltipContent,
@@ -36,6 +37,7 @@ export type AppView = 'all' | 'pinned' | 'settings';
 type LibraryView = Exclude<AppView, 'settings'>;
 
 interface AppSidebarProps {
+  onOpenExtension: () => Promise<void>;
   updater?: UpdateControls;
   updateBlocked?: boolean;
   activeView: AppView;
@@ -56,6 +58,7 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({
+  onOpenExtension,
   updater,
   updateBlocked = false,
   activeView,
@@ -76,6 +79,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const { state, setOpen } = useSidebar();
   const collapsed = state === 'collapsed';
+  const footer = useRef<HTMLDivElement>(null);
   const sections = [
     {
       view: 'all' as const,
@@ -167,15 +171,34 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      {updater && (
-        <UpdateNotice
-          controls={updater}
-          blocked={updateBlocked}
+      <div
+        className="sidebar-notifications"
+        role="region"
+        aria-label="Sidebar notifications"
+        tabIndex={0}
+      >
+        {updater && (
+          <UpdateNotice
+            controls={updater}
+            blocked={updateBlocked}
+            collapsed={collapsed}
+            onExpand={() => setOpen(true)}
+          />
+        )}
+        <ExtensionNotice
+          onOpen={onOpenExtension}
           collapsed={collapsed}
           onExpand={() => setOpen(true)}
+          onDismissFocus={() =>
+            footer.current
+              ?.querySelector<HTMLButtonElement>(
+                'button[aria-label="Settings"]',
+              )
+              ?.focus({ preventScroll: true })
+          }
         />
-      )}
-      <SidebarFooter>
+      </div>
+      <SidebarFooter ref={footer} className="sidebar-settings-footer">
         {collapsed ? (
           <Tooltip>
             <TooltipTrigger
@@ -194,11 +217,7 @@ export function AppSidebar({
               Local only — no account or cloud required
             </TooltipContent>
           </Tooltip>
-        ) : (
-          <Badge variant="outline" className="sidebar-local-status">
-            Local only
-          </Badge>
-        )}
+        ) : null}
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -212,6 +231,9 @@ export function AppSidebar({
               <Settings aria-hidden="true" />
               {!collapsed && <span>Settings</span>}
             </SidebarMenuButton>
+            {!collapsed && (
+              <span className="sidebar-settings-status">Local only</span>
+            )}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

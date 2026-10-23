@@ -111,9 +111,10 @@ export function LauncherClipEditor({
           <div className="launcher-editor-field">
             <label htmlFor="launcher-content-type">Content type</label>
             <Select
+              disabled={isSaving}
               value={contentType}
               onValueChange={(value) => {
-                if (!value) return;
+                if (!value || isSaving || submitting.current) return;
                 setContentType(value as ClipContentType);
                 setTypeChoice('manual');
               }}
@@ -131,6 +132,7 @@ export function LauncherClipEditor({
                     key={type}
                     value={type}
                     onClick={() => {
+                      if (isSaving || submitting.current) return;
                       setContentType(type);
                       setTypeChoice('manual');
                     }}
@@ -149,9 +151,11 @@ export function LauncherClipEditor({
               aria-label="Content"
               className="launcher-editor-content"
               value={content}
+              readOnly={isSaving}
               rows={9}
               required
               onChange={(event) => {
+                if (isSaving || submitting.current) return;
                 const next = event.currentTarget.value;
                 setContent(next);
                 setValidationError(null);

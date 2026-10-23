@@ -14,6 +14,8 @@ export type UpdatePhase =
   | 'error';
 
 export interface UpdateSnapshot {
+  /** Only the DEV-only visual fixture supplies this flag. Never native production state. */
+  developmentFixture?: boolean;
   revision: number;
   phase: UpdatePhase;
   currentVersion: string;

@@ -155,6 +155,9 @@ struct TestInstaller {
     launches: Arc<std::sync::atomic::AtomicUsize>,
     quits: std::sync::atomic::AtomicUsize,
     launch_fails: bool,
+    exit_safety: Option<Arc<crate::installation_safety::SafetyCoordinator>>,
+    runtime: crate::background::RuntimePolicy,
+    stage_fails: bool,
 }
 struct TestStage(Arc<std::sync::atomic::AtomicUsize>, bool);
 impl StagedInstall for TestStage {
@@ -173,13 +176,30 @@ impl InstallBoundary for TestInstaller {
             .lock()
             .unwrap()
             .push((version.into(), bytes.to_vec()));
+        if self.stage_fails {
+            return Err(SafeError::HANDOFF_FAILED);
+        }
         Ok(Box::new(TestStage(
             self.launches.clone(),
             self.launch_fails,
         )))
     }
-    fn quit(&self) {
-        self.quits.fetch_add(1, Ordering::SeqCst);
+    fn quit(&self, authorization: crate::installation_safety::UpdateExitAuthorization) {
+        // Same authorization/delegation as WindowsInstall. Only OS termination
+        // is substituted: never launch an installer or terminate the test runner.
+        crate::background::with_update_exit(authorization, &self.runtime, || {
+            assert_eq!(
+                self.runtime.main_close_decision(),
+                crate::background::MainCloseDecision::AllowExit
+            );
+            if let Some(safety) = &self.exit_safety {
+                assert!(safety.status().unwrap().preparing);
+                assert!(safety.admit().is_err());
+                assert!(safety.begin_quit().is_err());
+            }
+            self.quits.fetch_add(1, Ordering::SeqCst);
+        })
+        .expect("updater handoff must permit exit");
     }
 }
 fn ready(controller: &Arc<UpdateController>, driver: &TestDriver) {
@@ -344,8 +364,11 @@ fn user_restart_retains_verified_version_and_bytes_and_keeps_admission_closed_un
         .unwrap()
         .snapshot
         .installation_enabled = true;
-    let install = Arc::new(TestInstaller::default());
     let safety = install_safety();
+    let install = Arc::new(TestInstaller {
+        exit_safety: Some(safety.clone()),
+        ..Default::default()
+    });
     let active = safety.admit().unwrap();
     assert_eq!(
         controller
@@ -357,6 +380,10 @@ fn user_restart_retains_verified_version_and_bytes_and_keeps_admission_closed_un
     assert!(controller.restart(safety.clone(), install.clone()).is_err());
     assert_eq!(install.launches.load(Ordering::SeqCst), 0);
     assert!(safety.admit().is_err());
+    assert_eq!(
+        safety.begin_quit(),
+        Err(crate::installation_safety::SafetyError::Busy)
+    );
     drop(active);
     let deadline = Instant::now() + Duration::from_secs(3);
     while install.quits.load(Ordering::SeqCst) == 0 {
@@ -370,30 +397,54 @@ fn user_restart_retains_verified_version_and_bytes_and_keeps_admission_closed_un
     assert_eq!(install.launches.load(Ordering::SeqCst), 1);
     assert!(safety.admit().is_err());
     assert!(controller.cancel().phase == Phase::Preparing);
+    assert!(controller.restart(safety.clone(), install.clone()).is_err());
+    assert_eq!(install.launches.load(Ordering::SeqCst), 1);
+    assert_eq!(install.quits.load(Ordering::SeqCst), 1);
+    let state = controller.state.lock().unwrap();
+    assert!(state.installation_guard.is_some());
+    assert!(state.staged_install.is_some());
 }
 
 #[test]
 fn failed_launch_preserves_download_reopens_admission_and_never_quits() {
-    let (controller, driver, _) = fixture();
-    ready(&controller, &driver);
-    controller
-        .state
-        .lock()
-        .unwrap()
-        .snapshot
-        .installation_enabled = true;
-    let install = Arc::new(TestInstaller {
-        launch_fails: true,
-        ..Default::default()
-    });
-    let safety = install_safety();
-    controller.restart(safety.clone(), install.clone()).unwrap();
-    let snapshot = await_phase(&controller, Phase::Ready);
-    assert_eq!(snapshot.error, Some(SafeError::HANDOFF_FAILED));
-    assert!(safety.admit().is_ok());
-    assert_eq!(install.quits.load(Ordering::SeqCst), 0);
-    assert_eq!(controller.check().phase, Phase::Ready);
-    assert!(controller.state.lock().unwrap().verified_bytes.is_some());
+    for stage_fails in [false, true] {
+        let (controller, driver, _) = fixture();
+        ready(&controller, &driver);
+        controller
+            .state
+            .lock()
+            .unwrap()
+            .snapshot
+            .installation_enabled = true;
+        let install = Arc::new(TestInstaller {
+            launch_fails: !stage_fails,
+            stage_fails,
+            ..Default::default()
+        });
+        let safety = install_safety();
+        controller.restart(safety.clone(), install.clone()).unwrap();
+        let snapshot = await_phase(&controller, Phase::Ready);
+        assert_eq!(snapshot.error, Some(SafeError::HANDOFF_FAILED));
+        assert!(safety.admit().is_ok());
+        assert_eq!(install.quits.load(Ordering::SeqCst), 0);
+        assert_eq!(controller.check().phase, Phase::Ready);
+        assert!(controller.state.lock().unwrap().verified_bytes.is_some());
+        assert_eq!(
+            install.runtime.main_close_decision(),
+            crate::background::MainCloseDecision::Hide
+        );
+        assert!(!safety.status().unwrap().preparing);
+        assert!(controller
+            .state
+            .lock()
+            .unwrap()
+            .installation_guard
+            .is_none());
+        assert_eq!(
+            install.launches.load(Ordering::SeqCst),
+            usize::from(!stage_fails)
+        );
+    }
 }
 
 #[test]

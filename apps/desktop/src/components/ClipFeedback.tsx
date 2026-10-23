@@ -4,8 +4,13 @@ import { Button } from './ui/button';
 interface ClipFeedbackProps {
   message: string;
   onDismiss: () => void;
+  notificationId?: number;
 }
-export function ClipFeedback({ message, onDismiss }: ClipFeedbackProps) {
+export function ClipFeedback({
+  message,
+  onDismiss,
+  notificationId,
+}: ClipFeedbackProps) {
   const timer = useRef<number | null>(null);
   const remaining = useRef(4000);
   const deadline = useRef(0);
@@ -35,9 +40,9 @@ export function ClipFeedback({ message, onDismiss }: ClipFeedbackProps) {
 
   useEffect(() => {
     remaining.current = 4000;
-    startTimer();
+    if (!hovered.current && !focused.current) startTimer();
     return clearTimer;
-  }, [message, startTimer, clearTimer]);
+  }, [message, notificationId, startTimer, clearTimer]);
 
   return (
     <div
@@ -60,8 +65,8 @@ export function ClipFeedback({ message, onDismiss }: ClipFeedbackProps) {
         resumeTimer();
       }}
     >
-      <p role="status" aria-live="polite">
-        {message}
+      <p role="status" aria-live="polite" aria-atomic="true">
+        <span key={notificationId}>{message}</span>
       </p>
       <Button
         variant="ghost"

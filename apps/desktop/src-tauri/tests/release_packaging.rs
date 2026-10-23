@@ -4,7 +4,7 @@ use std::process::{Command, Output};
 
 use serde_json::Value;
 
-const RELEASE_VERSION: &str = "0.3.0";
+const RELEASE_VERSION: &str = "0.3.1";
 const HOST_NAME: &str = "com.aiclipmemory.bridge";
 const HOST_EXECUTABLE: &str = "ai-clip-memory-native-host.exe";
 const CHROME_ID: &str = "jjfaegknedfakmidhhdlmbebnjafcjfi";

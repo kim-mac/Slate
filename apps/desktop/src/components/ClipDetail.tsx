@@ -9,6 +9,11 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { RefObject } from 'react';
+import { InlineTitleEditor } from './InlineTitleEditor';
+import {
+  ClipContentEditor,
+  type InlineContentEditor,
+} from './ClipContentEditor';
 import { displayTitle, formatContentType } from '@/lib/clipRetrieval';
 
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +30,7 @@ import {
 interface ClipDetailProps {
   clip: Clip;
   disabled: boolean;
+  pending?: boolean;
   backButtonRef: RefObject<HTMLButtonElement | null>;
   onBack: () => void;
   onCopy: () => void;
@@ -32,11 +38,14 @@ interface ClipDetailProps {
   onEdit: () => void;
   onOpenSource: () => void;
   onSetPinned: (isPinned: boolean) => void;
+  inline?: InlineContentEditor;
+  inlineTitle?: InlineContentEditor;
 }
 
 export function ClipDetail({
   clip,
   disabled,
+  pending = false,
   backButtonRef,
   onBack,
   onCopy,
@@ -44,6 +53,8 @@ export function ClipDetail({
   onEdit,
   onOpenSource,
   onSetPinned,
+  inline,
+  inlineTitle,
 }: ClipDetailProps) {
   return (
     <Card className="clip-detail">
@@ -72,12 +83,19 @@ export function ClipDetail({
                 {formatContentType(clip.contentType)}
               </Badge>
               <CardTitle>
-                <h2>{displayTitle(clip)}</h2>
+                <InlineTitleEditor
+                  title={displayTitle(clip)}
+                  label="Clip title"
+                  disabled={disabled}
+                  pending={pending}
+                  inline={inlineTitle}
+                />
               </CardTitle>
             </div>
             <div className="clip-actions">
               <ActionButton
                 disabled={disabled}
+                pending={pending}
                 label="Copy"
                 icon={<Copy />}
                 onClick={onCopy}
@@ -85,11 +103,13 @@ export function ClipDetail({
               <ActionButton
                 label={clip.isPinned ? 'Unpin' : 'Pin'}
                 disabled={disabled}
+                pending={pending}
                 icon={clip.isPinned ? <PinOff /> : <Pin />}
                 onClick={() => onSetPinned(!clip.isPinned)}
               />
               <ActionButton
                 disabled={disabled}
+                pending={pending}
                 label="Edit"
                 icon={<Pencil />}
                 onClick={onEdit}
@@ -97,6 +117,7 @@ export function ClipDetail({
               <ActionButton
                 label="Delete"
                 disabled={disabled}
+                pending={pending}
                 icon={<Trash2 />}
                 onClick={onDelete}
                 destructive
@@ -105,7 +126,12 @@ export function ClipDetail({
           </CardHeader>
 
           <CardContent>
-            <pre className="clip-content">{clip.content}</pre>
+            <ClipContentEditor
+              clip={clip}
+              disabled={disabled}
+              pending={pending}
+              inline={inline}
+            />
             <Separator />
             <dl className="clip-metadata">
               {clip.sourceApp && (
@@ -132,6 +158,7 @@ export function ClipDetail({
                 type="button"
                 onClick={onOpenSource}
                 disabled={disabled}
+                pending={pending}
               >
                 <ExternalLink aria-hidden="true" />
                 Open source
@@ -146,6 +173,7 @@ export function ClipDetail({
 
 interface ActionButtonProps {
   disabled: boolean;
+  pending?: boolean;
   destructive?: boolean;
   icon: React.ReactNode;
   label: string;
@@ -154,6 +182,7 @@ interface ActionButtonProps {
 
 function ActionButton({
   disabled,
+  pending = false,
   destructive = false,
   icon,
   label,
@@ -169,6 +198,7 @@ function ActionButton({
             type="button"
             onClick={onClick}
             disabled={disabled}
+            pending={pending}
           />
         }
       >

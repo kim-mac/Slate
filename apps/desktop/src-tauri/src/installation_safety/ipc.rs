@@ -37,6 +37,7 @@ impl From<SafetyStatus> for Status {
 #[serde(rename_all = "lowercase")]
 pub enum WindowLeaseKind {
     Editor,
+    Inline,
     Confirmation,
 }
 
@@ -98,6 +99,7 @@ pub fn acquire_installation_lease(
 ) -> Result<Lease, &'static str> {
     let kind = match kind {
         WindowLeaseKind::Editor => LeaseKind::Editor,
+        WindowLeaseKind::Inline => LeaseKind::InlineEditor,
         WindowLeaseKind::Confirmation => LeaseKind::Confirmation,
     };
     let lease_id = safety
@@ -158,6 +160,7 @@ mod tests {
             serde_json::json!({"preparing":true,"generation":9,"available":false})
         );
         assert!(serde_json::from_str::<WindowLeaseKind>("\"editor\"").is_ok());
+        assert!(serde_json::from_str::<WindowLeaseKind>("\"inline\"").is_ok());
         assert!(serde_json::from_str::<WindowLeaseKind>("\"confirmation\"").is_ok());
         assert!(serde_json::from_str::<WindowLeaseKind>("\"installer\"").is_err());
     }

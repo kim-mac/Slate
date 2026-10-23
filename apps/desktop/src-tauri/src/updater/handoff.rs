@@ -31,8 +31,8 @@ impl InstallBoundary for WindowsInstall {
             .map(|staged| Box::new(staged) as Box<dyn StagedInstall>)
             .map_err(|_| SafeError::HANDOFF_FAILED)
     }
-    fn quit(&self) {
-        crate::background::quit_app(&self.0);
+    fn quit(&self, authorization: crate::installation_safety::UpdateExitAuthorization) {
+        crate::background::quit_after_update(&self.0, authorization);
     }
 }
 struct WindowsStage {

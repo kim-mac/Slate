@@ -9,6 +9,45 @@ const COMMANDS: [&str; 5] = [
 ];
 
 #[test]
+fn inline_close_completion_is_main_only_and_registered_with_narrow_permission() {
+    let lib = include_str!("../src/lib.rs");
+    let build = include_str!("../build.rs");
+    let main: Value = serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+    let launcher: Value =
+        serde_json::from_str(include_str!("../capabilities/launcher.json")).unwrap();
+    assert!(lib.contains("background::hide_main_after_inline_save"));
+    assert!(build.contains("\"hide_main_after_inline_save\""));
+    let permission = Value::String("allow-hide-main-after-inline-save".into());
+    assert!(main["permissions"]
+        .as_array()
+        .unwrap()
+        .contains(&permission));
+    assert!(!launcher["permissions"]
+        .as_array()
+        .unwrap()
+        .contains(&permission));
+    let background = include_str!("../src/background.rs");
+    assert!(background.contains("slate:inline-close-requested"));
+    assert!(background.contains("with_main_hide"));
+}
+
+#[test]
+fn inline_content_is_an_optional_compare_on_the_existing_update_command() {
+    let commands = include_str!("../src/commands.rs");
+    let command = commands
+        .split("pub fn update_clip(")
+        .nth(1)
+        .unwrap()
+        .split("#[tauri::command]")
+        .next()
+        .unwrap();
+    assert!(command.contains("expected_content: Option<String>"));
+    assert!(command.contains("validate_update_input(input, expected_content.is_some())"));
+    assert!(command.contains("service.update_content("));
+    assert!(command.contains("service.update("));
+}
+
+#[test]
 fn only_window_handshake_ipc_is_registered_for_both_windows() {
     let lib = include_str!("../src/lib.rs");
     let build = include_str!("../build.rs");

@@ -44,12 +44,23 @@ function Button({
   className,
   variant = 'default',
   size = 'default',
+  pending = false,
+  disabled,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonPrimitive.Props &
+  VariantProps<typeof buttonVariants> & {
+    /** Temporary blocking; callers must not apply this to genuine unavailability. */
+    pending?: boolean;
+  }) {
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      data-pending={pending ? '' : undefined}
+      disabled={disabled || pending}
+      className={cn(
+        buttonVariants({ variant, size, className }),
+        pending && 'disabled:opacity-100 disabled:pointer-events-auto',
+      )}
       {...props}
     />
   );

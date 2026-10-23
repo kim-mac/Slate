@@ -1,0 +1,102 @@
+/* Sidebar discovery: do not change the Settings button or existing update card. */
+.sidebar-settings-status {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  border: 1px solid var(--sidebar-border);
+  border-radius: var(--radius-sm);
+  padding: 0.125rem 0.375rem;
+  background: color-mix(in oklab, var(--sidebar-accent) 50%, transparent);
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  line-height: 1rem;
+  white-space: nowrap;
+}
+
+.sidebar-settings-footer {
+  flex-shrink: 0;
+}
+
+.sidebar-notifications {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 45%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+.sidebar-notifications:focus-visible {
+  outline: 2px solid var(--sidebar-ring);
+  outline-offset: -2px;
+}
+
+.sidebar-notifications:empty {
+  display: none;
+}
+
+.sidebar-extension-card {
+  position: relative;
+  min-width: 0;
+  flex-shrink: 0;
+  margin: 0 0.5rem 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--sidebar-border);
+  border-radius: var(--radius);
+  background: var(--sidebar-accent);
+  color: var(--sidebar-foreground);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-extension-card:first-child {
+  margin-top: 0.5rem;
+}
+
+.sidebar-extension-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  margin: 0 1.25rem 0.5rem 0;
+  font-weight: 600;
+}
+
+.sidebar-extension-title svg {
+  flex-shrink: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.125rem;
+}
+
+.sidebar-extension-description {
+  margin: 0 0 0.5rem;
+  color: var(--muted-foreground);
+}
+
+.sidebar-extension-dismiss {
+  position: absolute;
+  right: 0.375rem;
+  top: 0.375rem;
+}
+
+.sidebar-extension-feedback {
+  margin: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.sidebar-extension-card .sidebar-extension-feedback {
+  margin: 0.5rem 0 0;
+}
+
+.sidebar-extension-collapsed {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: center;
+  padding: 0.375rem 0;
+}

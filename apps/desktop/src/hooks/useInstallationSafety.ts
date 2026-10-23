@@ -15,6 +15,28 @@ export function useInstallationSafety(client: InstallationSafetyClient) {
   const [connected, setConnected] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    let stop: (() => void) | undefined;
+    void client
+      .onQuitBlocked?.(() => {
+        if (active)
+          setError(
+            'Slate could not quit. Finish saving in Slate or Quick Search, or press Escape to cancel inline editing, then choose Quit again.',
+          );
+      })
+      .then((unlisten) => {
+        if (active) stop = unlisten;
+        else unlisten();
+      })
+      .catch(() => {
+        /* The native notification also reports the denied Quit. */
+      });
+    return () => {
+      active = false;
+      stop?.();
+    };
+  }, [client]);
   const current = useRef<{
     active: boolean;
     generation: number | null;
@@ -145,7 +167,10 @@ export function useInstallationSafety(client: InstallationSafetyClient) {
         await client.release(lease);
         state.leases.delete(lease.leaseId);
         state.unused.delete(lease.leaseId);
-        if (state.active && current.current === state) acknowledge();
+        if (state.active && current.current === state) {
+          if (!state.leases.size) setError(null);
+          acknowledge();
+        }
         return true;
       } catch {
         if (state.active && current.current === state) setError(BLOCKED);

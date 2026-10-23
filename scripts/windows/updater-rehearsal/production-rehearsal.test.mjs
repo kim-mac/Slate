@@ -20,7 +20,9 @@ const api = await import('./production-rehearsal.mjs').catch(() => ({}));
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const crate = 'apps/desktop/src-tauri';
 const read = (path) => readFileSync(join(root, path), 'utf8');
-const source = JSON.parse(read(`${crate}/tauri.conf.json`));
+const currentSource = JSON.parse(read(`${crate}/tauri.conf.json`));
+// Preserve the fixed historical rehearsal, not the current release version.
+const source = { ...currentSource, version: '0.3.0' };
 const acknowledgement = 'private-production-0.2.9-to-0.3.0-no-public-release';
 const now = Date.UTC(2026, 9, 19, 12);
 const policy = {
@@ -100,6 +102,11 @@ test('only production trust and the fixed 0.2.9 to 0.3.0 roles are accepted', ()
     changed.plugins.updater[flag] = true;
     assert.throws(() => api.configuration(changed, 'candidate'), /trust/);
   }
+});
+
+test('historical production rehearsal rejects current v0.3.1 source', () => {
+  assert.equal(currentSource.version, '0.3.1');
+  assert.throws(() => api.configuration(currentSource, 'candidate'));
 });
 
 test('private baseline URL policy refuses public, expired, wrong namespace and unknown inputs', () => {
@@ -182,6 +189,36 @@ test('fresh isolated copies preserve identity and source, stage consistent versi
     const destination = join(fixture, path);
     mkdirSync(dirname(destination), { recursive: true });
     copyFileSync(join(root, path), destination);
+  }
+  // Only the synthetic test tree gets the historical metadata. The operational
+  // helper's source-version guards and permitted candidate versions stay fixed.
+  for (const path of [
+    'package.json',
+    'apps/desktop/package.json',
+    `${crate}/tauri.conf.json`,
+  ]) {
+    const destination = join(fixture, path);
+    const document = JSON.parse(readFileSync(destination, 'utf8'));
+    assert.equal(document.version, '0.3.1');
+    document.version = '0.3.0';
+    writeFileSync(destination, JSON.stringify(document));
+  }
+  for (const [path, pattern] of [
+    [`${crate}/Cargo.toml`, /(^\[package\][\s\S]*?\nversion = ")([^"]+)(")/m],
+    [
+      `${crate}/Cargo.lock`,
+      /(name = "ai-clip-memory-desktop"\r?\nversion = ")([^"]+)(")/,
+    ],
+  ]) {
+    const destination = join(fixture, path);
+    const original = readFileSync(destination, 'utf8');
+    writeFileSync(
+      destination,
+      original.replace(pattern, (_match, before, version, after) => {
+        assert.equal(version, '0.3.1');
+        return before + '0.3.0' + after;
+      }),
+    );
   }
   const frontend = join(fixture, 'dist/test/frontend');
   mkdirSync(frontend, { recursive: true });

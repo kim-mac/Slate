@@ -18,6 +18,19 @@ export function selectedItemsInLibraryOrder(
   });
 }
 
+// Set insertion order is the user's selection order, independent of filtering,
+// calendar placement, library sorting, and which window surface selected it.
+export function selectedItemsInSelectionOrder(
+  items: readonly LibraryItem[],
+  selectedIds: ReadonlySet<string>,
+): LibraryItem[] {
+  const byId = new Map(items.map((item) => [libraryItemId(item), item]));
+  return [...selectedIds].flatMap((id) => {
+    const item = byId.get(id);
+    return item ? [item] : [];
+  });
+}
+
 export function reconcileSelectedIds(
   selectedIds: ReadonlySet<string>,
   items: readonly LibraryItem[],

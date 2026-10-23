@@ -1369,3 +1369,71 @@
   ) {
   color: var(--popover-foreground);
 }
+
+/* Inline content editing: keep all established theme and menu rules intact. */
+.clip-content-card {
+  position: relative;
+}
+
+.clip-content-card .clip-content {
+  padding-right: 3rem;
+}
+
+.clip-content-edit-action {
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  color: var(--foreground);
+}
+
+.clip-content-actions {
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.clip-content-actions .clip-content-edit-action {
+  position: static;
+}
+
+.clip-content-card:has(.clip-content-actions) .clip-content {
+  padding-right: 5.5rem;
+}
+
+.clip-content-editor {
+  display: block;
+  width: 100%;
+  min-height: 6rem;
+  resize: vertical;
+  color: var(--foreground);
+}
+
+.clip-content-editor:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.inline-title {
+  min-width: 0;
+}
+.inline-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.inline-title-input {
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
+}
+.inline-title-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

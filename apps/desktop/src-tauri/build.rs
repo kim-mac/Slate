@@ -1,4 +1,9 @@
 fn main() {
+    if std::env::var_os("CARGO_FEATURE_UX_DEV").is_some()
+        && std::env::var("PROFILE").as_deref() != Ok("debug")
+    {
+        panic!("ux-dev is restricted to the debug build profile");
+    }
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
         && std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc")
         && (std::path::Path::new("tests/installation_safety_contract.rs").is_file()
@@ -18,12 +23,14 @@ fn main() {
             "delete_group_member",
             "delete_group",
             "set_group_pinned",
+            "rename_group",
             "create_clip",
             "update_clip",
             "delete_clip",
             "set_clip_pinned",
             "copy_clip_content",
             "open_clip_source",
+            "open_extension_listing",
             "launcher_ready",
             "hide_launcher",
             "open_tin_from_launcher",
@@ -41,6 +48,7 @@ fn main() {
             "acquire_installation_lease",
             "release_installation_lease",
             "acknowledge_installation_safety",
+            "hide_main_after_inline_save",
         ]),
     ))
     .expect("failed to build application permissions");

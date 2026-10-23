@@ -27,7 +27,10 @@ test('safety IPC passes only generation-bound participant commands, never prepar
     'acknowledge',
     'acquire',
     'connect',
+    'hideMainAfterSave',
     'listen',
+    'onCloseRequested',
+    'onQuitBlocked',
     'release',
     'status',
   ]);
@@ -41,4 +44,25 @@ test('safety IPC passes only generation-bound participant commands, never prepar
     payload: { preparing: true, generation: 9 },
   });
   expect(receive).toHaveBeenCalledWith({ preparing: true, generation: 9 });
+  const quitBlocked = vi.fn();
+  await client.onQuitBlocked!(quitBlocked);
+  expect(boundary.listen).toHaveBeenCalledWith(
+    'slate:quit-blocked',
+    quitBlocked,
+  );
+  const closeRequested = vi.fn();
+  await client.onCloseRequested!(closeRequested);
+  expect(boundary.listen).toHaveBeenCalledWith(
+    'slate:inline-close-requested',
+    closeRequested,
+  );
+  await client.hideMainAfterSave!();
+  expect(boundary.invoke).toHaveBeenLastCalledWith(
+    'hide_main_after_inline_save',
+  );
+  await client.acquire(3, 'inline');
+  expect(boundary.invoke).toHaveBeenLastCalledWith(
+    'acquire_installation_lease',
+    { generation: 3, kind: 'inline' },
+  );
 });

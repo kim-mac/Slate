@@ -67,6 +67,7 @@ function disabled(): Promise<never> {
 
 // No production client fallback; no arbitrary IPC, clipboard, source opener, or writes.
 const previewClips: ClipClient = {
+  renameGroup: disabled,
   list: () => invoke('list_clips'),
   create: disabled,
   update: disabled,

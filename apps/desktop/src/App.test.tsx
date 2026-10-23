@@ -1,5 +1,6 @@
 import type { Clip, ClipInput, LibraryItem } from '@ai-clip-memory/shared';
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -54,6 +55,7 @@ function fakeClient(initialClips: Array<Clip | LibraryItem> = []) {
   );
   const methods = {
     list: vi.fn().mockResolvedValue(initialItems),
+    renameGroup: vi.fn<ClipClient['renameGroup']>(),
     create: vi.fn<ClipClient['create']>(),
     update: vi.fn<ClipClient['update']>(),
     delete: vi.fn<ClipClient['delete']>().mockResolvedValue(undefined),
@@ -169,6 +171,76 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  test('copy keeps the detail and success notification stable while temporary actions are blocked', async () => {
+    const fake = fakeClient([firstClip]);
+    render(<App client={fake.client} />);
+    await openClipFromSidebar(firstClip);
+    const copy = screen.getByRole('button', { name: 'Copy' });
+    const detail = document.querySelector('.clip-detail');
+    fireEvent.click(copy);
+    const status = await screen.findByText('Clip copied.');
+    const notification = status.closest('.clip-feedback');
+    let finish!: () => void;
+    fake.copyContent.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    fireEvent.click(copy);
+    expect(
+      screen.getByRole('button', { name: 'Pin' }).hasAttribute('data-pending'),
+    ).toBe(true);
+    expect(document.querySelector('.clip-detail')).toBe(detail);
+    expect(status.closest('.clip-feedback')).toBe(notification);
+    expect(notification?.isConnected).toBe(true);
+    fireEvent.click(copy);
+    fireEvent.keyDown(copy, { key: 'Enter' });
+    fireEvent.keyDown(copy, { key: ' ' });
+    expect(fake.copyContent).toHaveBeenCalledTimes(2);
+    await act(async () => finish());
+    expect(
+      (await screen.findByText('Clip copied.')).closest('.clip-feedback'),
+    ).toBe(notification);
+    fake.copyContent.mockRejectedValueOnce({
+      code: 'clipboard_unavailable',
+      message: 'Could not copy clip content.',
+    });
+    fireEvent.click(copy);
+    await screen.findByText(/Could not copy clip content/);
+    expect(screen.queryByText('Clip copied.')).toBeNull();
+  });
+
+  test('a different operation clears the previous success instead of reporting it during failure', async () => {
+    const fake = fakeClient([firstClip]);
+    render(<App client={fake.client} />);
+    await openClipFromSidebar(firstClip);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await screen.findByText('Clip copied.');
+    let fail!: (error: Error) => void;
+    fake.openSource.mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          fail = reject;
+        }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open source' }));
+    expect(screen.queryByText('Clip copied.')).toBeNull();
+    await act(async () => fail(new Error('source failed')));
+    expect(screen.queryByText('Clip copied.')).toBeNull();
+  });
+  test('manual refresh clears previous success even when the refresh fails', async () => {
+    const fake = fakeClient([firstClip]);
+    render(<App client={fake.client} />);
+    await openClipFromSidebar(firstClip);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await screen.findByText('Clip copied.');
+    fake.list.mockRejectedValueOnce(new Error('Refresh failed'));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await screen.findByText(/Could not load local clips/);
+    expect(screen.queryByText('Clip copied.')).toBeNull();
+  });
+
   test('shows the real Windows startup setting in Settings', async () => {
     render(
       <App
@@ -424,6 +496,9 @@ describe('App', () => {
     };
     const fake = fakeClient();
     fake.create.mockResolvedValue(created);
+    fake.list
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ kind: 'clip', clip: created }]);
     render(<App client={fake.client} />);
     await waitForCalendar();
     fireEvent.click(screen.getByRole('button', { name: 'New clip' }));
@@ -458,6 +533,9 @@ describe('App', () => {
     };
     const fake = fakeClient([currentMonthClip]);
     fake.update.mockResolvedValue(updated);
+    fake.list
+      .mockResolvedValueOnce([{ kind: 'clip', clip: currentMonthClip }])
+      .mockResolvedValue([{ kind: 'clip', clip: updated }]);
     fake.setPinned.mockResolvedValue({ ...updated, isPinned: true });
     render(<App client={fake.client} />);
     await waitForCalendar();
@@ -728,6 +806,9 @@ describe('App', () => {
     };
     const fake = fakeClient([currentMonthClip]);
     fake.update.mockResolvedValue(updated);
+    fake.list
+      .mockResolvedValueOnce([{ kind: 'clip', clip: currentMonthClip }])
+      .mockResolvedValue([{ kind: 'clip', clip: updated }]);
     render(<App client={fake.client} />);
     await waitForCalendar();
     fireEvent.click(
@@ -940,6 +1021,86 @@ describe('App', () => {
       'complete private draft',
     );
   });
+  test.each(['create', 'edit'] as const)(
+    '%s locks submitted fields without replacing or blurring them, then unlocks a failed save',
+    async (mode) => {
+      const fake = fakeClient([firstClip]);
+      let fail!: (error: Error) => void;
+      const write = mode === 'create' ? fake.create : fake.update;
+      write.mockReturnValueOnce(
+        new Promise((_, reject) => {
+          fail = reject;
+        }),
+      );
+      render(<App client={fake.client} />);
+      await openClipFromSidebar(firstClip);
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: mode === 'create' ? 'New clip' : 'Edit',
+        }),
+      );
+      const dialog = await screen.findByRole('dialog');
+      const fields = [
+        'Content',
+        'Title',
+        'Source app',
+        'Source URL',
+        'Source page title',
+      ].map((label) =>
+        within(dialog).getByLabelText<HTMLInputElement | HTMLTextAreaElement>(
+          label,
+        ),
+      );
+      const values = [
+        'Submitted content',
+        'Submitted title',
+        'Submitted app',
+        'https://example.com/submitted',
+        'Submitted page',
+      ];
+      fields.forEach((field, index) =>
+        fireEvent.change(field, { target: { value: values[index] } }),
+      );
+      const content = fields[0]!;
+      act(() => {
+        content.focus();
+        content.setSelectionRange(2, 7);
+      });
+      fireEvent.submit(dialog.querySelector('form')!);
+      expect(write).toHaveBeenCalledOnce();
+      expect(document.activeElement).toBe(content);
+      expect([content.selectionStart, content.selectionEnd]).toEqual([2, 7]);
+      fields.forEach((field, index) => {
+        expect(field.readOnly).toBe(true);
+        expect(field.disabled).toBe(false);
+        fireEvent.change(field, {
+          target: { value: 'Changed after submission' },
+        });
+        expect(field.value).toBe(values[index]);
+      });
+      expect(within(dialog).getByRole('combobox')).toHaveProperty(
+        'disabled',
+        true,
+      );
+      fireEvent.submit(dialog.querySelector('form')!);
+      expect(write).toHaveBeenCalledOnce();
+      await act(async () => fail(new Error('synthetic save failure')));
+      await within(dialog).findByRole('alert');
+      fields.forEach((field, index) => {
+        expect(field.readOnly).toBe(false);
+        expect(field.value).toBe(values[index]);
+      });
+      expect(within(dialog).getByRole('combobox')).toHaveProperty(
+        'disabled',
+        false,
+      );
+      fireEvent.change(content, { target: { value: 'Retry this content' } });
+      write.mockResolvedValueOnce(firstClip);
+      fireEvent.submit(dialog.querySelector('form')!);
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(write).toHaveBeenCalledTimes(2);
+    },
+  );
   test('distinguishes launcher startup failure from a shortcut conflict', async () => {
     vi.mocked(getLauncherStatus).mockResolvedValueOnce({
       available: false,
@@ -1784,6 +1945,9 @@ describe('App', () => {
     };
     const fake = fakeClient();
     fake.create.mockResolvedValue(created);
+    fake.list
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ kind: 'clip', clip: created }]);
     render(<App client={fake.client} />);
     await waitForCalendar();
 
@@ -1825,7 +1989,7 @@ describe('App', () => {
       } satisfies ClipInput),
     );
     expect(
-      screen.getByText(
+      await screen.findByText(
         (_, element) =>
           element?.classList.contains('clip-content') === true &&
           element.textContent === created.content,
@@ -1872,6 +2036,9 @@ describe('App', () => {
     };
     const fake = fakeClient([firstClip]);
     fake.update.mockResolvedValue(updated);
+    fake.list
+      .mockResolvedValueOnce([{ kind: 'clip', clip: firstClip }])
+      .mockResolvedValue([{ kind: 'clip', clip: updated }]);
     render(<App client={fake.client} />);
     await openClipFromSidebar(firstClip);
 
@@ -1912,7 +2079,7 @@ describe('App', () => {
       } satisfies ClipInput),
     );
     expect(
-      screen.getByText('Updated content', { selector: '.clip-content' }),
+      await screen.findByText('Updated content', { selector: '.clip-content' }),
     ).toBeTruthy();
   });
 

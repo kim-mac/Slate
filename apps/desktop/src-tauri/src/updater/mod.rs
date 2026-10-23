@@ -106,7 +106,7 @@ trait StagedInstall: Send {
 }
 trait InstallBoundary: Send + Sync {
     fn stage(&self, version: &str, bytes: Arc<[u8]>) -> Result<Box<dyn StagedInstall>, SafeError>;
-    fn quit(&self);
+    fn quit(&self, authorization: crate::installation_safety::UpdateExitAuthorization);
 }
 struct ControllerState {
     snapshot: UpdateSnapshot,
@@ -425,14 +425,14 @@ impl UpdateController {
             // The coordinator rechecks generations/readiness under policy at the
             // exact process-creation boundary. It never waits for the installer.
             match guard.handoff(|| staged.launch()) {
-                Ok(Ok(())) => {
+                Ok(Ok(authorization)) => {
                     let mut state = controller.state.lock().unwrap();
                     state.installation_guard = Some(guard);
                     state.staged_install = Some(staged);
                     drop(state);
                     // Normal Tauri exit, only after successful process creation.
                     // NSIS independently obtains A/B and waits for Slate to exit.
-                    boundary.quit();
+                    boundary.quit(authorization);
                 }
                 _ => {
                     drop(guard);

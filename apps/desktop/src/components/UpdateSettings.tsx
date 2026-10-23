@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 
 export function UpdateSettings({ controls }: { controls: UpdateControls }) {
   const { state } = controls;
+  const fixture = import.meta.env.DEV && state?.developmentFixture === true;
   let message = 'Connecting to the updater…';
   if (controls.connectionError)
     message = 'Update status is unavailable. Try checking again.';
@@ -43,12 +44,15 @@ export function UpdateSettings({ controls }: { controls: UpdateControls }) {
         break;
     }
   }
+  if (fixture)
+    message =
+      'Production updates are disabled in UX development mode. The sidebar card is a visual fixture only.';
   return (
     <div className="settings-update-control">
       <Button
         size="sm"
         variant="outline"
-        disabled={controls.pending || updateIsBusy(state?.phase)}
+        disabled={fixture || controls.pending || updateIsBusy(state?.phase)}
         onClick={() => void controls.check()}
       >
         Check for Updates

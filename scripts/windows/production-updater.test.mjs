@@ -67,7 +67,7 @@ test('production config has one permanent endpoint and explicit signed-version, 
   ]) {
     assert.equal(config.plugins.updater[flag], false, flag);
   }
-  assert.equal(config.version, '0.3.0');
+  assert.equal(config.version, '0.3.1');
   assert.equal(config.bundle.windows.allowDowngrades, false);
 });
 
@@ -167,8 +167,19 @@ test('historical TEST configuration helpers refuse to overwrite production trust
     /unconfigured/,
   );
   assert.throws(
-    () => testConfiguration(config, '0.2.0', '../frontend', 'PUBLIC'),
+    // Exercise the trust guard at the helper's historical approved version,
+    // rather than letting the newer source-version guard mask it.
+    () =>
+      testConfiguration(
+        { ...config, version: '0.3.0' },
+        '0.2.0',
+        '../frontend',
+        'PUBLIC',
+      ),
     /unconfigured/,
+  );
+  assert.throws(() =>
+    testConfiguration(config, '0.2.0', '../frontend', 'PUBLIC'),
   );
   assert.equal(JSON.stringify(config), before);
 });

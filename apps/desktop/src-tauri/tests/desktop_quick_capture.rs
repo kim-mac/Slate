@@ -67,6 +67,23 @@ fn production_storage_sink_persists_through_clip_service() {
 }
 
 #[test]
+fn desktop_captures_without_urls_do_not_group_by_content_app_or_page_title() {
+    let directory = tempfile::tempdir().unwrap();
+    let storage = StorageState::new(directory.path().to_owned());
+    for _ in 0..2 {
+        persist_capture(Ok(selection("identical selection")), &storage).unwrap();
+    }
+    let items = storage
+        .with_service(ClipService::list_library_items)
+        .unwrap();
+    assert_eq!(items.len(), 2);
+    assert!(items.iter().all(|item| matches!(
+        item,
+        ai_clip_memory_desktop_lib::clips::LibraryItem::Clip { .. }
+    )));
+}
+
+#[test]
 fn unchanged_empty_or_whitespace_clipboards_never_create_a_clip() {
     let sink = RecordingSink::default();
 

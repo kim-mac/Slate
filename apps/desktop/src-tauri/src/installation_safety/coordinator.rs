@@ -7,6 +7,7 @@ use std::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LeaseKind {
     Editor,
+    InlineEditor,
     Confirmation,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,6 +34,7 @@ struct WindowState {
     connected: bool,
     acknowledged: Option<u64>,
     leases: BTreeMap<u64, LeaseKind>,
+    last_released: Option<u64>,
     monitor_required: bool,
     monitor_ready: bool,
 }
@@ -43,6 +45,7 @@ struct Policy {
     status: SafetyStatus,
     operations: usize,
     frozen: bool,
+    quitting: bool,
 }
 type StatusObserver = Arc<dyn Fn(SafetyStatus) + Send + Sync>;
 pub(crate) trait ProcessGate: Send + Sync {
@@ -85,6 +88,31 @@ pub(crate) struct PreparationGuard {
     deadline: std::time::Instant,
     executed: bool,
 }
+/// One-use authority issued only after successful guarded installer creation.
+/// It neither owns nor releases the preparation/maintenance guard.
+pub(crate) struct UpdateExitAuthorization {
+    safety: Arc<SafetyCoordinator>,
+    generation: u64,
+}
+impl UpdateExitAuthorization {
+    pub(crate) fn begin_exit(self) -> Result<(), SafetyError> {
+        let mut p = self.safety.lock()?;
+        if p.quitting
+            || !p.status.preparing
+            || p.status.generation != self.generation
+            || !p.frozen
+            || p.operations != 0
+            || p.windows.values().any(|window| !window.leases.is_empty())
+        {
+            return Err(SafetyError::NotReady);
+        }
+        // Readiness/deadline were checked atomically with process creation.
+        // Once the installer exists, renderer disconnection or elapsed time must
+        // not strand it. Admission stays closed and maintenance remains held.
+        p.quitting = true;
+        Ok(())
+    }
+}
 impl SafetyCoordinator {
     pub fn new() -> Arc<Self> {
         Self::create(None)
@@ -108,6 +136,7 @@ impl SafetyCoordinator {
                 },
                 operations: 0,
                 frozen: false,
+                quitting: false,
             }),
             observer: Mutex::new(None),
             gate,
@@ -129,6 +158,9 @@ impl SafetyCoordinator {
     }
     pub fn connect(&self, label: &str) -> Result<u64, SafetyError> {
         let mut p = self.lock()?;
+        if p.quitting {
+            return Err(SafetyError::Busy);
+        }
         let window = p.windows.get(label).ok_or(SafetyError::UnknownWindow)?;
         if !window.leases.is_empty() {
             return Err(SafetyError::Busy);
@@ -145,6 +177,7 @@ impl SafetyCoordinator {
         window.generation = generation;
         window.connected = true;
         window.acknowledged = None;
+        window.last_released = None;
         Ok(generation)
     }
     fn window<'a>(
@@ -168,6 +201,9 @@ impl SafetyCoordinator {
         kind: LeaseKind,
     ) -> Result<u64, SafetyError> {
         let mut p = self.lock()?;
+        if p.quitting {
+            return Err(SafetyError::Busy);
+        }
         Self::window(&mut p, label, generation)?;
         if p.status.preparing {
             return Err(SafetyError::Preparing);
@@ -181,11 +217,17 @@ impl SafetyCoordinator {
     }
     pub fn release(&self, label: &str, generation: u64, lease: u64) -> Result<(), SafetyError> {
         let mut p = self.lock()?;
-        Self::window(&mut p, label, generation)?
-            .leases
-            .remove(&lease)
-            .ok_or(SafetyError::InvalidLease)?;
-        Ok(())
+        let window = Self::window(&mut p, label, generation)?;
+        if window.leases.remove(&lease).is_some() {
+            // Retain one bounded receipt so a lost IPC response can be retried
+            // without weakening window/generation ownership or another lease.
+            window.last_released = Some(lease);
+            Ok(())
+        } else if window.last_released == Some(lease) {
+            Ok(())
+        } else {
+            Err(SafetyError::InvalidLease)
+        }
     }
     pub fn acknowledge(
         &self,
@@ -211,6 +253,9 @@ impl SafetyCoordinator {
     }
     pub fn admit(self: &Arc<Self>) -> Result<OperationPermit, SafetyError> {
         let mut p = self.lock()?;
+        if p.quitting {
+            return Err(SafetyError::Busy);
+        }
         if p.status.preparing {
             return Err(SafetyError::Preparing);
         }
@@ -227,6 +272,101 @@ impl SafetyCoordinator {
             permit.process = Some(gate.admit()?);
         }
         Ok(permit)
+    }
+    fn main_window_for_hide(p: &Policy) -> Result<&WindowState, SafetyError> {
+        let main = &p.windows["main"];
+        if !main.connected || main.generation == 0 {
+            return Err(SafetyError::UninitializedWindow);
+        }
+        if main.monitor_required && !main.monitor_ready {
+            return Err(SafetyError::NotReady);
+        }
+        if p.quitting || p.status.preparing || p.frozen {
+            return Err(SafetyError::Busy);
+        }
+        Ok(main)
+    }
+
+    /// A native Close asks the main renderer to finish its existing inline save.
+    /// Other windows' editors do not participate in hiding the main window.
+    pub(crate) fn main_close_needs_save(&self) -> Result<bool, SafetyError> {
+        let p = self.lock()?;
+        // Hiding to tray is non-destructive. Retained local inline leases,
+        // including disconnected ones, are the only reason to defer Close.
+        let main = &p.windows["main"];
+        Ok(main
+            .leases
+            .values()
+            .any(|kind| *kind == LeaseKind::InlineEditor))
+    }
+
+    /// Ordinary native Close retains hide-to-tray for full Edit and dialogs.
+    /// Only an inline draft needs the renderer's save before hiding.
+    pub(crate) fn with_main_close_hide<T>(
+        &self,
+        hide: impl FnOnce() -> T,
+    ) -> Result<T, SafetyError> {
+        self.with_main_hide_policy("main", true, hide)
+    }
+
+    /// Only a bounded native hide belongs in this closure. The policy mutex
+    /// serializes the last lease/registration check with the hide boundary;
+    /// no process gate is acquired or waited on here.
+    pub(crate) fn with_main_hide<T>(
+        &self,
+        label: &str,
+        hide: impl FnOnce() -> T,
+    ) -> Result<T, SafetyError> {
+        self.with_main_hide_policy(label, false, hide)
+    }
+
+    fn with_main_hide_policy<T>(
+        &self,
+        label: &str,
+        ordinary_close: bool,
+        hide: impl FnOnce() -> T,
+    ) -> Result<T, SafetyError> {
+        if label != "main" {
+            return Err(SafetyError::UnknownWindow);
+        }
+        if !ordinary_close && self.gate.as_ref().is_some_and(|gate| !gate.available()) {
+            return Err(SafetyError::Unavailable);
+        }
+        let p = self.lock()?;
+        let main = if ordinary_close {
+            &p.windows["main"]
+        } else {
+            Self::main_window_for_hide(&p)?
+        };
+        if main
+            .leases
+            .values()
+            .any(|kind| !ordinary_close || *kind == LeaseKind::InlineEditor)
+        {
+            return Err(SafetyError::Busy);
+        }
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(hide));
+        drop(p);
+        match result {
+            Ok(value) => Ok(value),
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+
+    /// Tray Quit is immediate only when no renderer draft or desktop operation
+    /// can be lost. Closing admission under this same lock prevents a final
+    /// editor/save/capture from racing the decision. A denied Quit changes nothing.
+    pub(crate) fn begin_quit(&self) -> Result<(), SafetyError> {
+        let mut p = self.lock()?;
+        if p.quitting
+            || p.status.preparing
+            || p.operations != 0
+            || p.windows.values().any(|window| !window.leases.is_empty())
+        {
+            return Err(SafetyError::Busy);
+        }
+        p.quitting = true;
+        Ok(())
     }
     #[allow(dead_code)] // Deliberately internal: no production preparation/install IPC.
     pub(crate) fn begin_preparation(self: &Arc<Self>) -> Result<PreparationAttempt, SafetyError> {
@@ -245,6 +385,9 @@ impl SafetyCoordinator {
             gate.prepare()?;
         }
         let mut p = self.lock()?;
+        if p.quitting {
+            return Err(SafetyError::Busy);
+        }
         if p.status.preparing {
             return Err(SafetyError::Busy);
         }
@@ -464,7 +607,10 @@ impl Drop for PreparationGuard {
 impl PreparationGuard {
     /// Only a bounded process-creation call belongs inside this closure. Never
     /// wait for the installer or another process while holding the policy mutex.
-    pub(crate) fn handoff<T>(&mut self, boundary: impl FnOnce() -> T) -> Result<T, SafetyError> {
+    pub(crate) fn handoff<E>(
+        &mut self,
+        boundary: impl FnOnce() -> Result<(), E>,
+    ) -> Result<Result<UpdateExitAuthorization, E>, SafetyError> {
         let p = self.safety.lock()?;
         if std::time::Instant::now() >= self.deadline {
             return Err(SafetyError::TimedOut);
@@ -480,13 +626,22 @@ impl PreparationGuard {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(boundary));
         drop(p);
         match result {
-            Ok(value) => Ok(value),
+            Ok(value) => Ok(value.map(|()| UpdateExitAuthorization {
+                safety: Arc::clone(&self.safety),
+                generation: self.generation,
+            })),
             Err(payload) => std::panic::resume_unwind(payload),
         }
     }
     #[cfg(test)]
     fn run_mock(&mut self, boundary: impl FnOnce()) -> Result<(), SafetyError> {
-        self.handoff(boundary)
+        self.handoff(|| {
+            boundary();
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .map(|result| {
+            let _authorization = result.unwrap_or_else(|never| match never {});
+        })
     }
 }
 #[cfg(test)]

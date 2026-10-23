@@ -1,7 +1,7 @@
 //! Desktop participant safety. Preparation remains internal and installation disabled.
 mod coordinator;
-pub(crate) use coordinator::PreparationGuard;
 pub use coordinator::{LeaseKind, OperationPermit, SafetyCoordinator, SafetyError, SafetyStatus};
+pub(crate) use coordinator::{PreparationGuard, UpdateExitAuthorization};
 
 #[cfg(windows)]
 pub mod gate;

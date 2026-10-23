@@ -7,6 +7,10 @@ use ai_clip_memory_desktop_lib::bridge::protocol::{BridgeErrorCode, BridgeRespon
 use ai_clip_memory_desktop_lib::installation_safety::gate::InstallationGate;
 
 fn main() {
+    if cfg!(feature = "ux-dev") {
+        // No protocol output, SQLite access or process-gate access in this mode.
+        return;
+    }
     // This separate installer mode must run before any native protocol or data
     // directory bootstrap. It emits only a handle; failure has no stdout payload.
     let mut arguments = std::env::args_os().skip(1);

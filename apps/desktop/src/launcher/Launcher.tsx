@@ -32,6 +32,7 @@ import {
   TooltipTrigger,
 } from '../components/ui/tooltip';
 import { displayTitle } from '../lib/clipRetrieval';
+import { groupPreview } from './groupPreview';
 import {
   asLibraryItem,
   libraryItemId,
@@ -41,6 +42,9 @@ import {
   libraryItemTypeLabel,
   matchesLibraryItemSearch,
   recentLibraryItems,
+  findLibraryClip,
+  libraryItemContainingClip,
+  replaceLibraryClip,
 } from '../lib/libraryItems';
 import {
   connectLauncher,
@@ -179,6 +183,7 @@ function LauncherGroupView({
   onBack,
   onCopy,
   onOpenSource,
+  backRef,
 }: {
   group: import('@ai-clip-memory/shared').ClipGroup | undefined;
   busy: boolean;
@@ -186,6 +191,7 @@ function LauncherGroupView({
   onBack: () => void;
   onCopy: (clip: Clip) => void;
   onOpenSource: (clip: Clip) => void;
+  backRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   if (!group)
     return (
@@ -203,6 +209,7 @@ function LauncherGroupView({
           variant="ghost"
           size="icon-sm"
           aria-label="Back to search"
+          ref={backRef}
           onClick={onBack}
         >
           <ArrowLeft />
@@ -240,7 +247,7 @@ function LauncherGroupView({
                     variant="ghost"
                     size="icon-sm"
                     aria-label={`Copy ${displayTitle(clip)}`}
-                    disabled={busy}
+                    pending={busy}
                     onClick={() => onCopy(clip)}
                   >
                     <Copy />
@@ -251,7 +258,7 @@ function LauncherGroupView({
                       variant="ghost"
                       size="icon-sm"
                       aria-label={`Open source for ${displayTitle(clip)}`}
-                      disabled={busy}
+                      pending={busy}
                       onClick={() => onOpenSource(clip)}
                     >
                       <ExternalLink />
@@ -294,6 +301,7 @@ function LauncherSession({
   focusActive: React.RefObject<((session: number) => void) | null>;
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
+  const groupBackRef = useRef<HTMLButtonElement>(null);
   const editorContentRef = useRef<HTMLTextAreaElement>(null);
   const selectedRef = useRef<HTMLDivElement>(null);
   const active = useRef(true);
@@ -325,6 +333,7 @@ function LauncherSession({
     'copied' | 'saved' | 'deleted' | null
   >(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveRefreshFailed, setSaveRefreshFailed] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Clip | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -335,6 +344,11 @@ function LauncherSession({
   const selected = selectedId
     ? results.find((clip) => libraryItemId(clip) === selectedId)
     : undefined;
+
+  useEffect(() => {
+    if (mode.kind === 'search' && !loading && selectedId && !selected)
+      setSelectedId(null);
+  }, [mode.kind, loading, selectedId, selected]);
 
   function setMode(next: LauncherMode) {
     modeRef.current = next;
@@ -350,6 +364,7 @@ function LauncherSession({
       if (active.current && generation === loadingGeneration.current) {
         hasLoaded.current = true;
         setClips(next.map(asLibraryItem));
+        setSaveRefreshFailed(false);
       }
     } catch {
       if (active.current && generation === loadingGeneration.current)
@@ -366,7 +381,7 @@ function LauncherSession({
       safety.frozen ||
       !hasLoaded.current ||
       refreshInFlight.current ||
-      modeRef.current.kind !== 'search' ||
+      (modeRef.current.kind !== 'search' && modeRef.current.kind !== 'group') ||
       saving.current ||
       deleting.current
     )
@@ -378,7 +393,8 @@ function LauncherSession({
       if (
         active.current &&
         generation === loadingGeneration.current &&
-        modeRef.current.kind === 'search' &&
+        (modeRef.current.kind === 'search' ||
+          modeRef.current.kind === 'group') &&
         !saving.current &&
         !deleting.current
       )
@@ -396,6 +412,8 @@ function LauncherSession({
       if (!visibleNow.current) return;
       const focusCurrent = () => {
         if (modeRef.current.kind === 'search') searchRef.current?.focus();
+        else if (modeRef.current.kind === 'group')
+          groupBackRef.current?.focus({ preventScroll: true });
         else editorContentRef.current?.focus();
       };
       focusCurrent();
@@ -433,6 +451,8 @@ function LauncherSession({
     const frame = requestAnimationFrame(() => {
       if (!active.current) return;
       if (mode.kind === 'search') searchRef.current?.focus();
+      else if (mode.kind === 'group')
+        groupBackRef.current?.focus({ preventScroll: true });
       else editorContentRef.current?.focus();
     });
     return () => cancelAnimationFrame(frame);
@@ -658,43 +678,43 @@ function LauncherSession({
           sourcePageTitle: null,
         });
         if (!active.current) return;
-        setClips((current) => [
-          { kind: 'clip', clip: saved },
-          ...current.filter(
-            (clip) => !(clip.kind === 'clip' && clip.clip.id === saved.id),
-          ),
-        ]);
       } else if (modeRef.current.kind === 'edit') {
         const clipId = modeRef.current.clipId;
         const latest = (await client.list()).map(asLibraryItem);
         if (!active.current || modeRef.current.kind !== 'edit') return;
-        const storedItem = latest.find(
-          (item) => item.kind === 'clip' && item.clip.id === clipId,
-        );
-        if (!storedItem || storedItem.kind !== 'clip') {
+        const storedClip = findLibraryClip(latest, clipId);
+        if (!storedClip) {
           setSaveError('This clip is no longer available.');
           return;
         }
         const input: ClipInput = {
           ...draft,
-          title: storedItem.clip.title,
-          sourceApp: storedItem.clip.sourceApp,
-          sourceUrl: storedItem.clip.sourceUrl,
-          sourcePageTitle: storedItem.clip.sourcePageTitle,
+          title: storedClip.title,
+          sourceApp: storedClip.sourceApp,
+          sourceUrl: storedClip.sourceUrl,
+          sourcePageTitle: storedClip.sourcePageTitle,
         };
         saved = await client.update(clipId, input);
         if (!active.current || modeRef.current.kind !== 'edit') return;
-        setClips(
-          latest.map((item) =>
-            item.kind === 'clip' && item.clip.id === saved.id
-              ? { kind: 'clip', clip: saved }
-              : item,
-          ),
-        );
       } else return;
       if (!active.current) return;
+      let selectedAfterSave: string | null = null;
+      try {
+        const latest = (await client.list()).map(asLibraryItem);
+        if (!active.current) return;
+        setClips(latest);
+        const containing = libraryItemContainingClip(latest, saved.id);
+        selectedAfterSave = containing ? libraryItemId(containing) : null;
+        setSaveRefreshFailed(false);
+      } catch {
+        if (!active.current) return;
+        // Persistence succeeded. Close the draft and offer only a read retry,
+        // never repeat Create/Update because an authoritative refresh failed.
+        setClips((current) => replaceLibraryClip(current, saved));
+        setSaveRefreshFailed(true);
+      }
       setQuery('');
-      setSelectedId(saved.id);
+      setSelectedId(selectedAfterSave);
       setFeedback('saved');
       if (await safety.release(leases.current.editor))
         leases.current.editor = null;
@@ -777,7 +797,7 @@ function LauncherSession({
             size="icon-sm"
             aria-label="Open Slate"
             title="Open Slate"
-            disabled={busy}
+            pending={busy}
             onClick={() => void openTin()}
           >
             <AppWindow aria-hidden="true" />
@@ -793,6 +813,19 @@ function LauncherSession({
           </Button>
         </div>
       </header>
+      {saveRefreshFailed && (
+        <div className="launcher-error" role="alert">
+          <span>Clip saved, but the library could not refresh.</span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading || isSaving}
+            onClick={() => void load()}
+          >
+            Refresh clips
+          </Button>
+        </div>
+      )}
       {mode.kind === 'search' ? (
         <>
           <Input
@@ -900,6 +933,10 @@ function LauncherSession({
                       onMouseDown={() => setSelectedId(id)}
                       onClick={() => {
                         setSelectedId(id);
+                        if (clip.kind === 'group') {
+                          openGroup(clip.group.id);
+                          return;
+                        }
                         if (window.getSelection()?.isCollapsed !== false)
                           searchRef.current?.focus();
                       }}
@@ -910,6 +947,29 @@ function LauncherSession({
                         </div>
                         {isSelected && clip.kind === 'clip' && (
                           <div className="launcher-title-actions">
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label="Copy clip"
+                                    pending={busy}
+                                    onMouseDown={(event) =>
+                                      event.stopPropagation()
+                                    }
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void copy(clip.clip.id);
+                                    }}
+                                  />
+                                }
+                              >
+                                <Copy aria-hidden="true" />
+                              </TooltipTrigger>
+                              <TooltipContent>Copy clip</TooltipContent>
+                            </Tooltip>
                             <Tooltip>
                               <TooltipTrigger
                                 render={
@@ -966,7 +1026,9 @@ function LauncherSession({
                         </ScrollArea>
                       ) : (
                         <div className="launcher-preview">
-                          {libraryItemPreview(clip)}
+                          {clip.kind === 'group'
+                            ? groupPreview(clip.group)
+                            : libraryItemPreview(clip)}
                         </div>
                       )}
                       <div className="launcher-meta">
@@ -1009,6 +1071,7 @@ function LauncherSession({
             )?.group
           }
           busy={busy}
+          backRef={groupBackRef}
           error={error}
           onBack={() => setMode({ kind: 'search' })}
           onCopy={(clip) => void copy(clip.id)}
@@ -1027,27 +1090,12 @@ function LauncherSession({
           mode={mode.kind}
           initialContent={
             mode.kind === 'edit'
-              ? clips.find(
-                  (item) =>
-                    item.kind === 'clip' && item.clip.id === mode.clipId,
-                )?.kind === 'clip'
-                ? (
-                    clips.find(
-                      (item) =>
-                        item.kind === 'clip' && item.clip.id === mode.clipId,
-                    ) as { kind: 'clip'; clip: Clip }
-                  ).clip.content
-                : ''
+              ? (findLibraryClip(clips, mode.clipId)?.content ?? '')
               : ''
           }
           initialContentType={
             mode.kind === 'edit'
-              ? ((
-                  clips.find(
-                    (item) =>
-                      item.kind === 'clip' && item.clip.id === mode.clipId,
-                  ) as { kind: 'clip'; clip: Clip } | undefined
-                )?.clip.contentType ?? 'text')
+              ? (findLibraryClip(clips, mode.clipId)?.contentType ?? 'text')
               : 'text'
           }
           isSaving={isSaving}

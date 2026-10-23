@@ -16,6 +16,7 @@ export function UpdateNotice({
   onExpand,
 }: Props) {
   const { state, pending } = controls;
+  const fixture = import.meta.env.DEV && state?.developmentFixture === true;
   if (
     !state ||
     state.dismissed ||
@@ -50,11 +51,19 @@ export function UpdateNotice({
       <p className="sidebar-update-title">
         <Download aria-hidden="true" />
         <span>
-          {state.availableVersion
-            ? `Slate ${state.availableVersion} available`
-            : 'Slate updates'}
+          {fixture
+            ? 'Update notification — visual fixture'
+            : state.availableVersion
+              ? `Slate ${state.availableVersion} available`
+              : 'Slate updates'}
         </span>
       </p>
+      {fixture && (
+        <p>
+          No update is available from this fixture. Downloads and installation
+          are disabled.
+        </p>
+      )}
       {active && (
         <>
           <p role="status">
@@ -126,7 +135,11 @@ export function UpdateNotice({
           ) : (
             <Button
               size="xs"
-              disabled={pending || (Boolean(state.availableVersion) && blocked)}
+              disabled={
+                fixture ||
+                pending ||
+                (Boolean(state.availableVersion) && blocked)
+              }
               onClick={() =>
                 void (state.availableVersion
                   ? controls.download()

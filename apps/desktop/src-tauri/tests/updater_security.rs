@@ -125,7 +125,34 @@ fn restart_is_explicit_main_only_guarded_and_never_uses_sdk_early_exit() {
     assert!(controller.contains("begin_user_preparation()"));
     assert!(controller.contains("guard.handoff(|| staged.launch())"));
     let handoff = source("src/updater/handoff.rs");
-    assert!(handoff.contains("crate::background::quit_app"));
+    assert!(handoff.contains("crate::background::quit_after_update(&self.0, authorization)"));
+    assert!(!handoff.contains("crate::background::quit_app("));
+    assert!(controller.contains("boundary.quit(authorization)"));
+    let background = source("src/background.rs");
+    let authorized = background
+        .split("pub(crate) fn quit_after_update(")
+        .nth(1)
+        .unwrap()
+        .split("pub fn quit_app(")
+        .next()
+        .unwrap();
+    assert!(authorized.contains("with_update_exit(authorization"));
+    assert!(authorized.contains("app.exit(0)"));
+    assert!(background.contains("authorization.begin_exit()?;"));
+    let delegation = background
+        .split("pub(crate) fn with_update_exit(")
+        .nth(1)
+        .unwrap()
+        .split("pub(crate) fn quit_after_update(")
+        .next()
+        .unwrap();
+    assert!(
+        delegation.find("authorization.begin_exit()?").unwrap()
+            < delegation.find("runtime.request_quit()").unwrap()
+    );
+    assert!(
+        delegation.find("runtime.request_quit()").unwrap() < delegation.find("exit();").unwrap()
+    );
     assert!(handoff.contains("Command::new(&self.path)"));
     assert!(handoff.contains(".args(INSTALL_ARGS)"));
     for forbidden in [

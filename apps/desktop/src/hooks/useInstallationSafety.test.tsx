@@ -52,6 +52,34 @@ test('acquires before admitting an editor and keeps its lease until explicit rel
   );
 });
 
+test('a denied tray Quit explains safe draft recovery and clears after explicit resolution', async () => {
+  const fake = fixture();
+  let blocked!: () => void;
+  const stop = vi.fn();
+  fake.client.onQuitBlocked = async (handler) => {
+    blocked = handler;
+    return stop;
+  };
+  const { result, unmount } = renderHook(() =>
+    useInstallationSafety(fake.client),
+  );
+  await waitFor(() => expect(result.current.connected).toBe(true));
+  let lease: Awaited<ReturnType<typeof result.current.acquire>>;
+  await act(async () => {
+    lease = await result.current.acquire('editor');
+  });
+  act(() => blocked());
+  expect(result.current.error).toContain('Slate could not quit');
+  expect(result.current.error).toContain('Escape');
+  expect(fake.client.release).not.toHaveBeenCalled();
+  await act(async () => {
+    await result.current.release(lease!);
+  });
+  expect(result.current.error).toBeNull();
+  unmount();
+  expect(stop).toHaveBeenCalledOnce();
+});
+
 test('freezes admission and acknowledges a clean window without changing application state', async () => {
   const fake = fixture();
   const { result } = renderHook(() => useInstallationSafety(fake.client));

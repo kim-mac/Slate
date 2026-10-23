@@ -22,6 +22,8 @@ const original = join(root, 'apps/desktop/src-tauri');
 const read = (name) => readFileSync(join(original, name), 'utf8');
 function historicalConfiguration() {
   const config = JSON.parse(read('tauri.conf.json'));
+  // The historical helper intentionally accepts only its approved v0.3.0 source.
+  config.version = '0.3.0';
   delete config.plugins.updater;
   return config;
 }
@@ -30,6 +32,18 @@ function historicalController() {
     'installation_enabled: cfg!(windows) && driver.configured(),',
     'installation_enabled: false,',
   );
+}
+function historicalRustMetadata() {
+  return {
+    cargo: read('Cargo.toml').replace(
+      /(^\[package\][\s\S]*?\nversion = ")[^"]+(")/m,
+      (_match, before, after) => before + '0.3.0' + after,
+    ),
+    lock: read('Cargo.lock').replace(
+      /(name = "ai-clip-memory-desktop"\r?\nversion = ")[^"]+(")/,
+      (_match, before, after) => before + '0.3.0' + after,
+    ),
+  };
 }
 
 test('architecture contract keeps x64 and ARM64 artifact names and platform keys separate', () => {
@@ -111,8 +125,7 @@ test('staged Rust changes enable exactly the anchored constructor, pin TLS and k
   const input = {
     controller: historicalController(),
     driver: read('src/updater/tauri_driver.rs'),
-    cargo: read('Cargo.toml'),
-    lock: read('Cargo.lock'),
+    ...historicalRustMetadata(),
   };
   const result = api.testRustSources(input, '0.2.1');
   assert.match(result.controller, /installation_enabled: true,/);
@@ -385,8 +398,11 @@ test('server refuses unsigned inputs before reading TLS credentials or binding',
   );
 });
 
-test('preparation creates two fresh staged Rust trees with a source hash inventory and no production changes', () => {
+test('preparation creates two fresh staged Rust trees with a source hash inventory and no production changes', (t) => {
   assert.equal(typeof api.prepareStages, 'function');
+  // This is historical, offline preparation, not live TLS. Its public CA was
+  // valid on this recorded date. Keep the real helper's expiry checks unchanged.
+  t.mock.method(Date, 'now', () => Date.UTC(2026, 9, 20));
   const baseline = api.sourceInventory(root);
   const directories = readdirSync(
     join(root, 'dist/test/updater-e2e-transport'),
@@ -426,6 +442,13 @@ test('preparation creates two fresh staged Rust trees with a source hash invento
     join(historicalRoot, 'apps/desktop/src-tauri/src/updater/mod.rs'),
     historicalController(),
   );
+  const metadata = historicalRustMetadata();
+  for (const [file, text] of [
+    ['Cargo.toml', metadata.cargo],
+    ['Cargo.lock', metadata.lock],
+  ]) {
+    writeFileSync(join(historicalRoot, 'apps/desktop/src-tauri', file), text);
+  }
   const historicalCa = join(historicalRoot, 'dist/test/ca.pem');
   mkdirSync(dirname(historicalCa), { recursive: true });
   copyFileSync(ca, historicalCa);

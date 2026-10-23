@@ -16,6 +16,7 @@ interface CalendarDayDialogProps extends CalendarClipActions {
   clips: LibraryItem[];
   dateLabel: string;
   disabled?: boolean;
+  pending?: boolean;
   focusOrigin: () => HTMLElement | null;
   onClose: () => void;
   onEditFromDialog: (clip: LibraryItem) => void;
@@ -30,6 +31,7 @@ export function CalendarDayDialog({
   clips,
   dateLabel,
   disabled = false,
+  pending = false,
   focusOrigin,
   onClose,
   onEditFromDialog,
@@ -88,6 +90,7 @@ export function CalendarDayDialog({
                   key={id}
                   clip={clip}
                   disabled={disabled}
+                  pending={pending}
                   primaryId={calendarDayDialogClipElementId(id)}
                   selectionMode={selectionMode}
                   selected={selectedClipIds?.has(id) ?? false}

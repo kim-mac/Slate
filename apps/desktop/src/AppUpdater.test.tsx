@@ -113,7 +113,7 @@ test('updater state loading never blocks library startup', async () => {
   expect(fake.updater.check).not.toHaveBeenCalled();
 });
 
-test('places a new update immediately above the existing sidebar footer', async () => {
+test('prioritizes updates above extension discovery and the unchanged footer', async () => {
   const fake = fixture();
   render(
     <App
@@ -125,7 +125,18 @@ test('places a new update immediately above the existing sidebar footer', async 
   const notice = await screen.findByRole('region', { name: 'Slate update' });
   const sidebar = notice.closest('[data-slot="sidebar"]')!;
   const footer = sidebar.querySelector('[data-slot="sidebar-footer"]')!;
-  expect(notice.nextElementSibling).toBe(footer);
+  const notifications = screen.getByRole('region', {
+    name: 'Sidebar notifications',
+  });
+  const extension = screen.getByRole('region', {
+    name: 'Browser extension suggestion',
+  });
+  expect(notifications.firstElementChild).toBe(notice);
+  expect(notice.nextElementSibling).toBe(extension);
+  expect(notifications.nextElementSibling).toBe(footer);
+  expect(
+    footer.contains(screen.getByRole('button', { name: 'Settings' })),
+  ).toBe(true);
   fireEvent.click(within(notice).getByRole('button', { name: 'Update Now' }));
   await waitFor(() => expect(fake.updater.download).toHaveBeenCalledOnce());
 });
