@@ -1,6 +1,7 @@
 ---
 import DownloadActions from './DownloadActions.astro';
 import Icon from './Icon.astro';
+import HeroMiniatures from './HeroMiniatures.astro';
 
 // Public sample data only. This illustration does not read the Slate library.
 const clips = [
@@ -50,21 +51,24 @@ const days = Array.from({ length: 42 }, (_, index) => {
 ---
 
 <section class="hero shell" aria-labelledby="hero-title">
-  <div class="hero-copy">
-    <h1 id="hero-title">
-      Save what matters.
-      <br />
-      Without breaking your flow.
-    </h1>
-    <p class="hero-description">
-      Save useful information from ChatGPT, Claude, the web, and your desktop
-      directly to your private local library without having to copy and paste.
-    </p>
-    <p class="hero-trust">
-      No account required&nbsp;· Local-first&nbsp;· Your data stays on your
-      device
-    </p>
-    <DownloadActions />
+  <div class="hero-stage">
+    <HeroMiniatures />
+    <div class="hero-copy">
+      <h1 id="hero-title">
+        Save what matters.
+        <br />
+        Without breaking your flow.
+      </h1>
+      <p class="hero-description">
+        Save useful information from ChatGPT, Claude, the web, and your desktop
+        directly to your private local library without having to copy and paste.
+      </p>
+      <p class="hero-trust">
+        No account required&nbsp;· Local-first&nbsp;· Your data stays on your
+        device
+      </p>
+      <DownloadActions />
+    </div>
   </div>
   <figure
     id="product"
@@ -198,6 +202,40 @@ const days = Array.from({ length: 42 }, (_, index) => {
 </section>
 
 <style is:global>
+  .hero .hero-stage {
+    position: relative;
+    isolation: isolate;
+  }
+  .hero .hero-stage::before {
+    content: '';
+    position: absolute;
+    top: -64px;
+    bottom: -32px;
+    left: 50%;
+    width: min(1460px, calc(100vw - 48px));
+    transform: translateX(-50%);
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.35;
+    background: radial-gradient(
+        circle,
+        var(--stage-dot) 0.65px,
+        transparent 0.9px
+      )
+      0 0 / 7px 7px;
+    mask-image:
+      linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent),
+      linear-gradient(to right, #000, transparent 24%, transparent 76%, #000);
+    mask-composite: intersect;
+  }
+  :root[data-theme='dark'] .hero .hero-stage::before {
+    opacity: 0.45;
+  }
+  @media (max-width: 767px) {
+    .hero .hero-stage::before {
+      display: none;
+    }
+  }
   /* Keep the longer headline on two lines where the viewport has room. */
   .hero .hero-copy {
     max-width: 960px;

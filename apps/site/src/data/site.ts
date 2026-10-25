@@ -32,7 +32,12 @@ export function canonicalUrl(
   }
 }
 
-export const publicRoutes = ['/', '/privacy/', '/support/'] as const;
+export const publicRoutes = [
+  '/',
+  '/privacy/',
+  '/support/',
+  '/download/windows/',
+] as const;
 
 export function sitemapXml(base: string | null = site.url): string | null {
   if (!canonicalUrl('/', base)) return null;

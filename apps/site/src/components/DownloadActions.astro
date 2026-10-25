@@ -1,13 +1,13 @@
 ---
-import Icon from './Icon.astro';
+import PlatformLogo from './PlatformLogo.astro';
 ---
 
 <div class="download-actions">
-  <a class="button primary" href="#download">
-    <Icon name="download" /> Download for Windows
+  <a class="button primary" href="/download/windows/?start=1">
+    <PlatformLogo platform="windows" /> Download for Windows
   </a>
   <button class="button secondary" type="button" disabled>
-    Coming soon for macOS
+    <PlatformLogo platform="apple" /> Coming soon for macOS
   </button>
 </div>
 <p class="availability">Windows 11</p>

@@ -1,0 +1,106 @@
+---
+// Original, generic line drawings. These represent content, not apps or integrations.
+const concepts = [
+  {
+    kind: 'browser',
+    path: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM3 9h18M6 6.5h.01M9 6.5h.01M7 13h6M7 16h9',
+  },
+  {
+    kind: 'conversation',
+    path: 'M5 4h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3v-3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM8 8h5M11 17h5l4 3v-3a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2',
+  },
+  {
+    kind: 'snippet',
+    path: 'M6 3h8l4 4v14H6V3ZM14 3v5h4M9 12h6M9 15h6M9 18h3',
+  },
+];
+---
+
+<span class="hero-concepts" data-hero-concepts aria-hidden="true" inert>
+  {concepts.map(({ kind, path }) => (
+    <span
+      class:list={['concept-tile', `concept-${kind}`]}
+      data-hero-concept={kind}
+    >
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d={path} />
+      </svg>
+    </span>
+  ))}
+</span>
+
+<style>
+  .hero-concepts {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    user-select: none;
+  }
+  .concept-tile {
+    display: none;
+    position: absolute;
+    place-items: center;
+    width: 54px;
+    height: 54px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow:
+      0 10px 24px -16px rgb(0 0 0 / 20%),
+      0 1px 4px rgb(0 0 0 / 3%);
+  }
+  .concept-browser {
+    top: -40px;
+    left: 248px;
+    color: #697b91;
+    transform: rotate(3deg);
+  }
+  .concept-conversation {
+    top: 135px;
+    left: 72px;
+    color: #9a7869;
+    transform: rotate(-4deg);
+  }
+  .concept-snippet {
+    top: 151px;
+    right: 52px;
+    color: #657c6e;
+    transform: rotate(2deg);
+  }
+  :global([data-theme='dark']) .concept-tile {
+    box-shadow:
+      0 10px 24px -16px rgb(0 0 0 / 50%),
+      0 1px 4px rgb(0 0 0 / 10%);
+  }
+  :global([data-theme='dark']) .concept-browser {
+    color: #a8b9cc;
+  }
+  :global([data-theme='dark']) .concept-conversation {
+    color: #c6a28f;
+  }
+  :global([data-theme='dark']) .concept-snippet {
+    color: #a4b8a9;
+  }
+  @media (min-width: 1360px) {
+    .concept-conversation,
+    .concept-snippet {
+      display: grid;
+    }
+  }
+  @media (min-width: 1440px) {
+    .concept-browser {
+      display: grid;
+    }
+  }
+</style>

@@ -220,15 +220,12 @@ test('detection fails closed when Client Hints are absent, withheld, rejected or
   );
 });
 
-test('built download panel enables official Windows and Chrome destinations while preserving hashes and Desktop pairing', () => {
+test('dedicated Windows guide preserves both immutable installers, hashes and Copy controls', () => {
   const html = readFileSync(
-    new URL('../dist/index.html', import.meta.url),
+    new URL('../dist/download/windows/index.html', import.meta.url),
     'utf8',
   );
-  const section = html.match(
-    /<section\b[^>]*id="download"[\s\S]*?<\/section>/,
-  )?.[0];
-  assert.ok(section);
+  const section = html;
   for (const [id, name, filename, hash] of [
     [
       'windowsX64',
@@ -267,8 +264,32 @@ test('built download panel enables official Windows and Chrome destinations whil
   }
   assert.match(section, /For Intel &amp; AMD PCs/);
   assert.match(section, /For Windows-on-ARM PCs/);
-  assert.match(section, /Chrome extension/);
   assert.doesNotMatch(section, /href="[^"]*\.zip/);
+});
+
+test('homepage Get Slate has two clean cards and funnels Windows downloads through the guide', () => {
+  const html = readFileSync(
+    new URL('../dist/index.html', import.meta.url),
+    'utf8',
+  );
+  const section = html.match(
+    /<section\b[^>]*id="download"[\s\S]*?<\/section>/,
+  )?.[0];
+  assert.ok(section, 'Existing #download anchor must remain');
+  assert.equal((section.match(/<article\b/g) ?? []).length, 2);
+  assert.match(section, /Slate for Windows/);
+  assert.match(section, /Your personal library, stored locally on your PC\./);
+  assert.match(section, /Chrome Extension/);
+  assert.match(section, /Save content from your browser straight into Slate\./);
+  assert.match(section, /Browser capture requires the Slate desktop app\./);
+  assert.match(
+    section,
+    /class="button primary" href="\/download\/windows\/\?start=1"[^>]*>[\s\S]*?Download for Windows/,
+  );
+  assert.doesNotMatch(
+    html,
+    /SHA-?256|data-copy-hash|data-windows-installer|href="[^"]*\.exe|Windows (?:x64|ARM64)/,
+  );
   const chromeLink = section.match(
     /<a\b([^>]*href="https:\/\/chromewebstore\.google\.com\/detail\/slate\/hgbfaclkpmcecikjepoejgjccddjbekh"[^>]*)>([\s\S]*?)<\/a>/,
   );
@@ -282,13 +303,8 @@ test('built download panel enables official Windows and Chrome destinations whil
     /\bdisabled\b|aria-disabled="true"|\bdownload=/,
   );
   assert.match(chromeLink[2], /Add to Chrome/);
-  assert.match(
-    section,
-    /Requires Slate Desktop to save to your local library\./,
-  );
   assert.doesNotMatch(
     section,
     /not yet available|Store listing not available yet/i,
   );
-  assert.match(section, /<p class="small-note download-safety">/);
 });

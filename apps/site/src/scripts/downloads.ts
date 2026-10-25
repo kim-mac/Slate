@@ -41,7 +41,8 @@ export function initializeDownloads(
   root: ParentNode,
   browser: DownloadNavigator,
 ) {
-  void detectArchitecture(browser).then((id) => {
+  const architecture = detectArchitecture(browser);
+  void architecture.then((id) => {
     if (!id) return;
     const card = root.querySelector<HTMLElement>(
       `[data-windows-installer="${id}"]`,
@@ -84,4 +85,5 @@ export function initializeDownloads(
         }
       });
     });
+  return architecture;
 }

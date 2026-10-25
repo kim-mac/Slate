@@ -8,12 +8,13 @@ interface Props {
   description?: string;
   home?: boolean;
   indexable?: boolean;
+  showFooter?: boolean;
 }
 const {
   title = site.title,
   description = site.description,
-  home = true,
   indexable = true,
+  showFooter = true,
 } = Astro.props;
 const canonical = indexable ? canonicalUrl(Astro.url.pathname) : null;
 const shareImage = canonicalUrl('/brand/social-preview.png');
@@ -109,10 +110,10 @@ const shareImage = canonicalUrl('/brand/social-preview.png');
     <a class="skip-link" href="#main">
       Skip to content
     </a>
-    <Header home={home} />
+    <Header />
     <main id="main" tabindex="-1">
       <slot />
     </main>
-    <Footer />
+    {showFooter && <Footer />}
   </body>
 </html>

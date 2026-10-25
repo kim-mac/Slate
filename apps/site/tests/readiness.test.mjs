@@ -10,6 +10,7 @@ const routes = [
   'index.html',
   'privacy/index.html',
   'support/index.html',
+  'download/windows/index.html',
   '404.html',
 ];
 const page = (path) => {
@@ -44,6 +45,7 @@ test('Support explains shipping workflows and a truthful reporting destination',
     assert.ok(html.includes(text), 'Missing verified guidance: ' + text);
   }
   assert.match(html, /desktop app installed/);
+  assert.match(html, /href="\/download\/windows\/"/);
   assert.match(html, /original clips/);
   assert.match(html, /source and date/);
   assert.match(html, /href="https:\/\/github\.com\/kim-mac\/Slate"/);
@@ -64,7 +66,8 @@ test('all launch routes preserve accessible structure, safe links, themes and co
     assert.match(html, /<html[^>]*lang="en"/);
     assert.match(html, /href="#main"/);
     assert.match(html, /<main[^>]*id="main"/);
-    assert.match(html, /href="\/support\/"/);
+    if (route !== 'download/windows/index.html')
+      assert.match(html, /href="\/support\/"/);
     assert.match(html, /data-theme-toggle/);
     assert.match(html, /data-slate-theme/);
     assert.match(html, /name="description" content="[^"]+"/);
@@ -98,6 +101,7 @@ test('all launch routes preserve accessible structure, safe links, themes and co
           [
             'Slate-0.3.0-Windows-x64.exe',
             'Slate-0.3.0-Windows-ARM64.exe',
+            'SHA256SUMS.txt',
           ].includes(filename),
         );
         assert.ok(
@@ -112,7 +116,7 @@ test('all launch routes preserve accessible structure, safe links, themes and co
     }
     assert.equal(
       (html.match(/<script\b/g) ?? []).length,
-      route === 'index.html' ? 3 : 1,
+      route === 'index.html' || route === 'download/windows/index.html' ? 2 : 1,
     );
     assert.doesNotMatch(html, /<form|astro-island|<iframe|googletagmanager/);
   }
@@ -131,7 +135,7 @@ test('homepage and Support link to the published Chrome extension and require Sl
       /not yet (?:publicly )?available|Once the extension is available/i,
     );
   }
-  assert.match(home, /Requires Slate Desktop to save to your local library\./);
+  assert.match(home, /Browser capture requires the Slate desktop app\./);
   assert.match(
     support,
     /Keep the Slate desktop app installed\. Browser capture requires it\./,
@@ -144,11 +148,8 @@ test('homepage and Support link to the published Chrome extension and require Sl
 
 test('download area explains desktop pairing and uses the centralized release version', () => {
   const html = page('index.html');
-  assert.match(
-    html,
-    /Slate for Windows and the Chrome extension work together/,
-  );
-  assert.match(html, /browser capture requires the desktop app/i);
+  assert.match(html, /Slate for Windows/);
+  assert.match(html, /browser capture requires the Slate desktop app/i);
   const privacy = readFileSync(
     resolve(root, 'src/pages/privacy.astro'),
     'utf8',
@@ -166,7 +167,7 @@ test('social preview is a site-owned 1200 by 630 PNG, not a copied installer or 
   assert.equal(bytes.readUInt32BE(20), 630);
 });
 
-test('domain configuration generates only the three public launch routes', async () => {
+test('domain configuration generates the four public launch routes', async () => {
   const { site, canonicalUrl, sitemapXml, robotsText } =
     await import('../src/data/site.ts');
   assert.equal(site.url, 'https://tryslate.tech');
@@ -187,9 +188,9 @@ test('domain configuration generates only the three public launch routes', async
   }
   assert.equal(canonicalUrl('/support/', base), base + '/support/');
   const xml = sitemapXml(base);
-  for (const path of ['/', '/privacy/', '/support/'])
+  for (const path of ['/', '/privacy/', '/support/', '/download/windows/'])
     assert.ok(xml.includes('<loc>' + base + path + '</loc>'));
-  assert.equal((xml.match(/<loc>/g) ?? []).length, 3);
+  assert.equal((xml.match(/<loc>/g) ?? []).length, 4);
   assert.doesNotMatch(xml, /404|localhost|pages\.dev/);
   assert.match(
     robotsText(base),
@@ -205,6 +206,7 @@ test('domain configuration generates only the three public launch routes', async
       'https://tryslate.tech/',
       'https://tryslate.tech/privacy/',
       'https://tryslate.tech/support/',
+      'https://tryslate.tech/download/windows/',
     ],
   );
 });

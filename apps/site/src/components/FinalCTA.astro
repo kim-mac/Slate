@@ -1,6 +1,7 @@
 ---
 import Icon from './Icon.astro';
-import { release, windowsDownloads, downloadUrl } from '../data/releases';
+import PlatformLogo from './PlatformLogo.astro';
+import { release, downloadUrl } from '../data/releases';
 const chromeUrl = downloadUrl(release.downloads.chrome);
 ---
 
@@ -16,117 +17,119 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
       </div>
       <p>v{release.version} · Windows 11</p>
     </div>
-    <div class="download-layout">
-      <div class="windows-panel" aria-labelledby="windows-title">
-        <div class="platform-heading">
-          <Icon name="window" />
-          <div>
-            <h3 id="windows-title">Windows</h3>
-            <p>Slate {release.version}</p>
-          </div>
-          <span class="artifact-format">.exe</span>
+    <div class="get-slate-cards">
+      <article class="get-slate-card" aria-labelledby="windows-title">
+        <div class="card-heading">
+          <span class="card-icon">
+            <PlatformLogo platform="windows" />
+          </span>
+          <h3 id="windows-title">Slate for Windows</h3>
         </div>
-        <div class="windows-options">
-          {windowsDownloads.map((id) => {
-            const artifact = release.downloads[id];
-            const url = downloadUrl(artifact);
-            return (
-              <article
-                class="installer-option"
-                data-windows-installer={id}
-                aria-labelledby={`${id}-title`}
-              >
-                <div class="installer-heading">
-                  <h4 id={`${id}-title`}>{artifact.title}</h4>
-                  <span class="system-badge" data-recommendation hidden>
-                    Recommended
-                  </span>
-                </div>
-                <p class="installer-description">{artifact.description}</p>
-                {url ? (
-                  <a
-                    class="button secondary"
-                    href={url}
-                    download={artifact.filename}
-                  >
-                    Download {artifact.architecture}
-                    <Icon name="download" />
-                  </a>
-                ) : (
-                  <button
-                    class="button secondary"
-                    type="button"
-                    disabled
-                    title="Download not available yet"
-                  >
-                    Download {artifact.architecture}
-                    <Icon name="download" />
-                  </button>
-                )}
-                <div class="fingerprint-row">
-                  <details class="fingerprint">
-                    <summary>
-                      SHA-256 <code>{artifact.sha256.slice(0, 16)}…</code>
-                    </summary>
-                    <code class="full-hash">{artifact.sha256}</code>
-                  </details>
-                  <button
-                    class="hash-copy"
-                    type="button"
-                    data-copy-hash={artifact.sha256}
-                    aria-label={`Copy SHA-256 for ${artifact.title}`}
-                  >
-                    <Icon name="copy" />
-                    <span data-copy-label>Copy</span>
-                  </button>
-                </div>
-                <span class="copy-status" data-copy-status role="status"></span>
-              </article>
-            );
-          })}
-        </div>
-        <p class="small-note download-safety">
-          Windows installers are not Authenticode-signed. Microsoft Defender
-          SmartScreen may show an Unknown Publisher warning.
+        <p class="card-description">
+          Your personal library, stored locally on your PC.
         </p>
-      </div>
-      <div class="extension-panel">
-        <div class="platform-heading">
-          <Icon name="globe" />
-          <div>
-            <h3>Chrome extension</h3>
-            <p>Slate {release.extensionVersion}</p>
-          </div>
-        </div>
-        <p class="extension-description">
-          Requires Slate Desktop to save to your local library.
-        </p>
-        {chromeUrl ? (
-          <a class="button secondary" href={chromeUrl}>
-            Add to Chrome
-            <Icon name="arrow" />
+        <div class="card-action">
+          <a class="button primary" href="/download/windows/?start=1">
+            <PlatformLogo platform="windows" /> Download for Windows
           </a>
-        ) : (
-          <button
-            class="button secondary"
-            type="button"
-            disabled
-            title="Chrome installation unavailable"
-          >
-            Add to Chrome
-            <Icon name="arrow" />
-          </button>
-        )}
-      </div>
+        </div>
+      </article>
+      <article class="get-slate-card" aria-labelledby="chrome-title">
+        <div class="card-heading">
+          <span class="card-icon">
+            <Icon name="globe" />
+          </span>
+          <h3 id="chrome-title">Chrome Extension</h3>
+        </div>
+        <p class="card-description">
+          Save content from your browser straight into Slate.
+        </p>
+        <p class="capture-note">
+          Browser capture requires the Slate desktop app.
+        </p>
+        <div class="card-action">
+          {chromeUrl ? (
+            <a class="button secondary" href={chromeUrl}>
+              Add to Chrome <Icon name="arrow" />
+            </a>
+          ) : (
+            <button
+              class="button secondary"
+              type="button"
+              disabled
+              title="Chrome installation unavailable"
+            >
+              Add to Chrome <Icon name="arrow" />
+            </button>
+          )}
+        </div>
+      </article>
     </div>
-    <p class="small-note download-pairing">
-      Slate for Windows and the Chrome extension work together. Browser capture
-      requires the desktop app.
-    </p>
   </div>
 </section>
 
-<script>
-  import { initializeDownloads } from '../scripts/downloads';
-  initializeDownloads(document, navigator);
-</script>
+<style>
+  .get-slate-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    margin-top: 24px;
+  }
+  .get-slate-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    padding: 26px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+  }
+  .card-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .card-icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    flex: none;
+    border-radius: var(--radius);
+    background: var(--soft);
+  }
+  h3 {
+    font-size: 22px;
+    line-height: 1.3;
+    letter-spacing: -0.03em;
+  }
+  .card-description {
+    margin-top: 14px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .capture-note {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .card-action {
+    margin-top: auto;
+    padding-top: 20px;
+  }
+  @media (max-width: 700px) {
+    .get-slate-cards {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .get-slate-card {
+      padding: 22px;
+    }
+    h3 {
+      font-size: 20px;
+    }
+  }
+</style>

@@ -48,7 +48,7 @@ test('built homepage keeps the approved compact hierarchy', () => {
     supportingCopy?.replace(/\s+/g, ' ').trim(),
     'Save useful information from ChatGPT, Claude, the web, and your desktop directly to your private local library without having to copy and paste.',
   );
-  assert.equal((html.match(/<section(?:\s|>)/g) ?? []).length, 3);
+  assert.equal((html.match(/<section(?:\s|>)/g) ?? []).length, 4);
   assert.doesNotMatch(html, /id="(?:local-first|workflows)"/);
 });
 
@@ -135,15 +135,19 @@ test('hero keeps Windows primary and presents macOS as an unavailable secondary 
   assert.ok(actions);
   assert.match(
     actions,
-    /<a class="button primary" href="#download">[\s\S]*Download for Windows/,
+    /<a class="button primary" href="\/download\/windows\/\?start=1">[\s\S]*Download for Windows/,
   );
   const macOS = actions.match(
-    /<button\b([^>]*)>\s*Coming soon for macOS\s*<\/button>/,
+    /<button\b([^>]*)>([\s\S]*?Coming soon for macOS[\s\S]*?)<\/button>/,
   );
   assert.ok(macOS, 'macOS must be informational, not a link');
   assert.match(macOS[1], /class="button secondary"/);
   assert.match(macOS[1], /type="button"/);
   assert.match(macOS[1], /\bdisabled(?:\s|$)/);
+  assert.equal(
+    macOS[2].replace(/<[^>]*>/g, '').trim(),
+    'Coming soon for macOS',
+  );
   assert.doesNotMatch(macOS[1], /href=|onclick=|tabindex=/);
   assert.doesNotMatch(
     actions,
@@ -165,19 +169,19 @@ test('navbar GitHub action has the full visible label and retains its safe desti
   assert.match(github[1], /rel="noopener noreferrer"/);
 });
 
-test('navbar GitHub and Download corners match without reordering controls', () => {
+test('navbar retains GitHub and theme controls without a redundant Download CTA', () => {
   const html = page();
   const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0];
   assert.ok(header);
   assert.match(header, /class="github-mark"/);
-  assert.ok(header.indexOf('github-link') < header.indexOf('nav-download'));
-  assert.ok(header.indexOf('nav-download') < header.indexOf('theme-toggle'));
+  assert.doesNotMatch(header, /nav-download|>\s*Download\s*</);
+  assert.ok(header.indexOf('github-link') < header.indexOf('theme-toggle'));
   const css = readFileSync(resolve(root, 'src/styles/global.css'), 'utf8');
   assert.ok(
     /\.github-link\s*\{[^}]*border-radius:\s*8px/.test(css),
-    'GitHub corners must match Download',
+    'GitHub corners retain the existing design',
   );
-  assert.match(css, /\.nav-download\s*\{[^}]*border-radius:\s*8px/);
+  assert.doesNotMatch(css, /\.nav-download/);
   assert.match(css, /\.theme-toggle\s*\{[^}]*border-radius:\s*50%/);
 });
 
@@ -242,15 +246,13 @@ test('local navigation and asset destinations resolve in static output', () => {
   }
 });
 
-test('published Windows assets and official Chrome listing are linked without exposing the CWS upload ZIP', () => {
+test('homepage links to the Windows guide and official Chrome listing without exposing installers or the CWS ZIP', () => {
   const html = page();
   const installers = [...html.matchAll(/href="([^"]+\.exe)"/g)].map(
     (match) => match[1],
   );
-  assert.deepEqual(installers.sort(), [
-    'https://github.com/kim-mac/Slate/releases/download/v0.3.0/Slate-0.3.0-Windows-ARM64.exe',
-    'https://github.com/kim-mac/Slate/releases/download/v0.3.0/Slate-0.3.0-Windows-x64.exe',
-  ]);
+  assert.deepEqual(installers, []);
+  assert.match(html, /href="\/download\/windows\/\?start=1"/);
   assert.doesNotMatch(html, /href="[^"]*\.zip/);
   assert.deepEqual(
     [
@@ -265,21 +267,15 @@ test('published Windows assets and official Chrome listing are linked without ex
   assert.doesNotMatch(html, /Download for macOS|Apple Silicon/);
 });
 
-test('launch copy keeps only the platform label and a secondary SmartScreen disclosure', () => {
+test('launch copy keeps the platform label and concise desktop-pairing note', () => {
   const html = page();
   assert.match(html, /<p class="availability">\s*Windows 11\s*<\/p>/);
   assert.doesNotMatch(
     html,
     /Public downloads coming soon|public download links are not live yet\./i,
   );
-  assert.match(
-    html,
-    /Slate for Windows and the Chrome extension work together\. Browser capture\s+requires the desktop app\./,
-  );
-  assert.match(
-    html,
-    /<p class="small-note download-safety">\s*Windows installers are not Authenticode-signed\. Microsoft Defender SmartScreen\s+may show an Unknown Publisher warning\.\s*<\/p>/,
-  );
+  assert.match(html, /Browser capture requires the Slate desktop app\./);
+  assert.doesNotMatch(html, /download-safety|SHA-256|data-windows-installer/);
 });
 
 test('public pages use the production apex for canonical and sharing metadata', () => {
@@ -338,7 +334,7 @@ test('public pages use the production apex for canonical and sharing metadata', 
   assert.doesNotMatch(notFound, /rel="canonical"|property="og:url"/);
 });
 
-test('production robots and sitemap expose only the three public apex routes', () => {
+test('production robots and sitemap expose the four public apex routes', () => {
   assert.equal(
     page('robots.txt'),
     'User-agent: *\nAllow: /\nSitemap: https://tryslate.tech/sitemap.xml\n',
@@ -351,6 +347,7 @@ test('production robots and sitemap expose only the three public apex routes', (
       'https://tryslate.tech/',
       'https://tryslate.tech/privacy/',
       'https://tryslate.tech/support/',
+      'https://tryslate.tech/download/windows/',
     ],
   );
   assert.doesNotMatch(xml, /404|localhost|pages\.dev|www\.tryslate/);
@@ -408,6 +405,7 @@ test('site ships only its existing UI scripts with no application tracking or co
     'index.html',
     'privacy/index.html',
     'support/index.html',
+    'download/windows/index.html',
     '404.html',
   ]) {
     const html = page(path);
@@ -415,27 +413,44 @@ test('site ships only its existing UI scripts with no application tracking or co
     const scripts = [
       ...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g),
     ];
-    assert.equal(scripts.length, path === 'index.html' ? 3 : 1);
+    assert.equal(
+      scripts.length,
+      path === 'index.html' || path === 'download/windows/index.html' ? 2 : 1,
+    );
     assert.match(scripts[0][1], /data-slate-theme/);
     assert.doesNotMatch(scripts[0][1], /\bsrc=/);
     if (path === 'index.html') {
-      for (const [index, script] of scripts.slice(1).entries()) {
+      for (const script of scripts.slice(1)) {
         assert.match(script[1], /type="module"/);
         const localScript = script[1].match(/src="([^"]+)"/)?.[1];
         if (localScript) {
           assert.ok(localScript.startsWith('/_astro/'));
           assert.ok(existsSync(resolve(output, `.${localScript}`)));
-        } else if (index === 0) {
+        } else {
           assert.match(script[2], /IntersectionObserver/);
           assert.match(script[2], /prefers-reduced-motion/);
           assert.doesNotMatch(
             script[2],
             /requestAnimationFrame|setInterval|fetch\(/,
           );
-        } else {
-          assert.match(script[2], /getHighEntropyValues/);
-          assert.match(script[2], /clipboard\.writeText/);
         }
+      }
+    }
+    if (path === 'download/windows/index.html') {
+      assert.match(scripts[1][1], /type="module"/);
+      const localScript = scripts[1][1].match(/src="([^"]+)"/)?.[1];
+      if (localScript) {
+        assert.ok(localScript.startsWith('/_astro/'));
+        assert.ok(existsSync(resolve(output, `.${localScript}`)));
+      } else {
+        assert.match(scripts[1][2], /getHighEntropyValues/);
+        assert.match(scripts[1][2], /history\.replaceState/);
+        assert.match(scripts[1][2], /\.location\.assign\(/);
+        assert.match(scripts[1][2], /clipboard\.writeText/);
+        assert.doesNotMatch(
+          scripts[1][2],
+          /fetch\(|XMLHttpRequest|setInterval/,
+        );
       }
     }
     assert.doesNotMatch(
@@ -610,6 +625,11 @@ test('built CSS loads only present local font assets and ships their license', (
 test('motion is nonessential and focus styling is explicit', () => {
   const css = readFileSync(resolve(root, 'src/styles/global.css'), 'utf8');
   assert.match(css, /:focus-visible/);
+  assert.match(
+    css,
+    /\.button\.primary:focus-visible\s*\{\s*outline-color:\s*var\(--ink\);\s*\}/,
+    'Primary button focus must contrast with the surrounding page in both themes',
+  );
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /animation:\s*none\s*!important/);
   assert.match(css, /scroll-behavior:\s*auto\s*!important/);

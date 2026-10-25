@@ -1,11 +1,6 @@
 ---
 import Icon from './Icon.astro';
 import { site } from '../data/site';
-interface Props {
-  home?: boolean;
-}
-const { home = true } = Astro.props;
-const anchor = (id: string) => (home ? `#${id}` : `/#${id}`);
 ---
 
 <header class="site-header">
@@ -31,9 +26,6 @@ const anchor = (id: string) => (home ? `#${id}` : `/#${id}`);
           <Icon name="github" />
         </span>
         <span>Star on GitHub</span>
-      </a>
-      <a class="nav-download" href={anchor('download')}>
-        Download
       </a>
       <button
         class="theme-toggle"

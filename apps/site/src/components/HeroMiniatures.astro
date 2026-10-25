@@ -1,0 +1,230 @@
+---
+import Icon from './Icon.astro';
+import HeroConceptTiles from './HeroConceptTiles.astro';
+---
+
+{/* Static public sample UI only; never reads the library or performs capture. */}
+<aside class="hero-miniatures" data-hero-miniatures aria-hidden="true" inert>
+  <HeroConceptTiles />
+  <div class="miniature saved-clip" data-hero-miniature="saved">
+    <div class="miniature-heading">
+      <span class="miniature-brand">
+        <img src="/brand/slate-icon.png" width="16" height="16" alt="" />
+        Slate
+      </span>
+      <Icon name="more" />
+    </div>
+    <div class="miniature-content">
+      <strong>One useful idea</strong>
+      <p>Start small. Keep the flow.</p>
+      <span class="miniature-meta">
+        <Icon name="check" /> Saved locally
+      </span>
+    </div>
+  </div>
+
+  <div class="miniature quick-search" data-hero-miniature="search">
+    <div class="miniature-heading window-heading">
+      <span class="miniature-brand">
+        <Icon name="search" /> Quick Search
+      </span>
+      <Icon name="close" />
+    </div>
+    <div class="miniature-query">API gateway</div>
+    <div class="miniature-result">
+      <strong>API gateway notes</strong>
+      <p>A single entry point for client requests.</p>
+    </div>
+  </div>
+
+  <div class="miniature pinned-clip" data-hero-miniature="pinned">
+    <div class="miniature-heading">
+      <span class="miniature-brand">
+        <Icon name="pin" /> Pinned
+      </span>
+      <Icon name="more" />
+    </div>
+    <div class="miniature-content">
+      <strong>Keep this close</strong>
+      <p>Give context. Ask one clear question.</p>
+      <span class="miniature-meta">Text clip</span>
+    </div>
+  </div>
+
+  <div class="miniature browser-capture" data-hero-miniature="capture">
+    <div class="miniature-heading window-heading">
+      <span class="miniature-brand">
+        <Icon name="globe" /> Browser capture
+      </span>
+      <Icon name="more" />
+    </div>
+    <div class="miniature-selection">
+      <mark>Keep useful ideas close to you.</mark>
+    </div>
+    <div class="miniature-capture-row">
+      <img src="/brand/slate-icon.png" width="16" height="16" alt="" />
+      <span>Save selection</span>
+      <Icon name="check" />
+    </div>
+    <span class="miniature-capture-state">Saved locally</span>
+  </div>
+</aside>
+
+<style>
+  .hero-miniatures {
+    --hero-card-inset: 24px;
+    display: none;
+    position: absolute;
+    inset-block: 0;
+    left: 50%;
+    width: min(1460px, calc(100vw - 64px));
+    transform: translateX(-50%);
+    pointer-events: none;
+    user-select: none;
+  }
+  .miniature {
+    position: absolute;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow:
+      0 15px 32px -20px rgb(0 0 0 / 24%),
+      0 2px 6px rgb(0 0 0 / 4%);
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: left;
+  }
+  .saved-clip {
+    top: -60px;
+    left: var(--hero-card-inset);
+    width: 196px;
+    transform: rotate(-3deg);
+  }
+  .quick-search {
+    top: -80px;
+    right: var(--hero-card-inset);
+    width: 216px;
+    transform: rotate(3deg);
+  }
+  .pinned-clip {
+    top: 234px;
+    left: var(--hero-card-inset);
+    width: 200px;
+    transform: rotate(2deg);
+  }
+  .browser-capture {
+    top: 230px;
+    right: var(--hero-card-inset);
+    width: 214px;
+    transform: rotate(-2deg);
+  }
+  .miniature-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 11px;
+    color: var(--muted);
+    font-size: 10px;
+  }
+  .miniature-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .miniature-brand img,
+  .miniature-capture-row img {
+    width: 16px;
+    height: 16px;
+  }
+  .miniature :global(.icon) {
+    width: 13px;
+    height: 13px;
+  }
+  .window-heading {
+    background: var(--window-surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .miniature-content {
+    padding: 0 12px 12px;
+  }
+  strong {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+  p {
+    margin-top: 4px;
+    color: var(--muted);
+  }
+  .miniature-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 10px;
+  }
+  .miniature-query {
+    margin: 8px;
+    padding: 5px 8px;
+    border: 1px solid var(--button-line);
+    border-radius: 5px;
+    background: var(--page);
+  }
+  .miniature-result {
+    margin: 0 8px 8px;
+    padding: 7px 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--soft);
+  }
+  .miniature-result strong {
+    font-size: 11px;
+  }
+  .miniature-result p {
+    font-size: 10px;
+  }
+  .miniature-selection {
+    padding: 12px 12px 10px;
+    line-height: 1.8;
+  }
+  mark {
+    padding-block: 2px;
+    color: var(--ink);
+    background: var(--accent);
+    box-decoration-break: clone;
+  }
+  .miniature-capture-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-inline: 8px;
+    padding: 6px 7px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--window-surface);
+  }
+  .miniature-capture-row :global(.icon) {
+    margin-left: auto;
+  }
+  .miniature-capture-state {
+    display: block;
+    padding: 5px 12px 8px;
+    color: var(--muted);
+    font-size: 10px;
+  }
+  :global([data-theme='dark']) .miniature {
+    box-shadow:
+      0 15px 32px -20px rgb(0 0 0 / 65%),
+      0 2px 6px rgb(0 0 0 / 12%);
+  }
+  @media (min-width: 1280px) {
+    .hero-miniatures {
+      display: block;
+    }
+  }
+</style>

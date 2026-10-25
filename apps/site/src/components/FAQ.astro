@@ -1,0 +1,198 @@
+---
+const questions = [
+  {
+    question: 'What is Slate?',
+    answer:
+      'Slate is a local-first app for saving useful text and links in a personal library. Search, organize, edit, and reuse your clips on your PC.',
+  },
+  {
+    question: 'Is Slate free?',
+    answer: 'Yes. Slate is free and open source under the MIT license.',
+  },
+  {
+    question: 'Is my data private?',
+    answer:
+      'Your clips are stored locally on your PC, not in a Slate cloud library. The database is not encrypted by Slate, so your device’s security still matters.',
+  },
+  {
+    question: 'How does the Chrome extension work?',
+    answer:
+      'Install Slate Desktop and the extension, then use Save selection for selected text or Save this page to keep a link and its title in your local library.',
+  },
+  {
+    question: 'Do I need the Chrome extension?',
+    answer:
+      'No. The extension is optional. You can create, edit, and search clips in Slate Desktop without it; it simply adds browser capture.',
+  },
+  {
+    question: 'Does Slate work offline?',
+    answer:
+      'Yes. Create, edit, search, and copy saved clips without an internet connection. Visiting websites, installing the extension, and downloading updates still need internet access.',
+  },
+  {
+    question: 'Is Slate available for macOS?',
+    answer:
+      'Not yet. Slate currently supports Windows 11; a macOS download is not available.',
+  },
+  {
+    question: 'Do I need to create an account?',
+    answer:
+      'No Slate account or sign-in is required. Install the app and start saving to your local library.',
+  },
+];
+---
+
+<section id="faq" class="faq-section" aria-labelledby="faq-title">
+  <div class="shell faq-inner">
+    <div class="faq-heading">
+      <h2 id="faq-title">Frequently asked questions</h2>
+      <p>Everything you need to know about Slate.</p>
+    </div>
+    <div class="faq-list">
+      {questions.map(({ question, answer }) => (
+        <details class="faq-item" name="slate-faq">
+          <summary>
+            <h3>{question}</h3>
+            <svg
+              class="faq-mark"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M5 12h14" />
+              <path class="faq-vertical" d="M12 5v14" />
+            </svg>
+          </summary>
+          <div class="faq-answer">
+            <p>{answer}</p>
+          </div>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .faq-section {
+    padding-block: clamp(64px, 7vw, 96px);
+    border-top: 1px solid var(--line);
+  }
+  .faq-inner {
+    max-width: 760px;
+  }
+  .faq-heading {
+    text-align: center;
+  }
+  h2 {
+    font-size: clamp(28px, 3.5vw, 40px);
+    line-height: 1.12;
+    letter-spacing: -0.045em;
+  }
+  .faq-heading > p {
+    margin-top: 14px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .faq-list {
+    display: grid;
+    gap: 12px;
+    margin-top: 36px;
+  }
+  .faq-item {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease;
+  }
+  .faq-item:hover {
+    border-color: var(--button-line);
+  }
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    min-height: 68px;
+    padding: 18px 22px;
+    border-radius: var(--radius-panel);
+    cursor: pointer;
+    list-style: none;
+  }
+  summary::marker {
+    content: '';
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.5;
+    letter-spacing: -0.015em;
+  }
+  .faq-mark {
+    flex: none;
+    color: var(--muted);
+  }
+  .faq-vertical {
+    transform-origin: center;
+    transition: transform 160ms ease;
+  }
+  .faq-item[open] .faq-vertical {
+    transform: scaleY(0);
+  }
+  .faq-answer {
+    padding: 0 62px 22px 22px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.75;
+  }
+  @supports (interpolate-size: allow-keywords) and
+    selector(details::details-content) {
+    .faq-item {
+      interpolate-size: allow-keywords;
+    }
+    .faq-item::details-content {
+      block-size: 0;
+      overflow: clip;
+      opacity: 0;
+      transition:
+        block-size 180ms ease,
+        opacity 180ms ease,
+        content-visibility 180ms allow-discrete;
+    }
+    .faq-item[open]::details-content {
+      block-size: auto;
+      opacity: 1;
+    }
+  }
+  @media (max-width: 600px) {
+    .faq-list {
+      margin-top: 28px;
+      gap: 10px;
+    }
+    summary {
+      padding: 18px;
+      gap: 14px;
+    }
+    .faq-answer {
+      padding: 0 18px 20px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .faq-item,
+    .faq-item::details-content,
+    .faq-vertical {
+      transition: none;
+    }
+  }
+</style>

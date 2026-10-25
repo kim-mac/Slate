@@ -156,16 +156,6 @@ h2 {
 .github-link:hover {
   background: #eaeaea;
 }
-.nav-download {
-  background: var(--ink);
-  color: var(--on-ink);
-  padding: 7px 14px;
-  border-radius: 8px;
-  font-weight: 500;
-}
-.nav-download:hover {
-  background: var(--ink-hover);
-}
 .theme-toggle {
   display: none;
   flex: none;
@@ -248,6 +238,9 @@ html[data-theme='dark'] .theme-moon {
 .button.primary {
   background: var(--ink);
   color: var(--on-ink);
+}
+.button.primary:focus-visible {
+  outline-color: var(--ink);
 }
 .button.secondary {
   background: var(--surface);
@@ -769,9 +762,10 @@ kbd {
   align-items: center;
   gap: 7px;
 }
-.installer-heading h4 {
+.installer-heading h3 {
   margin: 0;
   font-size: 15px;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 .system-badge {
@@ -1085,9 +1079,6 @@ kbd {
   .site-header nav a {
     gap: 7px;
   }
-  .nav-download {
-    padding-inline: 13px;
-  }
   .hero {
     padding-top: 65px;
   }
@@ -1366,9 +1357,6 @@ kbd {
     padding-inline: 4px;
     font-size: 12px;
   }
-  .nav-download {
-    padding-inline: 10px;
-  }
 }
 
 @media (max-width: 360px) {
@@ -1381,9 +1369,5 @@ kbd {
   .github-link {
     padding-inline: 8px;
     font-size: 12px;
-  }
-  .nav-download {
-    padding-inline: 8px;
-    font-size: 11px;
   }
 }
