@@ -1,6 +1,6 @@
 # Slate landing page
 
-An independent static Astro site for Slate Desktop 0.3.0 and Chrome extension 0.1.1. The immutable GitHub v0.3.0 release, production website and permanent updater manifest are already public. This homepage and Windows download-guide revision remains local until separately approved for deployment; it preserves the existing release metadata and manifest bytes.
+An independent static Astro site with a locally prepared Slate Desktop 0.3.1 activation and unchanged Chrome extension 0.1.1. The live homepage/download guide and updater manifest still serve public v0.3.0. These uncommitted activation changes must not be pushed or deployed until the frozen v0.3.1 release assets are published, verified and separately approved for activation.
 
 ## Local development
 
@@ -52,7 +52,7 @@ Astro 7 uses a separate Vite `prerender` environment. Its build-only `cookie` de
 
 ## Downloads and domain
 
-`src/data/releases.ts` is the only source for release destinations. Windows x64 and ARM64 use verified immutable GitHub Release v0.3.0 installer URLs and their approved SHA-256 hashes. Chrome extension 0.1.1 is published at `https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh`; the homepage's Add to Chrome action and Support installation step use this verified destination. The extension requires Slate Desktop to save to the local library. Its CWS upload ZIP must not be linked as a manual unpacked installation download. Future macOS Apple Silicon remains unverified with a null URL. Coming soon for macOS remains a disabled informational button. Verify each actual public HTTPS destination before setting its state to verified. The shared `downloadUrl()` helper still fails closed. Never copy installers into public.
+`src/data/releases.ts` is the only source for release destinations. This local activation targets the exact frozen Windows x64 and ARM64 v0.3.1 installers and their approved SHA-256 hashes. Its version-specific GitHub URLs are the intended publication contract, not a claim that those future downloads are already public. The `verified` metadata state records local artifact/contract verification; public existence, immutability and downloaded bytes must still pass the publication gate before this branch is exposed. Chrome extension 0.1.1 is published at `https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh`; the homepage's Add to Chrome action and Support installation step use this verified destination. The extension requires Slate Desktop to save to the local library. Its CWS upload ZIP must not be linked as a manual unpacked installation download. Future macOS Apple Silicon remains unverified with a null URL. Coming soon for macOS remains a disabled informational button. Verify each actual public HTTPS destination before deployment. The shared `downloadUrl()` helper still fails closed. Never copy installers into public.
 
 The homepage’s `#download` section has two equal-width cards: Slate for Windows and Chrome Extension. Its Windows CTA, like the unchanged hero CTA, opens `/download/windows/?start=1`. Architecture-specific installers, checksum details and Copy controls belong only on the dedicated guide. The compact Chrome card notes the desktop-app requirement. Homepage cards need no download-controller script; the guide retains its progressive enhancement, and Astro may inline that module when it no longer shares code with another page.
 
@@ -97,20 +97,26 @@ Cloudflare Pages provides one build-command field, not a separate custom install
 pnpm install --frozen-lockfile --filter @slate/site --filter ai-clip-memory --ignore-scripts && pnpm --filter @slate/site build
 ```
 
-These settings follow Cloudflare's [build image](https://developers.cloudflare.com/pages/configuration/build-image/) and [build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/) documentation. The scoped install/build commands are verified locally. The production v0.3.0 website and updater manifest were deployed previously; this homepage/download-guide revision has not been deployed. Do not use CF_PAGES_URL as the canonical production domain. No runtime variables or secrets are required.
+These settings follow Cloudflare's [build image](https://developers.cloudflare.com/pages/configuration/build-image/) and [build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/) documentation. The scoped install/build commands are verified locally. The current homepage/download guide is already deployed; the v0.3.1 metadata and manifest activation is not. Do not use CF_PAGES_URL as the canonical production domain. No runtime variables or secrets are required.
 
 Ensure the build image uses pinned pnpm; don't let automatic installation/building include unrelated workspace apps. `_headers` provides static security headers. No Workers, functions, auth, database or runtime service is needed.
 
-## Desktop update manifest (existing production contract)
+## Desktop update manifest (prepared v0.3.1 activation)
 
 The approved permanent endpoint is `https://tryslate.tech/updates/windows/latest.json`.
 The static Astro/Pages build copies `public/updates/windows/latest.json` unchanged
-into `dist`. The file is the approved Checkpoint 7E manifest, advertising 0.3.0
-with actual production signatures and immutable GitHub installer URLs for
-`windows-x86_64` and `windows-aarch64`. Its SHA-256 is
-`C12D5475652AFE4269A9A826B26705A4D936EFA2A6DC893DD1EB5F7190ED0B05`.
+into `dist`. The local candidate is copied byte-for-byte from the verified frozen
+v0.3.1 draft, with actual production signatures and version-specific GitHub URLs
+for `windows-x86_64` and `windows-aarch64`. Its SHA-256 is
+`61E89026D261AAB5EF2E88C0C9384BE860A64F4863F0FAF0E1EE5CD7BDB5D44B`.
 The source manifest and the exact byte-preservation tests must accompany every
 subsequent website build. No credentials or signing keys are deployed.
+
+The live manifest remains v0.3.0, SHA-256
+`C12D5475652AFE4269A9A826B26705A4D936EFA2A6DC893DD1EB5F7190ED0B05`.
+Its exact bytes are retained outside deploy output at
+`docs/releases/v0.3.1/recovery/latest-0.3.0.json`. Do not deploy that recovery
+directory or confuse the local candidate with the current live endpoint.
 
 `public/_headers` sets JSON content type and `Cache-Control: no-store` for this exact
 path. No auth, redirect, Function, environment secret or new hosting service is added.
@@ -126,10 +132,11 @@ both public installers and their signed version with Gate A1 before deployment;
 schema tests alone are not cryptographic verification. Do not copy installers,
 private keys, TEST keys, R2 endpoints or private URLs into public assets.
 
-After deployment, a standard 0.3.0 installation sees an equal version and offers no
-update. Startup checks remain metadata-only; Settings can check manually. Nothing
-downloads or installs automatically. Historical TEST/R2 builds keep their original
-channels; publishing this endpoint does not replace their embedded configuration.
+After approved activation, a standard 0.3.0 installation can discover 0.3.1;
+an installed 0.3.1 does not receive a same-version reinstall. Startup checks remain
+metadata-only; Settings can check manually. Download and restart require user
+actions. Historical TEST/R2 builds retain their embedded channels. The first real
+public updater/migration test remains pending; clean-installer tests do not prove it.
 
 ### Deployment approval gate and rollback
 
@@ -151,7 +158,19 @@ revert only the site changes after approval. A rollback to a deployment without 
 manifest makes update checks fail safely; it does not downgrade or uninstall Slate.
 Do not alter immutable GitHub assets or advertise a lower application version as
 an update. A faulty desktop release requires a separately approved higher-version
-fix, not replacement of 0.3.0 assets.
+fix, not replacement of immutable release assets. Restoring a previous manifest
+cannot revoke an offer/download retained by a running client or reverse an
+installation or schema migration. See the preparation documents below.
+
+### Release preparation and recovery documents
+
+- [Draft v0.3.1 release notes](../../docs/RELEASE_NOTES_0.3.1.md).
+- [Publication/activation checklist and current deployment record](../../docs/releases/v0.3.1/ACTIVATION-CHECKLIST.md).
+- [Future manual cold-backup procedure and recovery limits](../../docs/releases/v0.3.1/MIGRATION-BACKUP.md).
+
+Do not merge the frozen desktop integration branch into production main. Prepare
+and review a separate activation commit based on the latest production website;
+its eventual main push automatically deploys and enables update discovery.
 
 ## Product visuals
 

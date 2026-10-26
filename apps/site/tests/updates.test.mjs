@@ -11,7 +11,7 @@ const route = '/updates/windows/latest.json';
 const publicManifest = resolve(root, 'public/updates/windows/latest.json');
 const outputManifest = resolve(root, 'dist/updates/windows/latest.json');
 
-test('the static Windows manifest is the approved signed production release', async () => {
+test('the static Windows manifest is the approved signed activation candidate', async () => {
   assert.ok(existsSync(resolve(root, 'public/updates/windows/.gitkeep')));
   assert.ok(
     existsSync(publicManifest),
@@ -20,12 +20,12 @@ test('the static Windows manifest is the approved signed production release', as
   const bytes = readFileSync(publicManifest);
   assert.equal(
     createHash('sha256').update(bytes).digest('hex').toUpperCase(),
-    'C12D5475652AFE4269A9A826B26705A4D936EFA2A6DC893DD1EB5F7190ED0B05',
+    '61E89026D261AAB5EF2E88C0C9384BE860A64F4863F0FAF0E1EE5CD7BDB5D44B',
   );
   const { release } = await import('../src/data/releases.ts');
   const text = bytes.toString('utf8');
   const contract = validateManifestJson(text, release.version);
-  assert.equal(contract.version, '0.3.0');
+  assert.equal(contract.version, '0.3.1');
   for (const [platform, id] of [
     ['windows-x86_64', 'windowsX64'],
     ['windows-aarch64', 'windowsARM64'],
@@ -39,6 +39,33 @@ test('the static Windows manifest is the approved signed production release', as
   assert.doesNotMatch(
     text,
     /r2\.cloudflarestorage|X-Amz-|rehearsal|disposable/i,
+  );
+});
+
+test('the previous production manifest is preserved outside deploy output for recovery', () => {
+  const file = resolve(
+    root,
+    '../../docs/releases/v0.3.1/recovery/latest-0.3.0.json',
+  );
+  const bytes = readFileSync(file);
+  assert.equal(
+    createHash('sha256').update(bytes).digest('hex').toUpperCase(),
+    'C12D5475652AFE4269A9A826B26705A4D936EFA2A6DC893DD1EB5F7190ED0B05',
+  );
+  const contract = validateManifestJson(bytes.toString('utf8'), '0.3.0');
+  assert.deepEqual(
+    contract.artifacts.map((artifact) => artifact.platform).sort(),
+    ['windows-aarch64', 'windows-x86_64'],
+  );
+  assert.ok(
+    !existsSync(
+      resolve(root, 'public/releases/v0.3.1/recovery/latest-0.3.0.json'),
+    ),
+  );
+  assert.ok(
+    !existsSync(
+      resolve(root, 'dist/releases/v0.3.1/recovery/latest-0.3.0.json'),
+    ),
   );
 });
 

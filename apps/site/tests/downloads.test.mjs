@@ -230,14 +230,14 @@ test('dedicated Windows guide preserves both immutable installers, hashes and Co
     [
       'windowsX64',
       'Windows x64',
-      'Slate-0.3.0-Windows-x64.exe',
-      '5E29B49ADA57F8926F5A05B69FD3DC6819E81587B188F867EA8529F2F2697623',
+      'Slate-0.3.1-Windows-x64.exe',
+      '98726C7C7549B6112DB84657E8AE8F8D54DFD22909C85EB854E021884176DAE8',
     ],
     [
       'windowsARM64',
       'Windows ARM64',
-      'Slate-0.3.0-Windows-ARM64.exe',
-      'A691B3D6BB02E5EB002A02501A987228D5E38EF2E1CBD992BE5952E0AF17FEB7',
+      'Slate-0.3.1-Windows-ARM64.exe',
+      '16630847830DC275B07751197CEC10B63E0356D5ED6E18820EE045367B59E6B8',
     ],
   ]) {
     const card = section.match(
@@ -253,7 +253,7 @@ test('dedicated Windows guide preserves both immutable installers, hashes and Co
     assert.ok(download, `${name} must have an enabled download link`);
     assert.ok(
       download[1].includes(
-        `href="https://github.com/kim-mac/Slate/releases/download/v0.3.0/${filename}"`,
+        `href="https://github.com/kim-mac/Slate/releases/download/v0.3.1/${filename}"`,
       ),
     );
     assert.ok(download[1].includes(`download="${filename}"`));
