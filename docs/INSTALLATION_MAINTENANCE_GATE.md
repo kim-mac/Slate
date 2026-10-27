@@ -1,5 +1,97 @@
 # Checkpoint 8B-1.1: per-user Windows maintenance barrier
 
+## W2 / v0.3.2 preparation (unreleased)
+
+Desktop source is now prepared as v0.3.2; the public release remains v0.3.1.
+No v0.3.2 distributable, signing, publication or updater activation is implied.
+
+The sections below retain the original checkpoint observations. Production
+updater installation and its guarded authorized exit were enabled and verified
+for Windows v0.3.1; the historical disabled-installation statements are not the
+current release configuration. W2 does not change updater trust or authorized exit.
+
+W2 replaces count-only Restart Manager polling with an installer-only Rust check.
+A session can retain records after a process exits (`RmStatusStoppedOther`), so
+neither a nonempty list nor a stopped status authorizes maintenance. The helper
+retrieves initialized `RM_PROCESS_INFO` arrays (at most 1,024 entries and four
+buffer-growth retries), verifies PID and creation time through a process handle,
+and checks kernel exit state. PID reuse, access denial, unexpected API failures,
+foreign/unidentified resource users, and ambiguous ownership fail closed.
+Session teardown errors are failures too. There is no process termination.
+
+The target directory, or nearest existing parent for a new destination, must
+have a pinned local NTFS path without reparses and belong to the current user.
+Ownership/ACL checks do not repair permissions or access SQLite. Target pins
+last for the helper check; they are not a defense against malicious concurrent
+mutation by the same user after the helper exits. This is the existing
+cooperating-process maintenance model, not a new installer sandbox.
+
+Both installer and uninstaller use one shared Retry/Cancel flow. Verified live
+Slate gets tray-Quit guidance; verified activity gets a busy message; other
+failures get a content-free safe-failure message. An open browser alone is not a
+reason to stop. An active native host must drain normally. Detailed stage codes
+go to installer details, without clip contents, secrets, or personal paths.
+
+Before recovery UI, NSIS releases activity B and admission A, including partial
+ownership. Users can then save/cancel drafts and quit Slate normally. Retry
+revalidates the original receiver handle against the token/profile-derived
+authority, reacquires A/B, and rechecks target ownership and process lifetime.
+Validation never closes the receiver handle or alters its locks. One initial
+export retains a fixed set of identity pins until NSIS exits; repeated retries
+do not export additional pins. Failed handle output rolls back remote duplicates.
+Exporter transport/protocol failures and unlock failures abort the process,
+rather than retrying with uncertain handle ownership. Closing that process
+releases its handles. No lock file is deleted or replaced.
+
+Silent, passive and `/UPDATE` operations never show recovery dialogs. Same-version
+repair and supported manual upgrades offer an in-place action or Cancel; passive
+flows never read absent radio controls. Existing data deletion remains unchecked
+by default and is excluded from updater mode. Unsupported legacy/WiX nested
+uninstallation remains blocked. No automatic Quit endpoint is introduced.
+
+The helper modes precede native framing and data bootstrap:
+
+- `--export-maintenance-handle <pid>`: existing decimal stdout protocol;
+  duplicates commit only after a successful write and flush.
+- `--validate-maintenance-handle <pid> <handle>`: exit code only.
+- `--check-maintenance-processes <pid> <handle> <installation-directory>`:
+  exit code only. NSIS runs the extracted helper, never the installed native host.
+
+Helper codes: `0` ready; `10` live owned desktop; `11` live owned native host;
+`20` authority; `21` target; `30–34` Restart Manager start/register/list/end/bounds;
+`35` process identity; `36` other resource user; `40` arguments. NSIS distinguishes
+admission/activity contention, lock API failures, and helper transport failures.
+These codes do not claim a database-specific cause from a byte-lock conflict.
+
+Run focused tests with:
+
+```powershell
+node --test scripts/windows/maintenance.test.mjs scripts/windows/maintenance-nsis.test.mjs
+cargo test --offline --locked --jobs 2 --manifest-path apps/desktop/src-tauri/Cargo.toml
+```
+
+The NSIS tests compile disposable fixtures under unique ignored `dist/test`
+directories. They execute the shared production functions, substitute only the
+user-decision boundary, and use the cfg(test) bounded gate constructor. No test
+creates real-profile coordination objects, installs Slate, or accesses a user's
+library. They prove receiver-held locks survive helper validation, recovery
+allows admission, retries reuse one pin set, Cancel releases ownership, partial
+admission is released, and passive repair does not read radio controls.
+
+The maintainer reports that both ARM64 and x64 W3 local unsigned v0.3.1 test
+installers passed tray detection, Retry/Cancel, in-place reinstall with retained
+clips/groups, Quick Search, Chrome capture, and uninstall Cancel / Quit then
+Retry. This validates the tested W2 behavior, not future v0.3.2 package bytes or
+the signed v0.3.1-to-v0.3.2 updater path. Fresh signed candidates and their runtime
+validation remain separately approved release gates.
+
+One ARM64 standard-account (`slatetest`) attempt exited without UI or an
+installation; its cause remains unresolved. This is a known test limitation,
+not evidence of universal standard-user success or failure. It is not being
+investigated as part of v0.3.2 source/version preparation.
+
+## Historical barrier implementation and evidence
+
 Every cooperating desktop and native host uses one authority:
 
 `<permanent Windows profile>/.slate-coordination/com.aiclipmemory.desktop/maintenance-v2.lock`

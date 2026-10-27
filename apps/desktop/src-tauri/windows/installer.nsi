@@ -254,18 +254,18 @@ Function PageReinstall
   ${If} $R0 = 0
     StrCpy $R1 "$(alreadyInstalledLong)"
     StrCpy $R2 "$(addOrReinstall)"
-    StrCpy $R3 "$(uninstallApp)"
+    StrCpy $R3 "$(cancelInstallation)"
     !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$(chooseMaintenanceOption)"
   ; Upgrading
   ${ElseIf} $R0 = 1
-    StrCpy $R1 "$(olderOrUnknownVersionInstalled)"
-    StrCpy $R2 "$(uninstallBeforeInstalling)"
-    StrCpy $R3 "$(dontUninstall)"
+    StrCpy $R1 "$(inPlaceUpdateDescription)"
+    StrCpy $R2 "$(inPlaceUpdate)"
+    StrCpy $R3 "$(cancelInstallation)"
     !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$(choowHowToInstall)"
   ; Downgrading
   ${ElseIf} $R0 = -1
     StrCpy $R1 "$(newerVersionInstalled)"
-    StrCpy $R2 "$(uninstallBeforeInstalling)"
+    StrCpy $R2 "$(cancelInstallation)"
     !if "${ALLOWDOWNGRADES}" == "true"
       StrCpy $R3 "$(dontUninstall)"
     !else
@@ -322,16 +322,18 @@ Function PageReinstallUpdateSelection
   ${EndIf}
 FunctionEnd
 Function PageLeaveReinstall
-  ${NSD_GetState} $R2 $R1
-
   ; If migrating from Wix, always uninstall
   ${If} $WixMode = 1
     Goto reinst_uninstall
   ${EndIf}
-  ; In update mode, always proceeds without uninstalling
+  ; No radio HWNDs exist in unattended modes. Downgrades were rejected in
+  ; .onInit; supported unattended repairs/updates always preserve app data.
   ${If} $UpdateMode = 1
+  ${OrIf} $PassiveMode = 1
+  ${OrIf} ${Silent}
     Goto reinst_done
   ${EndIf}
+  ${NSD_GetState} $R2 $R1
   ; $R0 holds whether same(0)/upgrading(1)/downgrading(-1) version
   ; $R1 holds the radio buttons state:
   ;   1 => first choice was selected
@@ -339,18 +341,24 @@ Function PageLeaveReinstall
   ${If} $R0 = 0 ; Same version, proceed
     ${If} $R1 = 1              ; User chose to add/reinstall
       Goto reinst_done
-    ${Else}                    ; User chose to uninstall
-      Goto reinst_uninstall
+    ${Else}                    ; User chose to cancel
+      Call SlateReleaseMaintenance
+      SetErrorLevel 1
+      Quit
     ${EndIf}
   ${ElseIf} $R0 = 1 ; Upgrading
-    ${If} $R1 = 1              ; User chose to uninstall
-      Goto reinst_uninstall
-    ${Else}
-      Goto reinst_done         ; User chose NOT to uninstall
+    ${If} $R1 = 1              ; User chose the supported in-place update
+      Goto reinst_done
+    ${Else}                    ; User chose to cancel
+      Call SlateReleaseMaintenance
+      SetErrorLevel 1
+      Quit
     ${EndIf}
   ${ElseIf} $R0 = -1 ; Downgrading
-    ${If} $R1 = 1              ; User chose to uninstall
-      Goto reinst_uninstall
+    ${If} $R1 = 1              ; User chose to cancel
+      Call SlateReleaseMaintenance
+      SetErrorLevel 1
+      Quit
     ${Else}
       Goto reinst_done         ; User chose NOT to uninstall
     ${EndIf}
@@ -831,6 +839,11 @@ Function un.onInit
   ${GetOptions} $CMDLINE "/P" $PassiveMode
   ${IfNot} ${Errors}
     StrCpy $PassiveMode 1
+  ${EndIf}
+  ; Know unattended updater mode before any recovery decision can show UI.
+  ${GetOptions} $CMDLINE "/UPDATE" $UpdateMode
+  ${IfNot} ${Errors}
+    StrCpy $UpdateMode 1
   ${EndIf}
   Call un.SlateAcquireMaintenance
   !insertmacro SetContext

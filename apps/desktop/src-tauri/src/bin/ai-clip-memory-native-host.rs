@@ -14,7 +14,8 @@ fn main() {
     // This separate installer mode must run before any native protocol or data
     // directory bootstrap. It emits only a handle; failure has no stdout payload.
     let mut arguments = std::env::args_os().skip(1);
-    if arguments.next().as_deref() == Some(std::ffi::OsStr::new("--export-maintenance-handle")) {
+    let mode = arguments.next();
+    if mode.as_deref() == Some(std::ffi::OsStr::new("--export-maintenance-handle")) {
         #[cfg(windows)]
         let result = (|| -> io::Result<()> {
             let pid = arguments
@@ -22,14 +23,44 @@ fn main() {
                 .and_then(|value| value.to_str()?.parse::<u32>().ok())
                 .filter(|_| arguments.next().is_none())
                 .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
-            let handle = InstallationGate::for_current_user()?.export_maintenance_handle(pid)?;
-            let mut output = io::stdout().lock();
-            write!(output, "{handle}")?;
-            output.flush()
+            InstallationGate::for_current_user()?.export_maintenance_handle_with(
+                pid,
+                |handle| {
+                    let mut output = io::stdout().lock();
+                    write!(output, "{handle}")?;
+                    output.flush()
+                },
+            )?;
+            Ok(())
         })();
         #[cfg(not(windows))]
         let result = Err::<(), _>(io::Error::from(io::ErrorKind::Unsupported));
         std::process::exit(if result.is_ok() { 0 } else { 1 });
+    }
+    // Installer checks return only documented exit codes. Parse first, and keep
+    // these modes ahead of native framing, profile data paths, and SQLite.
+    if mode
+        .as_ref()
+        .is_some_and(|mode| mode.to_string_lossy().starts_with("--"))
+    {
+        #[cfg(windows)]
+        let result = {
+            use ai_clip_memory_desktop_lib::installation_safety::maintenance::{
+                parse_request, MaintenanceResult,
+            };
+            let arguments: Vec<_> = mode.into_iter().chain(arguments).collect();
+            match parse_request(&arguments) {
+                Ok(request) => match InstallationGate::for_current_user() {
+                    Ok(gate) => request.execute(&gate),
+                    Err(_) => MaintenanceResult::Authority,
+                },
+                Err(error) => error,
+            }
+            .exit_code()
+        };
+        #[cfg(not(windows))]
+        let result = 40;
+        std::process::exit(result);
     }
     let stdin = io::stdin();
     let stdout = io::stdout();

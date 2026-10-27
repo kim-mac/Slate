@@ -40,7 +40,13 @@ fn maintenance_export_dispatch_is_separate_from_native_framing_and_sql() {
     assert!(mode < exit);
     assert!(exit < main.find("let stdin = io::stdin()").unwrap());
     assert!(exit < main.find("dirs::data_dir()").unwrap());
-    assert!(main[..exit].contains("export_maintenance_handle(pid)"));
+    let compact: String = main[..exit]
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect();
+    assert!(compact.contains("export_maintenance_handle_with(pid,|handle|"));
+    assert!(main[..exit].contains("write!(output, \"{handle}\")?"));
+    assert!(main[..exit].contains("output.flush()"));
     assert!(!main[..exit].contains("write_response"));
     assert!(!main[..exit].contains("run_with_storage"));
     assert!(!NATIVE_HOST_SOURCE.contains("SLATE_GATE_TEST_ROOT"));

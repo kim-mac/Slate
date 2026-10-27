@@ -104,8 +104,8 @@ test('only production trust and the fixed 0.2.9 to 0.3.0 roles are accepted', ()
   }
 });
 
-test('historical production rehearsal rejects current v0.3.1 source', () => {
-  assert.equal(currentSource.version, '0.3.1');
+test('historical production rehearsal rejects current v0.3.2 source', () => {
+  assert.equal(currentSource.version, '0.3.2');
   assert.throws(() => api.configuration(currentSource, 'candidate'));
 });
 
@@ -199,7 +199,7 @@ test('fresh isolated copies preserve identity and source, stage consistent versi
   ]) {
     const destination = join(fixture, path);
     const document = JSON.parse(readFileSync(destination, 'utf8'));
-    assert.equal(document.version, '0.3.1');
+    assert.equal(document.version, '0.3.2');
     document.version = '0.3.0';
     writeFileSync(destination, JSON.stringify(document));
   }
@@ -215,7 +215,7 @@ test('fresh isolated copies preserve identity and source, stage consistent versi
     writeFileSync(
       destination,
       original.replace(pattern, (_match, before, version, after) => {
-        assert.equal(version, '0.3.1');
+        assert.equal(version, '0.3.2');
         return before + '0.3.0' + after;
       }),
     );

@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import process from 'node:process';
 import test from 'node:test';
-import { URL } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { STABLE_ENDPOINT } from './validate-desktop-update-release.mjs';
 import {
   rehearsalConfiguration,
@@ -67,9 +69,54 @@ test('production config has one permanent endpoint and explicit signed-version, 
   ]) {
     assert.equal(config.plugins.updater[flag], false, flag);
   }
-  assert.equal(config.version, '0.3.1');
+  assert.equal(config.version, '0.3.2');
   assert.equal(config.bundle.windows.allowDowngrades, false);
 });
+
+test(
+  'v0.3.2 release validation selects both Windows targets and preserves installer version metadata',
+  { skip: process.platform !== 'win32' },
+  () => {
+    for (const [architecture, target] of [
+      ['arm64', 'aarch64-pc-windows-msvc'],
+      ['x64', 'x86_64-pc-windows-msvc'],
+    ]) {
+      const result = spawnSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-File',
+          fileURLToPath(
+            new URL('scripts/windows/Build-WindowsInstaller.ps1', root),
+          ),
+          '-Architecture',
+          architecture,
+          '-ReleaseVersion',
+          '0.3.2',
+          '-ValidateOnly',
+        ],
+        { encoding: 'utf8', windowsHide: true, timeout: 30_000 },
+      );
+      assert.equal(result.error, undefined);
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout.trim()), {
+        Version: '0.3.2',
+        Target: target,
+        Profile: 'release',
+      });
+    }
+    const template = read('apps/desktop/src-tauri/windows/installer.nsi');
+    for (const declaration of [
+      '!define VERSION "{{version}}"',
+      '!define VERSIONWITHBUILD "{{version_with_build}}"',
+      'VIProductVersion "${VERSIONWITHBUILD}"',
+      'VIAddVersionKey "FileVersion" "${VERSION}"',
+      'VIAddVersionKey "ProductVersion" "${VERSION}"',
+    ])
+      assert.ok(template.includes(declaration), declaration);
+  },
+);
 
 test('production enables only configured Windows installation and retains explicit main-window safety gates', () => {
   const controller = read('apps/desktop/src-tauri/src/updater/mod.rs');

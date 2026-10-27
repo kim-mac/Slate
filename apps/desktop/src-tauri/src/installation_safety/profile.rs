@@ -57,7 +57,7 @@ impl User {
     pub(crate) fn current() -> io::Result<Self> {
         Self::for_process(unsafe { GetCurrentProcess() })
     }
-    pub(super) fn for_process(process: HANDLE) -> io::Result<Self> {
+    pub(crate) fn for_process(process: HANDLE) -> io::Result<Self> {
         let mut token = Token(HANDLE::default());
         unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut token.0) }.map_err(win)?;
         let mut size = 0;
@@ -80,7 +80,7 @@ impl User {
         .map_err(win)?;
         Ok(Self { storage })
     }
-    pub(super) fn matches(&self, other: &Self) -> bool {
+    pub(crate) fn matches(&self, other: &Self) -> bool {
         unsafe { EqualSid(self.sid(), other.sid()) }.is_ok()
     }
     fn sid(&self) -> PSID {
@@ -116,6 +116,20 @@ impl User {
         Ok(Local(descriptor))
     }
     pub(crate) fn validate(&self, file: &File, private: bool, directory: bool) -> io::Result<()> {
+        self.validate_inner(file, private, directory, private)
+    }
+    /// Installation destinations must actually belong to this user, even though
+    /// profile roots may accept a SYSTEM or Administrators owner.
+    pub(crate) fn validate_owned_directory(&self, file: &File) -> io::Result<()> {
+        self.validate_inner(file, false, true, true)
+    }
+    fn validate_inner(
+        &self,
+        file: &File,
+        private: bool,
+        directory: bool,
+        user_owner: bool,
+    ) -> io::Result<()> {
         let mut owner = PSID::default();
         let mut acl: *mut ACL = std::ptr::null_mut();
         let mut descriptor = PSECURITY_DESCRIPTOR::default();
@@ -138,7 +152,7 @@ impl User {
         let owner_text = sid_text(owner)?;
         let user_text = self.sid_string()?;
         if owner_text != user_text
-            && (private || !matches!(owner_text.as_str(), "S-1-5-18" | "S-1-5-32-544"))
+            && (user_owner || !matches!(owner_text.as_str(), "S-1-5-18" | "S-1-5-32-544"))
         {
             return Err(denied());
         }

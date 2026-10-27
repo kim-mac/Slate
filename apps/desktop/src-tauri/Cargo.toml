@@ -1,6 +1,6 @@
 [package]
 name = "ai-clip-memory-desktop"
-version = "0.3.1"
+version = "0.3.2"
 license = "MIT"
 description = "Slate local-first desktop capture application"
 authors = ["Slate contributors"]
@@ -58,6 +58,7 @@ windows = { version = "0.62.2", features = [
   "Win32_System_Memory",
   "Win32_System_IO",
   "Win32_System_Ole",
+  "Win32_System_RestartManager",
   "Win32_System_Threading",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",

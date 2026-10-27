@@ -164,10 +164,85 @@ impl UserGate {
     }
 }
 impl InstallationGate {
+    /// Duplicate FROM the receiving process without closing or changing its
+    /// original handle. This validates identity/security without acquiring locks.
+    pub(crate) fn validated_maintenance_handle(
+        &self,
+        process_id: u32,
+        value: u32,
+    ) -> io::Result<File> {
+        use windows::Win32::{
+            Foundation::{CloseHandle, DuplicateHandle, DUPLICATE_SAME_ACCESS},
+            System::Threading::{
+                GetCurrentProcess, GetCurrentProcessId, OpenProcess, PROCESS_DUP_HANDLE,
+                PROCESS_QUERY_LIMITED_INFORMATION,
+            },
+        };
+        if process_id == 0
+            || process_id == unsafe { GetCurrentProcessId() }
+            || value == 0
+            || value == u32::MAX
+        {
+            return Err(invalid_path());
+        }
+        let process = unsafe {
+            OpenProcess(
+                PROCESS_DUP_HANDLE | PROCESS_QUERY_LIMITED_INFORMATION,
+                false,
+                process_id,
+            )
+        }
+        .map_err(win_error)?;
+        struct Process(HANDLE);
+        impl Drop for Process {
+            fn drop(&mut self) {
+                unsafe {
+                    let _ = CloseHandle(self.0);
+                }
+            }
+        }
+        let process = Process(process);
+        let user = profile::User::current()?;
+        if !user.matches(&profile::User::for_process(process.0)?) {
+            return Err(invalid_path());
+        }
+        let mut local = HANDLE::default();
+        unsafe {
+            DuplicateHandle(
+                process.0,
+                HANDLE(value as usize as *mut _),
+                GetCurrentProcess(),
+                &mut local,
+                0,
+                false,
+                DUPLICATE_SAME_ACCESS,
+            )
+        }
+        .map_err(win_error)?;
+        let file = unsafe { File::from_raw_handle(local.0) };
+        let actual = validate_file(&file)?;
+        let fresh = self.permit()?;
+        if identity(&actual) != identity(&information(&fresh.file)?) {
+            return Err(invalid_path());
+        }
+        user.validate(&file, true, false)?;
+        validate_final_path(&file, &self.state.path)?;
+        validate_filesystem(&file)?;
+        Ok(file)
+    }
     /// Export an independently opened, unlocked file and all physical identity
     /// pins. The receiving process must acquire A then B itself. Pins live until
     /// that process exits, including after this exporter has exited.
     pub fn export_maintenance_handle(&self, process_id: u32) -> io::Result<u32> {
+        self.export_maintenance_handle_with(process_id, |_| Ok(()))
+    }
+    /// Commit receiver handles only after the caller successfully emits and
+    /// flushes the decimal handle. A failed response rolls back every duplicate.
+    pub fn export_maintenance_handle_with(
+        &self,
+        process_id: u32,
+        emit: impl FnOnce(u32) -> io::Result<()>,
+    ) -> io::Result<u32> {
         use windows::Win32::{
             Foundation::{
                 CloseHandle, DuplicateHandle, DUPLICATE_CLOSE_SOURCE, DUPLICATE_SAME_ACCESS,
@@ -255,6 +330,7 @@ impl InstallationGate {
         if value == 0 || value == u32::MAX {
             return Err(invalid_path());
         }
+        emit(value)?;
         remote.committed = true;
         Ok(value)
     }

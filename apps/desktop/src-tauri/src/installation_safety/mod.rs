@@ -5,6 +5,8 @@ pub(crate) use coordinator::{PreparationGuard, UpdateExitAuthorization};
 
 #[cfg(windows)]
 pub mod gate;
+#[cfg(windows)]
+pub mod maintenance;
 
 #[cfg(windows)]
 impl coordinator::ProcessGate for gate::InstallationGate {

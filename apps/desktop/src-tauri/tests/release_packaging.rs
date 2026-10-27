@@ -4,7 +4,7 @@ use std::process::{Command, Output};
 
 use serde_json::Value;
 
-const RELEASE_VERSION: &str = "0.3.1";
+const RELEASE_VERSION: &str = "0.3.2";
 const HOST_NAME: &str = "com.aiclipmemory.bridge";
 const HOST_EXECUTABLE: &str = "ai-clip-memory-native-host.exe";
 const CHROME_ID: &str = "jjfaegknedfakmidhhdlmbebnjafcjfi";
@@ -19,15 +19,26 @@ fn nsis_owns_independent_maintenance_and_never_forces_processes() {
     let gate = read(root.join("maintenance-gate.nsh"));
     for required in [
         "--export-maintenance-handle",
+        "--validate-maintenance-handle",
+        "--check-maintenance-processes",
         "LockFileEx",
         "30000",
+    ] {
+        assert!(gate.contains(required), "missing {required}");
+    }
+    let process_check = read(
+        repository_root().join("apps/desktop/src-tauri/src/installation_safety/maintenance.rs"),
+    );
+    for required in [
         "RmStartSession",
         "RmRegisterResources",
         "RmGetList",
         "RmEndSession",
+        "GetProcessTimes",
+        "WaitForSingleObject",
         "ai-clip-memory-native-host.exe",
     ] {
-        assert!(gate.contains(required), "missing {required}");
+        assert!(process_check.contains(required), "missing {required}");
     }
     for forbidden in [
         "RmShutdown",
@@ -37,6 +48,7 @@ fn nsis_owns_independent_maintenance_and_never_forces_processes() {
         "TerminateProcess",
     ] {
         assert!(!gate.contains(forbidden));
+        assert!(!process_check.contains(forbidden));
     }
     for (init, call) in [
         ("Function .onInit", "Call SlateAcquireMaintenance"),
@@ -483,6 +495,7 @@ fn nsis_english_installer_messages_use_the_public_slate_name() {
         "failedToKillApp",
         "newerVersionInstalled",
         "olderOrUnknownVersionInstalled",
+        "inPlaceUpdateDescription",
         "uninstallApp",
     ] {
         let line = language
@@ -499,7 +512,7 @@ fn nsis_english_installer_messages_use_the_public_slate_name() {
             .lines()
             .filter(|line| line.starts_with("LangString "))
             .count(),
-        27
+        30
     );
 }
 
@@ -619,8 +632,15 @@ fn nsis_restart_manager_checks_only_exact_installed_desktop_and_host_paths() {
 
     assert!(!template.contains("!insertmacro CheckIfAppIsRunning"));
     let gate = read(repository_root().join("apps/desktop/src-tauri/windows/maintenance-gate.nsh"));
-    assert!(gate.contains("$INSTDIR\\${MAINBINARYNAME}.exe"));
-    assert!(gate.contains("$INSTDIR\\ai-clip-memory-native-host.exe"));
+    assert!(gate.contains("--check-maintenance-processes $0 $SlateGateHandle \"$INSTDIR\""));
+    let process_check = read(
+        repository_root().join("apps/desktop/src-tauri/src/installation_safety/maintenance.rs"),
+    );
+    assert!(process_check.contains("pub const DESKTOP: &str = \"ai-clip-memory-desktop.exe\""));
+    assert!(
+        process_check.contains("pub const NATIVE_HOST: &str = \"ai-clip-memory-native-host.exe\"")
+    );
+    assert!(process_check.contains("[target.root.join(DESKTOP), target.root.join(NATIVE_HOST)]"));
     for (section, path_check) in [
         ("Section Install", "Call SlateWaitForProcesses"),
         ("Section Uninstall", "Call un.SlateWaitForProcesses"),

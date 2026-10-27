@@ -21,7 +21,7 @@ test('explicit debug-only UX configuration differs from production and disables 
   assert.equal(dev.productName, 'Slate UX Development');
   assert.deepEqual(dev.plugins.updater.endpoints, []);
   assert.equal(dev.plugins.updater.pubkey, '');
-  assert.equal(prod.version, '0.3.1');
+  assert.equal(prod.version, '0.3.2');
   assert.deepEqual(prod.plugins.updater.endpoints, [
     'https://tryslate.tech/updates/windows/latest.json',
   ]);

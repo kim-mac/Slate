@@ -1,6 +1,9 @@
 ; Tauri CLI 2.11.4 English NSIS strings, with only public product naming
 ; changed to ${PUBLICNAME}. Diff-review with upstream when upgrading the CLI.
 LangString addOrReinstall ${LANG_ENGLISH} "Add/Reinstall components"
+LangString cancelInstallation ${LANG_ENGLISH} "Cancel installation"
+LangString inPlaceUpdate ${LANG_ENGLISH} "Install update (keep clips and settings)"
+LangString inPlaceUpdateDescription ${LANG_ENGLISH} "An earlier version of ${PUBLICNAME} is installed. Continue to update it without uninstalling. Your clips and settings will be preserved."
 LangString alreadyInstalled ${LANG_ENGLISH} "Already Installed"
 LangString alreadyInstalledLong ${LANG_ENGLISH} "${PUBLICNAME} ${VERSION} is already installed. Select the operation you want to perform and click Next to continue."
 LangString appRunning ${LANG_ENGLISH} "${PUBLICNAME} is running! Please close it first then try again."
