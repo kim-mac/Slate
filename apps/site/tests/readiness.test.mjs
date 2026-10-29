@@ -49,7 +49,12 @@ test('Support explains shipping workflows and a truthful reporting destination',
   assert.match(html, /original clips/);
   assert.match(html, /source and date/);
   assert.match(html, /href="https:\/\/github\.com\/kim-mac\/Slate"/);
-  assert.doesNotMatch(html, /mailto:|Smart Merge|macOS|MCP|delete.*database/i);
+  assert.match(html, /href="mailto:support@tryslate\.tech"/);
+  assert.match(html, /Do not delete your library or choose Delete app data/);
+  assert.doesNotMatch(
+    html,
+    /mailto:[^"]*\?|Smart Merge|macOS|MCP|Remove-Item|DELETE FROM/i,
+  );
 });
 
 test('404 is branded, non-indexable, and offers a working return home link', () => {

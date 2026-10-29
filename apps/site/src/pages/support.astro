@@ -20,7 +20,9 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
       <h2>Getting started</h2>
       <ol>
         <li>
-          Install <a href="/download/windows/">Slate for Windows</a>.
+          Install <a href="/download/windows/">Slate for Windows</a> for your
+          Windows account. Choose x64 for Intel/AMD PCs or ARM64 for
+          Windows-on-ARM PCs.
         </li>
         <li>
           Install the{' '}
@@ -36,6 +38,32 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
         </li>
         <li>Save from Chrome to your local Slate library.</li>
       </ol>
+      <p>
+        The installer supplies the native host that saves browser captures
+        locally, without the desktop window relaying each capture. Open Slate to
+        view your library. The extension is optional for creating, editing and
+        searching clips directly in Slate Desktop.
+      </p>
+    </section>
+    <section>
+      <h2>Verify your installer</h2>
+      <p>
+        Use only official Slate downloads. Compare the installer's SHA-256 with
+        its matching filename in <strong>SHA256SUMS.txt</strong> on the{' '}
+        <a
+          href={`${site.repositoryUrl}/releases/latest`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          latest official GitHub release
+        </a>
+        . Current installers are not Authenticode-signed, so Windows may show
+        Unknown Publisher. Tauri updater signatures are separate from Windows
+        publisher certificates. Proceed past a SmartScreen reputation warning
+        only after checking the official source and checksum; do not bypass
+        malware detections or organizational restrictions or disable Windows
+        protection.
+      </p>
     </section>
     <section>
       <h2>Saving from Chrome</h2>
@@ -71,9 +99,10 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
       <h2>Troubleshooting</h2>
       <h3>Browser capture is not appearing</h3>
       <p>
-        Check that Slate is installed and running, and the Chrome extension is
-        installed and enabled. Retry the capture. If needed, restart Slate and
-        Chrome.
+        Open <strong>All Clips</strong>, clear search or filters and use{' '}
+        <strong>Refresh</strong>, or return focus to the library. Check capture
+        feedback before retrying: a saved clip may not yet be visible in the
+        current view. Quick Search requires Slate to be running.
       </p>
       <h3>Quick Search does not open</h3>
       <p>
@@ -82,8 +111,38 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
       </p>
       <h3>The extension cannot connect</h3>
       <p>
-        The extension connects to the locally installed Slate desktop app. Check
-        that both are installed, then restart Slate and Chrome.
+        Confirm Slate Desktop is installed for your Windows account and the
+        official extension is installed and enabled. Restart Chrome after
+        installation if needed, then try one small synthetic example on a normal
+        HTTP/HTTPS page. A missing or blocked native host can be an
+        installation, registration or permission problem; it does not prove the
+        desktop app was uninstalled. The native host can save while the desktop
+        window is closed.
+      </p>
+      <h3>A save fails</h3>
+      <p>
+        A storage error is different from a connection error. Check the library
+        first, then record the safe error message and contact support if the
+        failure continues. Protected browser pages, large selections or
+        noncopyable content may not save. Do not repeatedly submit private
+        content to diagnose a problem.
+      </p>
+      <h3>Slate is still running during setup</h3>
+      <p>
+        Closing the window normally hides Slate in the Windows tray. Save or
+        cancel unfinished edits, then choose <strong>Quit</strong> from Slate's
+        tray menu. Stop setup using its normal controls if necessary, then retry
+        installation after Slate has quit. Do not force-close browsers or
+        terminate processes to bypass a maintenance check.
+      </p>
+      <h3>An update fails</h3>
+      <p>
+        Keep your installation and data. Check your network connection and the
+        safe error message before retrying through Settings. Do not disable
+        signature verification or change update endpoints. Do not delete your
+        library or choose Delete app data for connection or update errors. An
+        older installer does not undo a database migration; recovery may require
+        a compatible cold backup.
       </p>
     </section>
     <section>
@@ -96,17 +155,26 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
     <section>
       <h2>Reporting a problem</h2>
       <p>
-        Visit
+        Email{' '}
+        <a class="text-link" href="mailto:support@tryslate.tech">
+          support@tryslate.tech
+        </a>{' '}
+        or use{' '}
         <a
-          href={site.repositoryUrl}
+          href={`${site.repositoryUrl}/issues`}
           target="_blank"
           rel="noopener noreferrer"
-          title="Open Slate on GitHub in a new tab"
+          title="Open Slate issues on GitHub in a new tab"
         >
-          Slate on GitHub
-        </a>
-        . Include what you tried, your Windows architecture, and the error
-        message. Do not share private clip content.
+          GitHub issues
+        </a>{' '}
+        for a public report using a synthetic example. Include what you tried,
+        your Windows version and architecture, Slate version, browser and
+        extension versions, and the safe error text. Do not send private clip
+        content, sensitive URLs, database files, credentials or logs containing
+        personal information. For security issues, ask for a private reporting
+        route without posting vulnerability details publicly. No response time
+        is promised.
       </p>
     </section>
     <a class="text-link" href="/">

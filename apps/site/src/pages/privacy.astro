@@ -94,6 +94,29 @@ import { release } from '../data/releases';
         runtime-downloaded executable code.
       </p>
     </section>
+    <section aria-labelledby="upcoming-extension-status">
+      <h2 id="upcoming-extension-status">
+        Upcoming extension v0.1.2: recent save status
+      </h2>
+      <p>
+        This describes forthcoming behavior, not in the published extension
+        v0.1.1. The storage permission allows a limited capture outcome and
+        timestamp in Chrome session storage for connection recovery and
+        last-save feedback. The outcome can be saved, unavailable, or unknown.
+        This recovery-status record does not contain clip content, selected
+        text, page URLs, page titles, or raw error messages. Captured content
+        and source metadata still go to your local library as described below.
+      </p>
+      <p>
+        The record can survive service-worker restarts within the browser
+        session; it is not permanent storage. When status is read, outcomes ten
+        minutes old or older are treated as unknown. This does not mean the
+        record is physically deleted at exactly ten minutes; a later outcome can
+        replace it. The popup reports historical save feedback, not a live
+        connection check. There is no connection polling or automatic capture
+        retry.
+      </p>
+    </section>
     <section>
       <h2>Local capture communication</h2>
       <p>
@@ -116,6 +139,23 @@ import { release } from '../data/releases';
         Slate does not upload your saved clips, source URLs, or browsing
         activity to Slate-operated or third-party servers as part of its capture
         and library functionality.
+      </p>
+      <p>
+        Slate Desktop checks for updates at startup and when you request a
+        check. It requests the configured HTTPS update manifest at{' '}
+        <code class="update-endpoint">
+          https://tryslate.tech/updates/windows/latest.json
+        </code>
+        . If you choose to download an offered update, it requests the installer
+        from the official GitHub release infrastructure. Installation remains
+        user-confirmed.
+      </p>
+      <p>
+        These update requests do not include your clip contents. Update checks
+        use ordinary HTTP request information, including the requested resource
+        and an updater user-agent header. This policy does not claim whether
+        providers retain request logs. Local clip storage does not mean Slate
+        makes no network requests.
       </p>
       <p>
         Open source visits the stored URL in your browser. Visiting this
@@ -185,13 +225,17 @@ import { release } from '../data/releases';
     <section>
       <h2>Privacy questions</h2>
       <p>
-        Visit{' '}
+        For privacy questions, email{' '}
+        <a class="text-link" href="mailto:support@tryslate.tech">
+          support@tryslate.tech
+        </a>
+        . You can also visit{' '}
         <a class="text-link" href="/support/">
           Slate Support
         </a>{' '}
-        for the existing GitHub support channel. Do not put private clip
-        content, sensitive URLs, or other personal information in public GitHub
-        issues.
+        for the existing GitHub support channel. Do not send private clip
+        content, sensitive URLs, database files, or credentials, or include them
+        in public GitHub issues.
       </p>
     </section>
     <a class="text-link" href="/">
@@ -199,3 +243,9 @@ import { release } from '../data/releases';
     </a>
   </article>
 </BaseLayout>
+
+<style>
+  .update-endpoint {
+    overflow-wrap: anywhere;
+  }
+</style>

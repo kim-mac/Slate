@@ -1,5 +1,9 @@
 # Slate 0.1.0 Release Checklist
 
+> **Historical first-release checklist.** Versions, artifact names and signing
+> decisions below are retained as history. They do not authorize or describe the
+> current release process. See [current source and approval guidance](DEVELOPMENT.md#current-release-source-and-approvals).
+
 This checklist gates the first public Slate release. Completing source changes
 does not authorize publishing until the applicable manual gates are recorded.
 

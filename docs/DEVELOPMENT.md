@@ -9,6 +9,23 @@
 - `scripts/windows` — Windows development registration and release packaging
 - `docs` — current development/release guidance and labelled historical designs
 
+## Current release source and approvals
+
+The production website is maintained on `main`; frozen desktop release source
+can be on a separate release branch. Start from the release tag linked by the
+[official release](https://github.com/kim-mac/Slate/releases/latest) when inspecting
+a shipped desktop version. Do not assume a default-branch checkout is that binary's
+source or merge the desktop branch into website main as a documentation fix.
+
+Published versions are Desktop 0.3.1 and extension 0.1.1. Local desktop 0.3.2 and
+the planned extension 0.1.2 are not public releases. Package metadata in a working
+branch describes that branch, not necessarily current public availability.
+
+Building, signing, uploading, publishing and website/updater activation require
+their own approvals. A production-main push may automatically deploy the website.
+Keep installer URLs, hashes, signatures and updater metadata unchanged during
+documentation work. Never overwrite immutable release assets.
+
 ## Prerequisites
 
 - Node.js 22.13 or newer in the 22.x line, or Node.js 24+
@@ -56,14 +73,21 @@ Run the desktop app:
 pnpm dev:desktop
 ```
 
+A separate checkout alone does not isolate app data or native registrations from
+an installed Slate. Use the existing isolated-development workflow only after
+checking its configuration; do not launch ordinary development against important
+installed data without an explicit safety plan.
+
 ## Unpacked extension and development Native Messaging
 
-Unpacked installation is for development and testing only. Once published,
-public V1 users should install the Chrome Web Store package.
+Unpacked installation is for development and testing only. Public users should
+install the official Chrome Web Store package.
 
 Development registration uses the same `com.aiclipmemory.bridge` host name and
 Chrome/Edge HKCU keys as the installed app, so it replaces the installed host
-registration for the chosen browsers. Prefer an isolated Windows testing profile.
+registration for the chosen browsers. A new Chrome profile alone does not isolate Native Messaging.
+Prefer a disposable Windows account or VM with a verified independent data and
+registration plan; do not assume the account alone proves isolation.
 If testing in your normal profile, plan to restore the installed production host
 registration afterward by reinstalling Slate or explicitly registering that host.
 
@@ -123,14 +147,16 @@ pnpm release:extension
 
 The source/unpacked manifest retains its key and development Chrome ID
 `jjfaegknedfakmidhhdlmbebnjafcjfi`; the Chrome Web Store upload ZIP omits
-the key. The Chrome Web Store draft has the distinct production ID
+the key. The published Chrome Web Store item has the distinct production ID
 `hgbfaclkpmcecikjepoejgjccddjbekh`. Windows installer manifest generation
 allows both Chrome origins and the configured Edge origin
 `jcfcmapapjlgpbkcgcaeggeblgpidkoo`.
 
-Windows/root release version is `0.1.0`; the extension release version is
-independently read from `apps/extension/public/manifest.json`, currently `0.1.1`.
-Its upload artifact is `Slate-Extension-0.1.1.zip`.
+The desktop release version comes from the approved source's root, desktop,
+Tauri and Cargo metadata. The extension release version is read independently
+from `apps/extension/public/manifest.json`; the local manifest remains `0.1.1`
+until a separate version update is approved. Upload naming is
+`Slate-Extension-<extension-version>.zip`. A local build does not publish it.
 
 After both NSIS packages exist, copy them to friendly public filenames and
 regenerate `SHA256SUMS.txt`:
@@ -139,6 +165,15 @@ regenerate `SHA256SUMS.txt`:
 pnpm release:stage:windows
 ```
 
-Generated release files are written under `dist/release/v0.1.0/`, which is
-ignored by Git. The original Tauri installer files are retained. See
-[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) before distributing anything.
+Generated release files are written under `dist/release/v<desktop-version>/`,
+which is ignored by Git. The original Tauri installer files are retained.
+The [first-release checklist](RELEASE_CHECKLIST.md) is historical; do not use its
+0.1.0 version, artifact or signing decisions as current release authorization.
+Use the separately approved current source-freeze, artifact-audit, production
+updater-signing and exact-installer acceptance plan before distribution.
+
+For a current updater release, retain locked dependencies, the approved production
+public key and HTTPS endpoint, both Windows targets, actual-artifact signature and
+signed-version verification, and user-confirmed installation. Test the exact signed
+installers and the intended upgrade path; unsigned rehearsal tests are separate
+evidence. Do not bypass branch/ref or packaging guards to make a build run.

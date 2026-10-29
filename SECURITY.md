@@ -1,19 +1,27 @@
 # Security Policy
 
-## Supported version
+## Release versions and reporting scope
 
-| Version                    | Supported |
-| -------------------------- | --------- |
-| 0.1.x                      | Yes       |
-| Earlier development builds | No        |
+| Component        | Current public version |
+| ---------------- | ---------------------- |
+| Desktop          | 0.3.1                  |
+| Chrome extension | 0.1.1                  |
+
+Start with the [latest official desktop release](https://github.com/kim-mac/Slate/releases/latest)
+and the published [Chrome extension](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh)
+when reporting an issue. Include both component versions. Local development
+builds and future release drafts are not evidence that an update is publicly
+available. This policy does not promise support for every historical build or
+a response or fix timeline.
 
 ## Report a vulnerability
 
 Use GitHub's private vulnerability-reporting feature for this repository when
-it is available/enabled. This policy does not confirm that the feature is enabled.
-If no private reporting option is available, do not disclose vulnerability details
-in a public issue; wait for a private reporting channel or ask only how to contact
-the maintainer privately, without including sensitive details.
+GitHub offers it. This document does not confirm that it is enabled. If it is
+unavailable, email [support@tryslate.tech](mailto:support@tryslate.tech) to ask how
+to arrange a private report, without including sensitive details in the initial
+message. Do not post vulnerability details in public issues. No response time,
+mailbox availability or fix schedule is guaranteed.
 
 Do not include real clips, selected text, browser conversations, database files,
 tokens, secrets, personal URLs, or other private content in a report. Do not
@@ -35,21 +43,34 @@ data and describe reproduction steps without disclosing user content.
   Native Messaging host.
 - Saved content is displayed as text and is not executed as captured HTML.
 
-## Unsigned V1 direct downloads
+## Installer verification and update signatures
 
-By project decision, code signing is not required for the initial Slate 0.1.0
-direct-download release. The Windows installers and executables are therefore
-unsigned. SmartScreen may show a reputation warning and Windows may display an
-unknown publisher.
+Current public Windows installers are **not Authenticode-signed**. Windows
+SmartScreen may show **Unknown Publisher** or a reputation warning. Tauri updater
+signatures authenticate update artifacts against Slate's production verification
+key and enforce signed-version checks; they are not Windows publisher
+certificates and do not remove SmartScreen warnings.
 
-Users should download only from the official Slate GitHub Release or website and
-compare the file's SHA-256 checksum with the published `SHA256SUMS.txt`. Users
-may choose **More info → Run anyway** after verifying the source and checksum.
-Slate documentation does not ask users to disable SmartScreen, antivirus, or
-other Windows security protections.
+Download only through the [official website](https://tryslate.tech/download/windows/)
+or [GitHub release](https://github.com/kim-mac/Slate/releases/latest). Compare the
+installer's SHA-256 with the matching filename in that release's `SHA256SUMS.txt`.
+For example, after substituting your actual downloaded file path:
 
-Unsigned binaries provide no publisher authentication. Code signing remains a
-recommended future hardening step, but it is not a V1 release gate.
+```powershell
+Get-FileHash -Algorithm SHA256 -LiteralPath 'C:\path\to\Slate-installer.exe'
+```
+
+This detects differing bytes; a checksum alone does not authenticate the publisher.
+Obtain the installer and checksum through the official release. Proceed past a
+SmartScreen reputation warning only after verifying the official source and
+checksum. Do not disable Windows security or bypass malware detections or
+organizational restrictions.
+
+The updater checks metadata automatically, but download and installation are
+user-confirmed. Do not disable signature verification or substitute update
+endpoints to work around a failure. Normal upgrades are designed to preserve application data;
+an older installer does not reverse a database migration. Historical first-release
+signing decisions do not replace current updater verification requirements.
 
 ## Known limitations
 

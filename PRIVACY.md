@@ -1,6 +1,6 @@
 # Privacy
 
-Slate 0.1.0 is a local-first Windows application and Chromium browser
+Slate is a local-first Windows application and Chromium browser
 extension. It does not require an account, login, cloud database, Slate backend,
 cloud sync, telemetry, or analytics.
 
@@ -28,6 +28,39 @@ Messaging to the local Slate native host and then to the local SQLite database.
 Slate does not send them to a Slate server. Websites and browser pages still
 perform their own normal networking independently of Slate; their privacy
 practices and network activity are outside Slate's local capture transport.
+Native Messaging is local process communication, not a cloud upload. The native
+host supplied with Slate Desktop writes to the library directly; the desktop
+window does not relay each capture.
+
+## Upcoming extension v0.1.2: recent save status
+
+This describes forthcoming behavior, not in the published extension v0.1.1. The
+storage permission allows a limited capture outcome and timestamp in Chrome
+session storage for connection recovery and last-save feedback. The outcome can
+be saved, unavailable, or unknown. This recovery-status record does not contain
+clip content, selected text, page URLs, page titles, or raw error messages.
+Captured content and source metadata still go to the local library as described
+above.
+
+The record can survive service-worker restarts within the browser session; it is
+not permanent storage. When status is read, outcomes ten minutes old or older are
+treated as unknown.
+This does not mean the record is physically deleted at exactly ten minutes; a
+later outcome can replace it. The popup reports historical save feedback, not a
+live connection check. There is no connection polling or automatic capture retry.
+
+## Desktop updates and network requests
+
+Slate Desktop checks for updates at startup and when you request a check. It
+requests the configured HTTPS update manifest at
+https://tryslate.tech/updates/windows/latest.json. If you choose to download an
+offered update, it requests the installer from the official GitHub release
+infrastructure. Installation remains user-confirmed.
+
+These update requests do not include your clip contents. Update checks use
+ordinary HTTP request information, including the requested resource and an
+updater user-agent header. This policy does not claim whether providers retain
+request logs. Local clip storage does not mean Slate makes no network requests.
 
 ## Desktop selected-text capture and clipboard handling
 
@@ -78,6 +111,13 @@ backup exists. It does not remove copies made by the user or backup software.
 
 ## Future changes
 
-Cloud sync, accounts, telemetry, and analytics are not part of version 0.1.0. If
-future versions introduce optional network features, their behavior and privacy
+Cloud sync, accounts, telemetry, and analytics are not part of Slate Desktop or
+the extension. If future versions introduce additional network features, their behavior and privacy
 documentation must be updated before release.
+
+## Privacy questions
+
+For privacy questions, email [support@tryslate.tech](mailto:support@tryslate.tech).
+You can also use [Slate Support](https://tryslate.tech/support/) for the existing
+GitHub support channel. Do not send private clip content, sensitive URLs, database
+files, or credentials, or include them in public GitHub issues.
