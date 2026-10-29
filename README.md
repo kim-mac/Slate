@@ -6,7 +6,7 @@ then find and reuse it from your own private, local-first library.
 
 **Capture → find → reuse.** No Slate account required.
 
-**[Website](https://tryslate.tech/) · [Download for Windows](https://github.com/kim-mac/Slate/releases) · [Chrome extension](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh)**
+**[Website](https://tryslate.tech/) · [Download for Windows](https://github.com/kim-mac/Slate/releases) · [macOS - Coming soon] · [Chrome extension](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh)**
 
 ## What Slate does
 
