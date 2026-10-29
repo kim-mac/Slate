@@ -374,16 +374,32 @@ impl ClipRepository {
         Ok(true)
     }
 
-    pub(crate) fn delete_group(&self, group_id: &str) -> Result<bool> {
+    pub(crate) fn delete_group(
+        &self,
+        group_id: &str,
+        expected_member_ids: &[String],
+    ) -> Result<bool> {
         let mut connection = self.database.connect()?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let member_ids = group_member_ids(&transaction, group_id)?;
-        if member_ids.len() < 2 {
+        let expected: HashSet<_> = expected_member_ids.iter().collect();
+        // Bind deletion to the complete set the user reviewed, not just its
+        // count. The write transaction excludes captures/membership writes
+        // between this authoritative comparison and the last deletion.
+        if member_ids.len() < 2
+            || expected.len() != expected_member_ids.len()
+            || member_ids.len() != expected.len()
+            || member_ids.iter().any(|id| !expected.contains(id))
+        {
+            return Ok(false);
+        }
+        if transaction.execute("DELETE FROM clip_groups WHERE id = ?1", [group_id])? != 1 {
             return Err(Error::InvalidQuery);
         }
-        transaction.execute("DELETE FROM clip_groups WHERE id = ?1", [group_id])?;
         for clip_id in member_ids {
-            transaction.execute("DELETE FROM clips WHERE id = ?1", [clip_id])?;
+            if transaction.execute("DELETE FROM clips WHERE id = ?1", [clip_id])? != 1 {
+                return Err(Error::InvalidQuery);
+            }
         }
         transaction.commit()?;
         Ok(true)

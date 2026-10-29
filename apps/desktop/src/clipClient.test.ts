@@ -113,14 +113,23 @@ describe('tauriClipClient', () => {
     await tauriClipClient.unmergeMember(group.id, clip.id);
     await tauriClipClient.unmergeGroup(group.id);
     await tauriClipClient.deleteGroupMember(group.id, clip.id);
-    await tauriClipClient.deleteGroup(group.id);
+    await tauriClipClient.deleteGroup(
+      group.id,
+      group.members.map((clip) => clip.id),
+    );
     await tauriClipClient.setGroupPinned(group.id, true);
     expect(vi.mocked(invoke).mock.calls).toEqual([
       ['merge_clips', { selected }],
       ['unmerge_group_member', { groupId: group.id, clipId: clip.id }],
       ['unmerge_group', { groupId: group.id }],
       ['delete_group_member', { groupId: group.id, clipId: clip.id }],
-      ['delete_group', { groupId: group.id }],
+      [
+        'delete_group',
+        {
+          groupId: group.id,
+          expectedMemberIds: group.members.map((clip) => clip.id),
+        },
+      ],
       ['set_group_pinned', { groupId: group.id, isPinned: true }],
     ]);
   });

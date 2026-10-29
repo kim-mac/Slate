@@ -13,8 +13,9 @@ The v0.3.2 installers have not yet been built, signed or tested.
 - Safer retry coordination releases maintenance locks while you resolve drafts
   and quit, then revalidates safety before continuing. It does not force-close
   Slate or your browser.
-- Existing clip management, grouping, Quick Search and Chrome extension capture
-  remain unchanged.
+- Group deletion checks the exact clips you reviewed before deleting. If group
+  membership changes, Slate asks you to review its clips again.
+- Other existing Slate functionality remains unchanged.
 
 ## Installation and updates
 

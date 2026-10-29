@@ -382,6 +382,244 @@ test('whole-group delete uses its atomic client operation after confirmation', a
   ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Delete all 2 clips' }));
   await waitFor(() =>
-    expect(client.deleteGroup).toHaveBeenCalledWith(mergedGroup.id),
+    expect(client.deleteGroup).toHaveBeenCalledWith(
+      mergedGroup.id,
+      mergedGroup.members.map((clip) => clip.id),
+    ),
   );
+});
+
+test('group confirmation reads authoritative membership before showing its scope', async () => {
+  const client = setup([{ kind: 'group', group: mergedGroup }]);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Open Shared page' }),
+  );
+  const expanded = {
+    ...mergedGroup,
+    members: [
+      ...mergedGroup.members,
+      { ...older, id: 'third', title: 'Third clip' },
+    ],
+  };
+  vi.mocked(client.list).mockResolvedValue([
+    { kind: 'group', group: expanded },
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  expect(
+    await screen.findByRole('button', { name: 'Delete all 3 clips' }),
+  ).toBeTruthy();
+  expect(client.deleteGroup).not.toHaveBeenCalled();
+});
+
+test('stale group deletion refreshes for review without automatically confirming again', async () => {
+  const safety = installationSafetyFixture();
+  const client = setup([{ kind: 'group', group: mergedGroup }], safety);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Open Shared page' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  const confirm = await screen.findByRole('button', {
+    name: 'Delete all 2 clips',
+  });
+  const expanded = {
+    ...mergedGroup,
+    members: [
+      ...mergedGroup.members,
+      { ...older, id: 'third', title: 'Third clip', content: 'New capture' },
+    ],
+  };
+  vi.mocked(client.list).mockResolvedValue([
+    { kind: 'group', group: expanded },
+  ]);
+  vi.mocked(client.deleteGroup).mockRejectedValueOnce({
+    code: 'group_changed',
+    message: 'This group changed. Review its clips before deleting.',
+  });
+  fireEvent.click(confirm);
+  expect(
+    await screen.findByText(
+      /This group changed\. Review its clips before deleting\./,
+    ),
+  ).toBeTruthy();
+  expect(await screen.findByText('New capture')).toBeTruthy();
+  expect(client.deleteGroup).toHaveBeenCalledTimes(1);
+  expect(client.deleteGroup).toHaveBeenCalledWith(mergedGroup.id, [
+    newer.id,
+    older.id,
+  ]);
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  expect(
+    await screen.findByRole('button', { name: 'Delete all 3 clips' }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+  expect(client.deleteGroup).toHaveBeenCalledTimes(1);
+  expect(safety.client.release).toHaveBeenCalledTimes(2);
+});
+
+test('group confirmation fails closed and releases its lease when the authoritative read fails', async () => {
+  const safety = installationSafetyFixture();
+  const client = setup([{ kind: 'group', group: mergedGroup }], safety);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Open Shared page' }),
+  );
+  vi.mocked(client.list).mockRejectedValue(new Error('synthetic read failure'));
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  expect(
+    await screen.findByText(
+      /Could not load this group\. Refresh the library and try again\./,
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+  expect(client.deleteGroup).not.toHaveBeenCalled();
+  await waitFor(() => expect(safety.client.release).toHaveBeenCalledTimes(1));
+  expect(screen.getByText('Older content')).toBeTruthy();
+});
+
+test('a group that disappears before opening cannot acquire a deletion confirmation', async () => {
+  const safety = installationSafetyFixture();
+  const client = setup([{ kind: 'group', group: mergedGroup }], safety);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Open Shared page' }),
+  );
+  vi.mocked(client.list).mockResolvedValue([clipItem(older), clipItem(newer)]);
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  expect(
+    await screen.findByText(
+      /This clip or group changed or is no longer available/,
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+  expect(client.deleteGroup).not.toHaveBeenCalled();
+  await waitFor(() => expect(safety.client.release).toHaveBeenCalledTimes(1));
+});
+
+test('fresh confirmation after a same-count replacement submits the newly reviewed IDs only', async () => {
+  const client = setup([{ kind: 'group', group: mergedGroup }]);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Open Shared page' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  const confirm = await screen.findByRole('button', {
+    name: 'Delete all 2 clips',
+  });
+  const replacement = {
+    ...older,
+    id: 'replacement',
+    content: 'Replacement content',
+  };
+  vi.mocked(client.list).mockResolvedValue([
+    { kind: 'group', group: { ...mergedGroup, members: [newer, replacement] } },
+  ]);
+  vi.mocked(client.deleteGroup).mockRejectedValueOnce({
+    code: 'group_changed',
+    message: 'This group changed. Review its clips before deleting.',
+  });
+  fireEvent.click(confirm);
+  expect(await screen.findByText('Replacement content')).toBeTruthy();
+  expect(client.deleteGroup).toHaveBeenCalledExactlyOnceWith(mergedGroup.id, [
+    newer.id,
+    older.id,
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Delete all 2 clips' }),
+  );
+  await waitFor(() => expect(client.deleteGroup).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(client.deleteGroup).mock.calls[1]).toEqual([
+    mergedGroup.id,
+    [newer.id, replacement.id],
+  ]);
+  expect(await screen.findByText('2 clips deleted.')).toBeTruthy();
+});
+
+test('canceling the original confirmation never deletes or silently expands its count', async () => {
+  const safety = installationSafetyFixture();
+  const client = setup([{ kind: 'group', group: mergedGroup }], safety);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Open Shared page' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  await screen.findByRole('button', { name: 'Delete all 2 clips' });
+  vi.mocked(client.list).mockResolvedValue([
+    {
+      kind: 'group',
+      group: {
+        ...mergedGroup,
+        members: [...mergedGroup.members, { ...older, id: 'third' }],
+      },
+    },
+  ]);
+  fireEvent.focus(window);
+  expect(
+    screen.queryByRole('button', { name: 'Delete all 3 clips' }),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+  expect(client.deleteGroup).not.toHaveBeenCalled();
+  expect(safety.client.release).toHaveBeenCalledTimes(1);
+});
+
+test('pending confirmed deletion is single-flight and retains its lease until completion', async () => {
+  const safety = installationSafetyFixture();
+  const client = setup([{ kind: 'group', group: mergedGroup }], safety);
+  let resolve!: () => void;
+  vi.mocked(client.deleteGroup).mockImplementation(
+    () =>
+      new Promise<void>((done) => {
+        resolve = done;
+      }),
+  );
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Open Shared page' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  const confirm = await screen.findByRole('button', {
+    name: 'Delete all 2 clips',
+  });
+  act(() => {
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+  });
+  expect(client.deleteGroup).toHaveBeenCalledExactlyOnceWith(mergedGroup.id, [
+    newer.id,
+    older.id,
+  ]);
+  expect(safety.client.release).not.toHaveBeenCalled();
+  await act(async () => resolve());
+  expect(await screen.findByText('2 clips deleted.')).toBeTruthy();
+  await waitFor(() => expect(safety.client.release).toHaveBeenCalledTimes(1));
+});
+
+test('stale rejection with a failed refresh does not permit a cached destructive retry', async () => {
+  const safety = installationSafetyFixture();
+  const client = setup([{ kind: 'group', group: mergedGroup }], safety);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Open Shared page' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  const confirm = await screen.findByRole('button', {
+    name: 'Delete all 2 clips',
+  });
+  vi.mocked(client.list).mockRejectedValue(new Error('synthetic read failure'));
+  vi.mocked(client.deleteGroup).mockRejectedValue({
+    code: 'group_changed',
+    message: 'This group changed. Review its clips before deleting.',
+  });
+  fireEvent.click(confirm);
+  expect(
+    await screen.findByText(
+      /This group changed\. Review its clips before deleting\./,
+    ),
+  ).toBeTruthy();
+  await waitFor(() => expect(safety.client.release).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
+  expect(
+    await screen.findByText(
+      /Could not load this group\. Refresh the library and try again\./,
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+  expect(client.deleteGroup).toHaveBeenCalledTimes(1);
 });

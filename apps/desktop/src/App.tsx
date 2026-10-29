@@ -770,7 +770,28 @@ export function App({
         return;
       }
       confirmationLease.current = lease;
-      setDeleteTarget(target);
+      if (target.type === 'group') {
+        const latest = await readLatest();
+        const group = latest && groupIn(latest, target.group.id);
+        if (!group) {
+          unavailableAction();
+          await releaseConfirmation();
+          return;
+        }
+        // Keep the reviewed membership fixed even if the library later refreshes.
+        setDeleteTarget({
+          type: 'group',
+          group: { ...group, members: [...group.members] },
+        });
+      } else {
+        setDeleteTarget(target);
+      }
+    } catch {
+      setStatus(null);
+      setActionError(
+        'Could not load this group. Refresh the library and try again.',
+      );
+      await releaseConfirmation();
     } finally {
       confirmationOpening.current = false;
     }
@@ -1042,7 +1063,10 @@ export function App({
     setDeleteTarget(null);
     setActionError(null);
     try {
-      await client.deleteGroup(group.id);
+      await client.deleteGroup(
+        group.id,
+        group.members.map((clip) => clip.id),
+      );
       setClips((current) =>
         current.filter(
           (item) => !(item.kind === 'group' && item.group.id === group.id),
@@ -1057,6 +1081,16 @@ export function App({
     } catch (error) {
       setActionError(safeErrorMessage(error));
       setStatus(null);
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'group_changed'
+      ) {
+        // Reconcile for review only. A new dialog and explicit confirmation
+        // are required; never retry a destructive operation after refreshing.
+        await refresh();
+      }
     } finally {
       await releaseConfirmation();
       finishOperation();

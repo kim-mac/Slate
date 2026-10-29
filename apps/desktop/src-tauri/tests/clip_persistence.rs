@@ -435,7 +435,8 @@ fn whole_group_unmerge_preserves_clips_and_whole_group_delete_removes_them() {
             LibraryItemRef::clip(second.id.clone()),
         ])
         .unwrap();
-    service.delete_group(&group.id).unwrap();
+    let confirmed_ids: Vec<_> = group.members.iter().map(|clip| clip.id.clone()).collect();
+    assert!(service.delete_group(&group.id, &confirmed_ids).unwrap());
     assert!(service.get(&first.id).unwrap().is_none());
     assert!(service.get(&second.id).unwrap().is_none());
     assert!(service.list_library_items().unwrap().is_empty());

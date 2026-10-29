@@ -93,8 +93,9 @@ impl ClipService {
         self.repository.delete_member(group_id, clip_id)
     }
 
-    pub fn delete_group(&self, group_id: &str) -> Result<bool> {
-        self.repository.delete_group(group_id)
+    /// Delete only if the complete confirmed membership is still current.
+    pub fn delete_group(&self, group_id: &str, expected_member_ids: &[String]) -> Result<bool> {
+        self.repository.delete_group(group_id, expected_member_ids)
     }
 
     pub fn set_group_pinned(&self, group_id: &str, is_pinned: bool) -> Result<Option<ClipGroup>> {

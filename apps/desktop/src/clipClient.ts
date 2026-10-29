@@ -25,7 +25,7 @@ export interface ClipClient {
   unmergeMember(groupId: string, clipId: string): Promise<void>;
   unmergeGroup(groupId: string): Promise<void>;
   deleteGroupMember(groupId: string, clipId: string): Promise<void>;
-  deleteGroup(groupId: string): Promise<void>;
+  deleteGroup(groupId: string, expectedMemberIds: string[]): Promise<void>;
   setGroupPinned(groupId: string, isPinned: boolean): Promise<ClipGroup>;
   renameGroup(
     groupId: string,
@@ -58,7 +58,8 @@ export const tauriClipClient: ClipClient = {
   unmergeGroup: (groupId) => invoke<void>('unmerge_group', { groupId }),
   deleteGroupMember: (groupId, clipId) =>
     invoke<void>('delete_group_member', { groupId, clipId }),
-  deleteGroup: (groupId) => invoke<void>('delete_group', { groupId }),
+  deleteGroup: (groupId, expectedMemberIds) =>
+    invoke<void>('delete_group', { groupId, expectedMemberIds }),
   setGroupPinned: (groupId, isPinned) =>
     invoke<ClipGroup>('set_group_pinned', { groupId, isPinned }),
   renameGroup: (groupId, title, expectedState) =>

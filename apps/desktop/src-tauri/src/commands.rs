@@ -422,14 +422,31 @@ pub fn delete_group_member(
 pub fn delete_group(
     storage: State<'_, StorageState>,
     group_id: String,
+    expected_member_ids: Vec<String>,
 ) -> Result<(), CommandError> {
-    validate_clip_id(&group_id)?;
+    delete_group_from_storage(&storage, &group_id, &expected_member_ids)
+}
+
+// The command and its tests share this complete delegation, including normal
+// storage admission, input validation and the transactional membership guard.
+fn delete_group_from_storage(
+    storage: &StorageState,
+    group_id: &str,
+    expected_member_ids: &[String],
+) -> Result<(), CommandError> {
+    validate_clip_id(group_id)?;
+    for id in expected_member_ids {
+        validate_clip_id(id)?;
+    }
     match storage
-        .with_service(|service| service.delete_group(&group_id))
-        .map_err(|_| group_operation_error())?
+        .with_service(|service| service.delete_group(group_id, expected_member_ids))
+        .map_err(bootstrap_error)?
     {
         true => Ok(()),
-        false => Err(not_found_error()),
+        false => Err(CommandError::new(
+            "group_changed",
+            "This group changed. Review its clips before deleting.",
+        )),
     }
 }
 
@@ -647,6 +664,172 @@ pub fn open_clip_source(
 mod tests {
     use super::*;
     use crate::clips::{ClipService, CreateClip};
+
+    fn deletion_fixture() -> (tempfile::TempDir, StorageState, ClipGroup) {
+        let directory = tempfile::tempdir().unwrap();
+        let storage = StorageState::new(directory.path().into());
+        let group = storage
+            .with_service(|service| {
+                let mut captured = input("A", "text");
+                captured.source_url = Some("https://example.com/confirmed-group".into());
+                service.create(captured.clone())?;
+                service.create(captured)?;
+                Ok(service
+                    .list_library_items()?
+                    .into_iter()
+                    .find_map(|item| match item {
+                        LibraryItem::Group { group } => Some(group),
+                        _ => None,
+                    })
+                    .unwrap())
+            })
+            .unwrap();
+        (directory, storage, group)
+    }
+
+    #[test]
+    fn group_delete_command_delegation_rejects_stale_scope_then_requires_new_ids() {
+        let (_directory, storage, group) = deletion_fixture();
+        let expected: Vec<_> = group.members.iter().map(|clip| clip.id.clone()).collect();
+        let current = storage
+            .with_service(|service| {
+                let mut captured = input("C", "text");
+                captured.source_url = group.members[0].source_url.clone();
+                service.create(captured)?;
+                service.get_group(&group.id)
+            })
+            .unwrap()
+            .unwrap();
+        let before = storage
+            .with_service(ClipService::list_library_items)
+            .unwrap();
+        for _ in 0..2 {
+            let error = delete_group_from_storage(&storage, &group.id, &expected).unwrap_err();
+            assert_eq!(error.code, "group_changed");
+            assert_eq!(
+                error.message,
+                "This group changed. Review its clips before deleting."
+            );
+            assert_eq!(
+                storage
+                    .with_service(ClipService::list_library_items)
+                    .unwrap(),
+                before
+            );
+        }
+        let current_ids: Vec<_> = current.members.iter().map(|clip| clip.id.clone()).collect();
+        delete_group_from_storage(&storage, &group.id, &current_ids).unwrap();
+        assert!(storage.with_service(ClipService::list).unwrap().is_empty());
+        assert_eq!(
+            delete_group_from_storage(&storage, &group.id, &current_ids)
+                .unwrap_err()
+                .code,
+            "group_changed"
+        );
+    }
+
+    #[test]
+    fn group_delete_command_invalid_ids_do_not_bootstrap_storage() {
+        let directory = tempfile::tempdir().unwrap();
+        let storage = StorageState::new(directory.path().into());
+        let valid = Uuid::new_v4().to_string();
+        assert_eq!(
+            delete_group_from_storage(&storage, "invalid", &[])
+                .unwrap_err()
+                .code,
+            "invalid_clip_id"
+        );
+        assert_eq!(
+            delete_group_from_storage(&storage, &valid, &["invalid".into()])
+                .unwrap_err()
+                .code,
+            "invalid_clip_id"
+        );
+        assert!(!storage.database_path().exists());
+        assert!(!storage.marker_path().exists());
+    }
+
+    #[test]
+    fn group_delete_command_missing_mismatched_empty_or_duplicate_scope_is_safe() {
+        let (_directory, storage, group) = deletion_fixture();
+        let expected: Vec<_> = group.members.iter().map(|clip| clip.id.clone()).collect();
+        let before = storage
+            .with_service(ClipService::list_library_items)
+            .unwrap();
+        for scope in [
+            vec![],
+            vec![expected[0].clone()],
+            vec![expected[0].clone(), expected[0].clone()],
+            vec![expected[0].clone(), Uuid::new_v4().to_string()],
+        ] {
+            assert_eq!(
+                delete_group_from_storage(&storage, &group.id, &scope)
+                    .unwrap_err()
+                    .code,
+                "group_changed"
+            );
+        }
+        assert_eq!(
+            delete_group_from_storage(&storage, &Uuid::new_v4().to_string(), &expected)
+                .unwrap_err()
+                .code,
+            "group_changed"
+        );
+        assert_eq!(
+            storage
+                .with_service(ClipService::list_library_items)
+                .unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn group_delete_command_storage_failure_rolls_back_and_remains_retryable() {
+        let (_directory, storage, group) = deletion_fixture();
+        let expected: Vec<_> = group.members.iter().map(|clip| clip.id.clone()).collect();
+        let before = storage
+            .with_service(ClipService::list_library_items)
+            .unwrap();
+        let connection = rusqlite::Connection::open(storage.database_path()).unwrap();
+        connection.execute_batch("CREATE TRIGGER reject_delete BEFORE DELETE ON clips BEGIN SELECT RAISE(ABORT, 'synthetic'); END;").unwrap();
+        assert_eq!(
+            delete_group_from_storage(&storage, &group.id, &expected)
+                .unwrap_err()
+                .code,
+            "storage_unavailable"
+        );
+        assert_eq!(
+            storage
+                .with_service(ClipService::list_library_items)
+                .unwrap(),
+            before
+        );
+        connection
+            .execute_batch("DROP TRIGGER reject_delete")
+            .unwrap();
+        delete_group_from_storage(&storage, &group.id, &expected).unwrap();
+        assert!(storage.with_service(ClipService::list).unwrap().is_empty());
+    }
+
+    #[test]
+    fn group_delete_command_keeps_maintenance_admission_protection() {
+        let directory = tempfile::tempdir().unwrap();
+        let safety = SafetyCoordinator::new();
+        let storage = StorageState::with_safety(directory.path().into(), safety.clone());
+        let attempt = safety.begin_preparation().unwrap();
+        assert_eq!(
+            delete_group_from_storage(
+                &storage,
+                &Uuid::new_v4().to_string(),
+                &[Uuid::new_v4().to_string(), Uuid::new_v4().to_string()]
+            )
+            .unwrap_err()
+            .code,
+            "storage_unavailable"
+        );
+        assert!(!storage.database_path().exists());
+        drop(attempt);
+    }
 
     #[test]
     fn group_copy_uses_displayed_order_exact_saved_text_and_skips_empty_members() {
