@@ -164,6 +164,7 @@ export function App({
   } = useClipLibrary(client);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const dismissActionError = useCallback(() => setActionError(null), []);
   const [formError, setFormError] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -1549,12 +1550,6 @@ export function App({
             </header>
             <LauncherAvailability />
             <div className="content">
-              {actionError && !formMode && (
-                <p role="alert" className="error-message">
-                  {actionError} Try the action again, or refresh the library.
-                </p>
-              )}
-
               {activeView !== 'settings' && (
                 <section
                   className="library-view"
@@ -1820,13 +1815,19 @@ export function App({
             </div>
           </SidebarInset>
         </SidebarProvider>
-        {status && (
+        {actionError && !formMode ? (
+          <ClipFeedback
+            tone="error"
+            message={`${actionError} Try the action again, or refresh the library.`}
+            onDismiss={dismissActionError}
+          />
+        ) : status ? (
           <ClipFeedback
             notificationId={status.id}
             message={status.message}
             onDismiss={dismissStatus}
           />
-        )}
+        ) : null}
 
         {formMode && activeView !== 'settings' && (
           <ClipFormDialog

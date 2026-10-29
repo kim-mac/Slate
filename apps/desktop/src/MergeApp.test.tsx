@@ -417,6 +417,11 @@ test('stale group deletion refreshes for review without automatically confirming
   fireEvent.click(
     await screen.findByRole('button', { name: 'Open Shared page' }),
   );
+  const detail = document.querySelector('.merged-clip-detail');
+  const viewport = detail!.querySelector<HTMLElement>(
+    '[data-slot="scroll-area-viewport"]',
+  )!;
+  viewport.scrollTop = 120;
   fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
   const confirm = await screen.findByRole('button', {
     name: 'Delete all 2 clips',
@@ -442,12 +447,24 @@ test('stale group deletion refreshes for review without automatically confirming
     ),
   ).toBeTruthy();
   expect(await screen.findByText('New capture')).toBeTruthy();
+  const alert = screen.getByRole('alert');
+  expect(alert.closest('.content')).toBeNull();
+  expect(alert.closest('.clip-feedback-error')).not.toBeNull();
+  expect(document.querySelector('.content')!.children).toHaveLength(1);
+  expect(document.querySelector('.merged-clip-detail')).toBe(detail);
+  expect(detail!.querySelector('[data-slot="scroll-area-viewport"]')).toBe(
+    viewport,
+  );
+  expect(viewport.scrollTop).toBe(120);
   expect(client.deleteGroup).toHaveBeenCalledTimes(1);
   expect(client.deleteGroup).toHaveBeenCalledWith(mergedGroup.id, [
     newer.id,
     older.id,
   ]);
   expect(screen.queryByRole('alertdialog')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }));
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(client.deleteGroup).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole('button', { name: 'Delete merged clip' }));
   expect(
     await screen.findByRole('button', { name: 'Delete all 3 clips' }),
