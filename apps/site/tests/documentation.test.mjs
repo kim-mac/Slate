@@ -82,10 +82,7 @@ test('Support explains view refresh, native host, tray and safe failure recovery
   assert.match(support, /Quit[\s\S]*tray/);
   assert.match(support, /Do not delete your library or choose Delete app data/);
   assert.match(support, /Do not disable signature verification/);
-  assert.doesNotMatch(
-    support,
-    /v0\.3\.2|v0\.1\.2|Get Slate Desktop|Retry\/Cancel/,
-  );
+  assert.doesNotMatch(support, /v0\.1\.2|Get Slate Desktop|Retry\/Cancel/);
 });
 
 test('Support explains official installer trust without bypassing Windows protection', () => {

@@ -1,13 +1,13 @@
 {
-  "version": "0.3.1",
+  "version": "0.3.2",
   "platforms": {
     "windows-aarch64": {
-      "url": "https://github.com/kim-mac/Slate/releases/download/v0.3.1/Slate-0.3.1-Windows-ARM64.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUemp3S25jUUYyVjVSV1RxSUxSZC9IQnFUK3g2RWhRaGpVdzBybFVuREsvTm1jU21qYWxJeUNGY1A1aFVabFUrbGRDZHhjM04zK2h6SCtkcEd3L0c5UUtuY3ZvQXhqV2dBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzc4MTYwCWZpbGU6U2xhdGUtMC4zLjEtV2luZG93cy1BUk02NC5leGUJdmVyc2lvbjowLjMuMQpGdkNMeEdFcE1VRTZaUlhaZGFvcGFldmw3aDNKTS9seUJoQm9BWjJFd3ZzU2VCRSt6ZUFVQk9sbXBuSDROODNLSUhIdkt1aTZLbWJCRVl0YTIvUDVEQT09Cg=="
+      "url": "https://github.com/kim-mac/Slate/releases/download/v0.3.2/Slate-0.3.2-Windows-ARM64.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUemp3S25jUUYyVjhnczBRSWpJZGtVSE1HQnBIYjJpVndWN0thdmxXV1BpRDJsY3l6am1xYnFGc210YVRGRmRqd1RUYnkraDczTWIySE10T2tYcVFxK29wNHArWTlwbnc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMzE3MDUzCWZpbGU6U2xhdGUtMC4zLjItV2luZG93cy1BUk02NC5leGUJdmVyc2lvbjowLjMuMgpDb2xCQ25mamRqNHRSazBIUlFGSDZkY0labmNFVlJuMTlsQ3Y4dlVzcDlGRXZlUUV6NExtTFU0S0dZYXRlbFczUDJqWU4xYk1BSGJyMzVISy9hVXlEdz09Cg=="
     },
     "windows-x86_64": {
-      "url": "https://github.com/kim-mac/Slate/releases/download/v0.3.1/Slate-0.3.1-Windows-x64.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUemp3S25jUUYyVi9FOFdpNWtKMnA0RGdna2VvbGxwTFc3cHlYSTF4NUs5UmV3Ry8zUG1sZjRNc0x2bGpVUFRnUlV1eVFLTk5MQWhndEM2UVdEUXBDczIxVWRzbnJDUHdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzc4MTY4CWZpbGU6U2xhdGUtMC4zLjEtV2luZG93cy14NjQuZXhlCXZlcnNpb246MC4zLjEKNWU5OWZ6eTRTWDErckxwWEN0MElXeDN4c2JIMWdSNzJVbVhSd0RpMEQzVzdLVDNBL0ZaVHZFbjRZejJBL3lqYTFzbjZtTHAvR25xd1NDaFRRRDdsQlE9PQo="
+      "url": "https://github.com/kim-mac/Slate/releases/download/v0.3.2/Slate-0.3.2-Windows-x64.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUemp3S25jUUYyVjc3dXR5OTI0SkNJV1UzeGxVS214YWFHN2x1RU9zYVhHN2VMRWJIUS81UlYxQ1FER0NyUXFLbnN5Qm9wNHNVMWcxUkxVY0JVNXJsS0F6SjYvaldZdWdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMzE3MDYxCWZpbGU6U2xhdGUtMC4zLjItV2luZG93cy14NjQuZXhlCXZlcnNpb246MC4zLjIKcWM1cHR4MGdqbkIzU2YrMEd0djBtU2d2eUh6MkYvZ0haWS9GZ1RBY1g2Ykg2UXc5cU41OGtYMk1INUwvM0h2TFpFTUVQb01pdCtHbHlhaEh2aGtOQWc9PQo="
     }
   }
 }

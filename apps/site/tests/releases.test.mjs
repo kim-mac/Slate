@@ -8,19 +8,19 @@ test('Windows artifact metadata is centralized and matches the frozen release', 
   const { release } = await import(releaseModule.href);
   assert.equal(
     release.downloads.windowsX64.filename,
-    'Slate-0.3.1-Windows-x64.exe',
+    'Slate-0.3.2-Windows-x64.exe',
   );
   assert.equal(
     release.downloads.windowsARM64.filename,
-    'Slate-0.3.1-Windows-ARM64.exe',
+    'Slate-0.3.2-Windows-ARM64.exe',
   );
   assert.equal(
     release.downloads.windowsX64.sha256,
-    '98726C7C7549B6112DB84657E8AE8F8D54DFD22909C85EB854E021884176DAE8',
+    'FAF241B4F6884994AC1C0AADAB3D2D7B2FC356C09FD2DD4945919EE4A749D327',
   );
   assert.equal(
     release.downloads.windowsARM64.sha256,
-    '16630847830DC275B07751197CEC10B63E0356D5ED6E18820EE045367B59E6B8',
+    '0B4CD2DC092DFC3E6B512B7C2A185CBED6E2CB302E3FB17C839F32A2CEB9984B',
   );
   assert.equal(release.extensionVersion, '0.1.1');
 });
@@ -31,13 +31,13 @@ test('Windows activation destinations match the exact approved release assets', 
     'Central release configuration must exist',
   );
   const { release, downloadUrl } = await import(releaseModule.href);
-  assert.equal(release.version, '0.3.1');
+  assert.equal(release.version, '0.3.2');
   for (const [id, filename] of [
-    ['windowsX64', 'Slate-0.3.1-Windows-x64.exe'],
-    ['windowsARM64', 'Slate-0.3.1-Windows-ARM64.exe'],
+    ['windowsX64', 'Slate-0.3.2-Windows-x64.exe'],
+    ['windowsARM64', 'Slate-0.3.2-Windows-ARM64.exe'],
   ]) {
     const destination = release.downloads[id];
-    const expected = `https://github.com/kim-mac/Slate/releases/download/v0.3.1/${filename}`;
+    const expected = `https://github.com/kim-mac/Slate/releases/download/v0.3.2/${filename}`;
     assert.equal(destination.state, 'verified');
     assert.equal(destination.url, expected);
     assert.equal(downloadUrl(destination), expected);

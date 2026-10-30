@@ -20,12 +20,12 @@ test('the static Windows manifest is the approved signed activation candidate', 
   const bytes = readFileSync(publicManifest);
   assert.equal(
     createHash('sha256').update(bytes).digest('hex').toUpperCase(),
-    '61E89026D261AAB5EF2E88C0C9384BE860A64F4863F0FAF0E1EE5CD7BDB5D44B',
+    '961E9768EBECE757D74773A0690F4F283D76D5BD3F880DBF82098DFCD6730E5B',
   );
   const { release } = await import('../src/data/releases.ts');
   const text = bytes.toString('utf8');
   const contract = validateManifestJson(text, release.version);
-  assert.equal(contract.version, '0.3.1');
+  assert.equal(contract.version, '0.3.2');
   for (const [platform, id] of [
     ['windows-x86_64', 'windowsX64'],
     ['windows-aarch64', 'windowsARM64'],

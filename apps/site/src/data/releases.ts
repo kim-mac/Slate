@@ -3,28 +3,28 @@ export type Destination =
   | { readonly state: 'verified'; readonly url: string };
 
 export const release = {
-  version: '0.3.1',
+  version: '0.3.2',
   extensionVersion: '0.1.1',
   downloads: {
     windowsX64: {
       state: 'verified',
-      url: 'https://github.com/kim-mac/Slate/releases/download/v0.3.1/Slate-0.3.1-Windows-x64.exe',
+      url: 'https://github.com/kim-mac/Slate/releases/download/v0.3.2/Slate-0.3.2-Windows-x64.exe',
       architecture: 'x64',
       title: 'Windows x64',
       description: 'For Intel & AMD PCs',
-      filename: 'Slate-0.3.1-Windows-x64.exe',
+      filename: 'Slate-0.3.2-Windows-x64.exe',
       sha256:
-        '98726C7C7549B6112DB84657E8AE8F8D54DFD22909C85EB854E021884176DAE8',
+        'FAF241B4F6884994AC1C0AADAB3D2D7B2FC356C09FD2DD4945919EE4A749D327',
     },
     windowsARM64: {
       state: 'verified',
-      url: 'https://github.com/kim-mac/Slate/releases/download/v0.3.1/Slate-0.3.1-Windows-ARM64.exe',
+      url: 'https://github.com/kim-mac/Slate/releases/download/v0.3.2/Slate-0.3.2-Windows-ARM64.exe',
       architecture: 'ARM64',
       title: 'Windows ARM64',
       description: 'For Windows-on-ARM PCs',
-      filename: 'Slate-0.3.1-Windows-ARM64.exe',
+      filename: 'Slate-0.3.2-Windows-ARM64.exe',
       sha256:
-        '16630847830DC275B07751197CEC10B63E0356D5ED6E18820EE045367B59E6B8',
+        '0B4CD2DC092DFC3E6B512B7C2A185CBED6E2CB302E3FB17C839F32A2CEB9984B',
     },
     chrome: {
       state: 'verified',
