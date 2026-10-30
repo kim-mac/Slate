@@ -4,6 +4,8 @@ import { BookOpen, Info, Keyboard, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import type { StartupClient } from '../startupClient';
+import type { UpdateControls } from '../updaterClient';
+import { UpdateSettings } from './UpdateSettings';
 import { StartupSetting } from './StartupSetting';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
@@ -12,6 +14,7 @@ import { Separator } from './ui/separator';
 interface SettingsViewProps {
   startupClient: StartupClient;
   readVersion?: () => Promise<string>;
+  updater?: UpdateControls;
 }
 
 interface ShortcutDefinition {
@@ -76,6 +79,7 @@ function SettingsSectionTitle({
 export function SettingsView({
   startupClient,
   readVersion = getVersion,
+  updater,
 }: SettingsViewProps) {
   const [version, setVersion] = useState<string | null>(null);
   const [versionUnavailable, setVersionUnavailable] = useState(false);
@@ -261,6 +265,7 @@ export function SettingsView({
                       ? 'Version unavailable'
                       : 'Checking version…'}
                 </p>
+                {updater && <UpdateSettings controls={updater} />}
               </CardContent>
             </Card>
           </section>

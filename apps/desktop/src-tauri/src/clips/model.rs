@@ -20,6 +20,8 @@ pub struct Clip {
 pub struct ClipGroup {
     pub id: String,
     pub title: String,
+    /// Opaque compare token covering stored title and ordered fallback inputs.
+    pub title_state: String,
     pub is_pinned: bool,
     pub created_at: String,
     pub updated_at: String,

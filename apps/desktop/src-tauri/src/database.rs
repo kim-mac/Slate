@@ -5,6 +5,7 @@ use rusqlite::{Connection, Error, OpenFlags, Result, TransactionBehavior};
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_create_clips.sql"),
     include_str!("../migrations/0002_create_clip_groups.sql"),
+    include_str!("../migrations/0003_automatic_source_grouping.sql"),
 ];
 
 #[derive(Clone, Debug)]

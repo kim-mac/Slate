@@ -4,7 +4,7 @@ import {
   type ClipContentType,
   type ClipInput,
 } from '@ai-clip-memory/shared';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { validateClipInputSize } from '@/lib/clipInputLimits';
 import { formatContentType } from '@/lib/clipRetrieval';
 
@@ -48,9 +48,11 @@ export function ClipForm({
     clip?.sourcePageTitle ?? '',
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  const submitting = useRef(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSaving || submitting.current) return;
     if (content.trim().length === 0) return;
     const input = {
       content,
@@ -63,7 +65,10 @@ export function ClipForm({
     const sizeError = validateClipInputSize(input);
     setValidationError(sizeError);
     if (sizeError) return;
-    void onSubmit(input);
+    submitting.current = true;
+    void onSubmit(input).finally(() => {
+      submitting.current = false;
+    });
   }
 
   return (
@@ -76,15 +81,21 @@ export function ClipForm({
           required
           rows={8}
           value={content}
-          onChange={(event) => setContent(event.currentTarget.value)}
+          readOnly={isSaving}
+          onChange={(event) => {
+            if (!isSaving && !submitting.current)
+              setContent(event.currentTarget.value);
+          }}
         />
       </label>
       <label htmlFor="clip-content-type">
         Content type
         <Select
+          disabled={isSaving}
           value={contentType}
           onValueChange={(value) => {
-            if (value) setContentType(value as ClipContentType);
+            if (value && !isSaving && !submitting.current)
+              setContentType(value as ClipContentType);
           }}
         >
           <SelectTrigger id="clip-content-type" className="w-full">
@@ -95,7 +106,9 @@ export function ClipForm({
               <SelectItem
                 value={type}
                 key={type}
-                onClick={() => setContentType(type)}
+                onClick={() => {
+                  if (!isSaving && !submitting.current) setContentType(type);
+                }}
               >
                 {formatContentType(type)}
               </SelectItem>
@@ -109,7 +122,11 @@ export function ClipForm({
           <Input
             id="clip-title"
             value={title}
-            onChange={(event) => setTitle(event.currentTarget.value)}
+            readOnly={isSaving}
+            onChange={(event) => {
+              if (!isSaving && !submitting.current)
+                setTitle(event.currentTarget.value);
+            }}
           />
         </label>
         <label htmlFor="clip-source-app">
@@ -117,7 +134,11 @@ export function ClipForm({
           <Input
             id="clip-source-app"
             value={sourceApp}
-            onChange={(event) => setSourceApp(event.currentTarget.value)}
+            readOnly={isSaving}
+            onChange={(event) => {
+              if (!isSaving && !submitting.current)
+                setSourceApp(event.currentTarget.value);
+            }}
           />
         </label>
         <label htmlFor="clip-source-url">
@@ -126,7 +147,11 @@ export function ClipForm({
             id="clip-source-url"
             type="url"
             value={sourceUrl}
-            onChange={(event) => setSourceUrl(event.currentTarget.value)}
+            readOnly={isSaving}
+            onChange={(event) => {
+              if (!isSaving && !submitting.current)
+                setSourceUrl(event.currentTarget.value);
+            }}
           />
         </label>
         <label htmlFor="clip-source-page-title">
@@ -134,7 +159,11 @@ export function ClipForm({
           <Input
             id="clip-source-page-title"
             value={sourcePageTitle}
-            onChange={(event) => setSourcePageTitle(event.currentTarget.value)}
+            readOnly={isSaving}
+            onChange={(event) => {
+              if (!isSaving && !submitting.current)
+                setSourcePageTitle(event.currentTarget.value);
+            }}
           />
         </label>
       </div>

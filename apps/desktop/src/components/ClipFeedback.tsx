@@ -4,8 +4,15 @@ import { Button } from './ui/button';
 interface ClipFeedbackProps {
   message: string;
   onDismiss: () => void;
+  notificationId?: number;
+  tone?: 'success' | 'error';
 }
-export function ClipFeedback({ message, onDismiss }: ClipFeedbackProps) {
+export function ClipFeedback({
+  message,
+  onDismiss,
+  notificationId,
+  tone = 'success',
+}: ClipFeedbackProps) {
   const timer = useRef<number | null>(null);
   const remaining = useRef(4000);
   const deadline = useRef(0);
@@ -19,9 +26,10 @@ export function ClipFeedback({ message, onDismiss }: ClipFeedbackProps) {
 
   const startTimer = useCallback(() => {
     clearTimer();
+    if (tone === 'error') return;
     deadline.current = Date.now() + remaining.current;
     timer.current = window.setTimeout(onDismiss, remaining.current);
-  }, [clearTimer, onDismiss]);
+  }, [clearTimer, onDismiss, tone]);
 
   const pauseTimer = useCallback(() => {
     if (timer.current === null) return;
@@ -35,13 +43,15 @@ export function ClipFeedback({ message, onDismiss }: ClipFeedbackProps) {
 
   useEffect(() => {
     remaining.current = 4000;
-    startTimer();
+    if (!hovered.current && !focused.current) startTimer();
     return clearTimer;
-  }, [message, startTimer, clearTimer]);
+  }, [message, notificationId, startTimer, clearTimer]);
 
   return (
     <div
-      className="clip-feedback"
+      className={
+        tone === 'error' ? 'clip-feedback clip-feedback-error' : 'clip-feedback'
+      }
       onMouseEnter={() => {
         hovered.current = true;
         pauseTimer();
@@ -60,8 +70,12 @@ export function ClipFeedback({ message, onDismiss }: ClipFeedbackProps) {
         resumeTimer();
       }}
     >
-      <p role="status" aria-live="polite">
-        {message}
+      <p
+        role={tone === 'error' ? 'alert' : 'status'}
+        aria-live={tone === 'error' ? 'assertive' : 'polite'}
+        aria-atomic="true"
+      >
+        <span key={notificationId}>{message}</span>
       </p>
       <Button
         variant="ghost"

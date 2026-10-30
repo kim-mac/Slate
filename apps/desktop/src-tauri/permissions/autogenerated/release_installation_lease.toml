@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-release-installation-lease"
+description = "Enables the release_installation_lease command without any pre-configured scope."
+commands.allow = ["release_installation_lease"]
+
+[[permission]]
+identifier = "deny-release-installation-lease"
+description = "Denies the release_installation_lease command without any pre-configured scope."
+commands.deny = ["release_installation_lease"]

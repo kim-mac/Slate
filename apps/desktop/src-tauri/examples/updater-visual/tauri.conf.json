@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Slate Updater UX Preview",
+  "version": "0.1.0",
+  "identifier": "com.aiclipmemory.updater-visual",
+  "build": {
+    "devUrl": "http://127.0.0.1:1421/visual-preview/",
+    "frontendDist": "../../../visual-preview"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "capabilities": [
+        {
+          "identifier": "updater-visual",
+          "description": "Synthetic library reads and version only; no plugins or mutations.",
+          "windows": ["updater-visual"],
+          "permissions": [
+            "allow-list-clips",
+            "allow-get-launcher-status",
+            "core:app:allow-version"
+          ]
+        }
+      ],
+      "devCsp": {
+        "default-src": "'self'",
+        "connect-src": "ipc: http://ipc.localhost http://127.0.0.1:1421 ws://127.0.0.1:1421",
+        "font-src": "'self'",
+        "img-src": "'self' data:",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "frame-src": "'none'",
+        "object-src": "'none'"
+      }
+    }
+  },
+  "bundle": { "active": false, "icon": ["../../icons/icon.ico"] }
+}

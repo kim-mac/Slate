@@ -27,6 +27,7 @@ export interface CalendarClipActions {
 interface CalendarClipCardProps extends CalendarClipActions {
   clip: LibraryItem;
   disabled?: boolean;
+  pending?: boolean;
   onFocusClip?: (clip: LibraryItem) => void;
   primaryId: string;
   selectionMode?: boolean;
@@ -38,6 +39,7 @@ interface CalendarClipCardProps extends CalendarClipActions {
 export function CalendarClipCard({
   clip,
   disabled = false,
+  pending = false,
   onFocusClip,
   primaryId,
   selectionMode = false,
@@ -106,6 +108,7 @@ export function CalendarClipCard({
                 variant="ghost"
                 size="icon-xs"
                 className="memory-calendar-actions-trigger"
+                pending={pending}
                 aria-label={`Actions for ${title}`}
                 onFocus={() => onFocusClip?.(clip)}
               />

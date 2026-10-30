@@ -65,6 +65,28 @@ const clips: Clip[] = [
 
 afterEach(cleanup);
 
+test('temporarily blocked calendar action triggers retain their appearance and cannot open menus', () => {
+  render(
+    <MemoryCalendar
+      clips={clips}
+      visibleMonth={{ year: 2026, month: 8 }}
+      onVisibleMonthChange={vi.fn()}
+      {...calendarActions()}
+      actionsDisabled
+      actionsPending
+      today={new Date(2026, 8, 11, 12)}
+      timeZone="UTC"
+    />,
+  );
+  const trigger = screen.getByRole('button', {
+    name: `Actions for ${clips[0]!.title}`,
+  });
+  expect(trigger.hasAttribute('data-pending')).toBe(true);
+  expect(trigger).toHaveProperty('disabled', true);
+  fireEvent.click(trigger);
+  expect(screen.queryByRole('menu')).toBeNull();
+});
+
 test('places a merged group by its own creation date and shows it once', () => {
   const groupItem: LibraryItem = {
     kind: 'group',

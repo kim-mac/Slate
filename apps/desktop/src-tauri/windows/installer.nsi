@@ -1,10 +1,11 @@
-; Slate custom template baseline: Tauri CLI 2.11.4
-; Upstream: https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi
+; Slate custom template baseline: Tauri CLI 2.12.2
+; Upstream: https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.12.2/crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi
 ; This project owns a full template because Tauri's Finish-page Desktop shortcut
 ; action runs after the supported post-install hook. Changes are intentionally
 ; limited to Desktop-shortcut branding/lifecycle (marked SLATE DESKTOP below)
 ; and public display naming (marked SLATE DISPLAY below). PRODUCTNAME remains
 ; the compatibility-sensitive technical identity for paths and registry keys.
+; Upstream unattended downgrade protection runs in .onInit before installer actions.
 ; This template MUST be diff-reviewed against upstream whenever Tauri CLI/bundler is upgraded.
 Unicode true
 ManifestDPIAware true
@@ -29,6 +30,7 @@ ManifestDPIAwareness PerMonitorV2
 !include FileFunc.nsh
 !include x64.nsh
 !include WordFunc.nsh
+!include "Win\RestartManager.nsh"
 !include "utils.nsh"
 !include "FileAssociation.nsh"
 !include "Win\COM.nsh"
@@ -85,6 +87,23 @@ Var SlateDesktopPreflightTarget
 Var SlateDesktopPreviousInstallDir
 Var SlateDesktopPreviousMainBinaryName
 Var SlateDesktopShortcutBlocked
+
+; The only source is the correctly targeted native host already in binaries.
+; NSIS preprocessing compares the rendered filename; no Handlebars eq helper.
+!macro SlateEmbedMaintenanceHost
+  {{#each binaries}}
+  !if "{{this}}" == "ai-clip-memory-native-host.exe"
+    File /oname=slate-maintenance-host.exe "{{no-escape @key}}"
+    !define /ifndef SLATE_MAINTENANCE_HOST_EMBEDDED
+  !endif
+  {{/each}}
+  !ifndef SLATE_MAINTENANCE_HOST_EMBEDDED
+    !error "Slate maintenance requires the bundled native host"
+  !endif
+!macroend
+; installer_hooks is an absolute path supplied by Tauri for our fixed hook file.
+!searchreplace SLATE_MAINTENANCE_INCLUDE "{{installer_hooks}}" "installer-hooks.nsh" "maintenance-gate.nsh"
+!include "${SLATE_MAINTENANCE_INCLUDE}"
 
 Name "${PUBLICNAME}"
 BrandingText "${COPYRIGHT}"
@@ -235,18 +254,18 @@ Function PageReinstall
   ${If} $R0 = 0
     StrCpy $R1 "$(alreadyInstalledLong)"
     StrCpy $R2 "$(addOrReinstall)"
-    StrCpy $R3 "$(uninstallApp)"
+    StrCpy $R3 "$(cancelInstallation)"
     !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$(chooseMaintenanceOption)"
   ; Upgrading
   ${ElseIf} $R0 = 1
-    StrCpy $R1 "$(olderOrUnknownVersionInstalled)"
-    StrCpy $R2 "$(uninstallBeforeInstalling)"
-    StrCpy $R3 "$(dontUninstall)"
+    StrCpy $R1 "$(inPlaceUpdateDescription)"
+    StrCpy $R2 "$(inPlaceUpdate)"
+    StrCpy $R3 "$(cancelInstallation)"
     !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$(choowHowToInstall)"
   ; Downgrading
   ${ElseIf} $R0 = -1
     StrCpy $R1 "$(newerVersionInstalled)"
-    StrCpy $R2 "$(uninstallBeforeInstalling)"
+    StrCpy $R2 "$(cancelInstallation)"
     !if "${ALLOWDOWNGRADES}" == "true"
       StrCpy $R3 "$(dontUninstall)"
     !else
@@ -258,7 +277,7 @@ Function PageReinstall
   ${EndIf}
   ; Skip showing the page if passive
   ;
-  ; Note that we don't call this earlier at the begining
+  ; Note that we don't call this earlier at the beginning
   ; of this function because we need to populate some variables
   ; related to current installed version if detected and whether
   ; we are downgrading or not.
@@ -303,16 +322,18 @@ Function PageReinstallUpdateSelection
   ${EndIf}
 FunctionEnd
 Function PageLeaveReinstall
-  ${NSD_GetState} $R2 $R1
-
   ; If migrating from Wix, always uninstall
   ${If} $WixMode = 1
     Goto reinst_uninstall
   ${EndIf}
-  ; In update mode, always proceeds without uninstalling
+  ; No radio HWNDs exist in unattended modes. Downgrades were rejected in
+  ; .onInit; supported unattended repairs/updates always preserve app data.
   ${If} $UpdateMode = 1
+  ${OrIf} $PassiveMode = 1
+  ${OrIf} ${Silent}
     Goto reinst_done
   ${EndIf}
+  ${NSD_GetState} $R2 $R1
   ; $R0 holds whether same(0)/upgrading(1)/downgrading(-1) version
   ; $R1 holds the radio buttons state:
   ;   1 => first choice was selected
@@ -320,56 +341,37 @@ Function PageLeaveReinstall
   ${If} $R0 = 0 ; Same version, proceed
     ${If} $R1 = 1              ; User chose to add/reinstall
       Goto reinst_done
-    ${Else}                    ; User chose to uninstall
-      Goto reinst_uninstall
+    ${Else}                    ; User chose to cancel
+      Call SlateReleaseMaintenance
+      SetErrorLevel 1
+      Quit
     ${EndIf}
   ${ElseIf} $R0 = 1 ; Upgrading
-    ${If} $R1 = 1              ; User chose to uninstall
-      Goto reinst_uninstall
-    ${Else}
-      Goto reinst_done         ; User chose NOT to uninstall
+    ${If} $R1 = 1              ; User chose the supported in-place update
+      Goto reinst_done
+    ${Else}                    ; User chose to cancel
+      Call SlateReleaseMaintenance
+      SetErrorLevel 1
+      Quit
     ${EndIf}
   ${ElseIf} $R0 = -1 ; Downgrading
-    ${If} $R1 = 1              ; User chose to uninstall
-      Goto reinst_uninstall
+    ${If} $R1 = 1              ; User chose to cancel
+      Call SlateReleaseMaintenance
+      SetErrorLevel 1
+      Quit
     ${Else}
       Goto reinst_done         ; User chose NOT to uninstall
     ${EndIf}
   ${EndIf}
   reinst_uninstall:
-    HideWindow
-    ClearErrors
-    ${If} $WixMode = 1
-      ReadRegStr $R1 HKLM "$R6" "UninstallString"
-      ExecWait '$R1' $0
-    ${Else}
-      ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
-      ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
-      ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
-      ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
-      StrCpy $R1 "$R1 _?=$4" ; append uninstall directory
-      ExecWait '$R1' $0
+    ; Never nest an uninstaller while holding this independent barrier. Legacy
+    ; uninstallers also lack the gate and may forcibly close the application.
+    SetErrorLevel 1
+    ${IfNot} ${Silent}
+    ${AndIf} $PassiveMode != 1
+      MessageBox MB_OK|MB_ICONSTOP "Uninstall-before-reinstall is unavailable. Close Slate and Chromium browsers and follow the manual library migration procedure, or choose an in-place update."
     ${EndIf}
-
-    BringToFront
-    ${IfThen} ${Errors} ${|} StrCpy $0 2 ${|} ; ExecWait failed, set fake exit code
-
-    ${If} $0 <> 0
-    ${OrIf} ${FileExists} "$INSTDIR\${MAINBINARYNAME}.exe"
-      ; User cancelled wix uninstaller? return to select un/reinstall page
-      ${If} $WixMode = 1
-      ${AndIf} $0 = 1602
-        Abort
-      ${EndIf}
-
-      ; User cancelled NSIS uninstaller? return to select un/reinstall page
-      ${If} $0 = 1
-        Abort
-      ${EndIf}
-      ; Other erros? show generic error message and return to select un/reinstall page
-      MessageBox MB_ICONEXCLAMATION "$(unableToUninstall)"
-      Abort
-    ${EndIf}
+    Abort "Uninstall-before-reinstall is unavailable; use the manual migration procedure or an in-place update."
   reinst_done:
 FunctionEnd
 
@@ -403,6 +405,14 @@ Var AppStartMenuFolder
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
 !insertmacro MUI_PAGE_FINISH
 Function RunMainBinary
+  ; MUI2 invokes RUN before SHOWREADME. Finish the selected shortcut action
+  ; while the barrier is still held, then consume its pending checkbox action.
+  SendMessage $mui.FinishPage.ShowReadme ${BM_GETCHECK} 0 0 $R0
+  ${If} $R0 = ${BST_CHECKED}
+    Call CreateOrUpdateDesktopShortcut
+    SendMessage $mui.FinishPage.ShowReadme ${BM_SETCHECK} ${BST_UNCHECKED} 0
+  ${EndIf}
+  Call SlateReleaseMaintenance
   nsis_tauri_utils::RunAsUser "$INSTDIR\${MAINBINARYNAME}.exe" ""
 FunctionEnd
 ; Uninstaller Pages
@@ -473,6 +483,8 @@ Function .onInit
     StrCpy $UpdateMode 1
   ${EndIf}
 
+  Call SlateAcquireMaintenance
+
   !if "${DISPLAYLANGUAGESELECTOR}" == "true"
     !insertmacro MUI_LANGDLL_DISPLAY
   !endif
@@ -502,6 +514,33 @@ Function .onInit
   !if "${INSTALLMODE}" == "both"
     !insertmacro MULTIUSER_INIT
   !endif
+
+  ; Abort downgrades if they are disabled, in the modes that skip the reinstall page choice:
+  ; silent, passive and update
+  !if "${ALLOWDOWNGRADES}" == "false"
+  ${If} ${Silent}
+  ${OrIf} $PassiveMode = 1
+  ${OrIf} $UpdateMode = 1
+    ReadRegStr $R0 SHCTX "${UNINSTKEY}" "DisplayVersion"
+    nsis_tauri_utils::SemverCompare "${VERSION}" $R0
+    Pop $R0
+    ; If downgrading
+    ${If} $R0 = -1
+      ${If} ${Silent}
+        System::Call 'kernel32::AttachConsole(i -1)i.r0'
+        ${If} $0 <> 0
+          System::Call 'kernel32::GetStdHandle(i -11)i.r0'
+          System::call 'kernel32::SetConsoleTextAttribute(i r0, i 0x0004)' ; set red color
+          FileWrite $0 "$(silentDowngrades)"
+        ${EndIf}
+      ${Else}
+        MessageBox MB_ICONSTOP "$(silentDowngrades)"
+      ${EndIf}
+      Abort
+    ${EndIf}
+  ${EndIf}
+  !endif
+
   ; SLATE DESKTOP: this is before the reinstall page and all install sections.
   ; Remember the resolved existing/default target in case the directory page
   ; later changes $INSTDIR.
@@ -511,6 +550,7 @@ Function .onInit
   StrCpy $SlateDesktopPreviousMainBinaryName $OldMainBinaryName
   StrCpy $SlateDesktopShortcutBlocked 0
   Call PreflightDesktopShortcutCollision
+  Call SlateWaitForProcesses
 FunctionEnd
 
 ; SLATE DESKTOP: reject a conflicting public shortcut before an upgrade can
@@ -591,24 +631,6 @@ Function PreflightDesktopShortcutCollision
   Call RejectDesktopShortcutCollision
 FunctionEnd
 
-Section EarlyChecks
-  ; Abort silent installer if downgrades is disabled
-  !if "${ALLOWDOWNGRADES}" == "false"
-  ${If} ${Silent}
-    ; If downgrading
-    ${If} $R0 = -1
-      System::Call 'kernel32::AttachConsole(i -1)i.r0'
-      ${If} $0 <> 0
-        System::Call 'kernel32::GetStdHandle(i -11)i.r0'
-        System::call 'kernel32::SetConsoleTextAttribute(i r0, i 0x0004)' ; set red color
-        FileWrite $0 "$(silentDowngrades)"
-      ${EndIf}
-      Abort
-    ${EndIf}
-  ${EndIf}
-  !endif
-
-SectionEnd
 Section WebView2
   ; Check if Webview2 is already installed and skip this section
   ${If} ${RunningX64}
@@ -697,13 +719,13 @@ Section WebView2
   ${EndIf}
 SectionEnd
 Section Install
+  Call SlateWaitForProcesses
   SetOutPath $INSTDIR
 
   !ifmacrodef NSIS_HOOK_PREINSTALL
     !insertmacro NSIS_HOOK_PREINSTALL
   !endif
 
-  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PUBLICNAME}"
 
   ; Copy main executable
   File "${MAINBINARYSRCPATH}"
@@ -797,6 +819,10 @@ Section Install
   ${EndIf}
 SectionEnd
 Function .onInstSuccess
+  ${If} $PassiveMode = 1
+  ${OrIf} ${Silent}
+    Call SlateReleaseMaintenance
+  ${EndIf}
   ; Check for `/R` flag only in silent and passive installers because
   ; GUI installer has a toggle for the user to (re)start the app
   ${If} $PassiveMode = 1
@@ -810,6 +836,16 @@ Function .onInstSuccess
 FunctionEnd
 
 Function un.onInit
+  ${GetOptions} $CMDLINE "/P" $PassiveMode
+  ${IfNot} ${Errors}
+    StrCpy $PassiveMode 1
+  ${EndIf}
+  ; Know unattended updater mode before any recovery decision can show UI.
+  ${GetOptions} $CMDLINE "/UPDATE" $UpdateMode
+  ${IfNot} ${Errors}
+    StrCpy $UpdateMode 1
+  ${EndIf}
+  Call un.SlateAcquireMaintenance
   !insertmacro SetContext
   !if "${INSTALLMODE}" == "both"
     !insertmacro MULTIUSER_UNINIT
@@ -830,10 +866,11 @@ FunctionEnd
 
 Section Uninstall
 
+  Call un.SlateWaitForProcesses
+
   !ifmacrodef NSIS_HOOK_PREUNINSTALL
     !insertmacro NSIS_HOOK_PREUNINSTALL
   !endif
-  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PUBLICNAME}"
 
   ; Delete the app directory and its content from disk
   ; Copy main executable

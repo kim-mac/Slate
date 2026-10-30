@@ -162,6 +162,9 @@ fn read_validated_autostart_state(
 }
 
 pub fn get_autostart_enabled(app: &tauri::AppHandle) -> Result<bool, &'static str> {
+    if cfg!(feature = "ux-dev") {
+        return Err("Autostart is disabled in UX development mode.");
+    }
     let plugin_enabled = app
         .autolaunch()
         .is_enabled()
@@ -174,6 +177,9 @@ pub fn get_autostart_enabled(app: &tauri::AppHandle) -> Result<bool, &'static st
 }
 
 pub fn set_autostart_enabled(app: &tauri::AppHandle, enabled: bool) -> Result<bool, &'static str> {
+    if cfg!(feature = "ux-dev") {
+        return Err("Autostart is disabled in UX development mode.");
+    }
     let manager = app.autolaunch();
     let current = manager
         .is_enabled()
@@ -199,8 +205,15 @@ pub fn set_autostart_enabled(app: &tauri::AppHandle, enabled: bool) -> Result<bo
 }
 
 pub fn initialize_launcher(app: &tauri::AppHandle) {
-    let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("launcher.html".into()))
-        .title("Search clips")
+    let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("launcher.html".into()));
+    #[cfg(feature = "ux-dev")]
+    let builder = builder.data_directory(app.state::<crate::ux_dev::Profile>().webview.clone());
+    let window = builder
+        .title(if cfg!(feature = "ux-dev") {
+            "Search clips — Slate UX Development"
+        } else {
+            "Search clips"
+        })
         .inner_size(640.0, 420.0)
         .decorations(false)
         .resizable(false)
@@ -212,6 +225,10 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
         .build();
     let launcher_window_available = match window {
         Ok(window) => {
+            crate::installation_safety::windows::observe(
+                &window,
+                &app.state::<std::sync::Arc<crate::installation_safety::SafetyCoordinator>>(),
+            );
             let handle = app.clone();
             window.on_window_event(move |event| match event {
                 WindowEvent::CloseRequested { api, .. } => {
@@ -222,7 +239,12 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
             });
             true
         }
-        Err(_) => false,
+        Err(_) => {
+            let _ = app
+                .state::<std::sync::Arc<crate::installation_safety::SafetyCoordinator>>()
+                .launcher_creation_failed();
+            false
+        }
     };
 
     let launcher_binding = launcher_shortcut();
@@ -231,7 +253,7 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
         .with_handler(move |app, received, event| {
             if received == &launcher_binding {
                 launcher::shortcut_event(app, event.state() == ShortcutState::Pressed);
-            } else if received == &capture_binding {
+            } else if !cfg!(feature = "ux-dev") && received == &capture_binding {
                 desktop_capture::shortcut_event(app, event.state() == ShortcutState::Pressed);
             }
         })
@@ -243,7 +265,8 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
 
     let launcher_registered =
         launcher_window_available && app.global_shortcut().register(launcher_shortcut()).is_ok();
-    let capture_registered = app.global_shortcut().register(capture_shortcut()).is_ok();
+    let capture_registered =
+        cfg!(feature = "ux-dev") || app.global_shortcut().register(capture_shortcut()).is_ok();
     launcher::set_status(
         app,
         if launcher_registered {
@@ -263,6 +286,12 @@ pub fn initialize_launcher(app: &tauri::AppHandle) {
 }
 
 fn launcher_shortcut() -> Shortcut {
+    #[cfg(feature = "ux-dev")]
+    return Shortcut::new(
+        Some(Modifiers::CONTROL | Modifiers::ALT | Modifiers::SHIFT),
+        Code::Space,
+    );
+    #[cfg(not(feature = "ux-dev"))]
     Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space)
 }
 

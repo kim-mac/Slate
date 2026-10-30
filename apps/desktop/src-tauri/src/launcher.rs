@@ -24,14 +24,22 @@ impl LauncherStatus {
     pub fn available() -> Self {
         Self {
             available: true,
-            shortcut: "Ctrl+Shift+Space",
+            shortcut: if cfg!(feature = "ux-dev") {
+                "Ctrl+Alt+Shift+Space"
+            } else {
+                "Ctrl+Shift+Space"
+            },
             error_code: None,
         }
     }
     pub fn unavailable(code: &'static str) -> Self {
         Self {
             available: false,
-            shortcut: "Ctrl+Shift+Space",
+            shortcut: if cfg!(feature = "ux-dev") {
+                "Ctrl+Alt+Shift+Space"
+            } else {
+                "Ctrl+Shift+Space"
+            },
             error_code: Some(code),
         }
     }
@@ -479,7 +487,7 @@ mod tests {
         let status = serde_json::to_value(policy.status()).unwrap();
         assert_eq!(
             status,
-            serde_json::json!({"available":false,"shortcut":"Ctrl+Shift+Space","errorCode":"shortcut_unavailable"})
+            serde_json::json!({"available":false,"shortcut":if cfg!(feature = "ux-dev") { "Ctrl+Alt+Shift+Space" } else { "Ctrl+Shift+Space" },"errorCode":"shortcut_unavailable"})
         );
     }
 

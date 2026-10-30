@@ -24,6 +24,7 @@ interface MemoryCalendarProps extends Omit<
   'onDeleteItem' | 'onSetItemPinned'
 > {
   actionsDisabled?: boolean;
+  actionsPending?: boolean;
   clips: Array<LibraryItem | Clip>;
   headerControl?: ReactNode;
   visibleMonth: CalendarMonth;
@@ -42,6 +43,7 @@ interface MemoryCalendarProps extends Omit<
 
 export function MemoryCalendar({
   actionsDisabled = false,
+  actionsPending = false,
   clips,
   headerControl,
   onActivateClip,
@@ -252,6 +254,7 @@ export function MemoryCalendar({
                         key={id}
                         clip={clip}
                         disabled={actionsDisabled}
+                        pending={actionsPending}
                         primaryId={calendarClipElementId(id)}
                         selectionMode={selectionMode}
                         selected={selectedClipIds?.has(id) ?? false}
@@ -296,6 +299,7 @@ export function MemoryCalendar({
           clips={activeDayClips}
           dateLabel={fullDateFormatter.format(activeDay.date)}
           disabled={actionsDisabled}
+          pending={actionsPending}
           focusOrigin={() => dayFocusOrigin(activeDay.key)}
           onClose={closeActiveDay}
           selectionMode={selectionMode}

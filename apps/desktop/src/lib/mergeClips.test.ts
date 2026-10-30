@@ -5,10 +5,15 @@ import {
   libraryItemRef,
   reconcileSelectedIds,
   selectedItemsInLibraryOrder,
+  selectedItemsInSelectionOrder,
 } from './mergeClips';
 import {
   matchesLibraryItemContentType,
   matchesLibraryItemSearch,
+  findLibraryClip,
+  libraryItemContainingClip,
+  replaceLibraryClip,
+  removeLibraryClip,
 } from './libraryItems';
 
 const clip = (id: string, content: string, createdAt: string): Clip => ({
@@ -42,6 +47,52 @@ const group: LibraryItem = {
 };
 
 describe('Persistent Merge selection', () => {
+  test('manual merge retains click order across filtering and deselection', () => {
+    expect(
+      selectedItemsInSelectionOrder(
+        [item(older), item(tiedB), item(tiedA)],
+        new Set(['older', 'missing', 'b', 'a']),
+      ).map(libraryItemRef),
+    ).toEqual([
+      { kind: 'clip', id: 'older' },
+      { kind: 'clip', id: 'b' },
+      { kind: 'clip', id: 'a' },
+    ]);
+  });
+
+  test('member lookup and replacement preserve the containing group and other members', () => {
+    const updated = {
+      ...older,
+      content: 'Updated member content',
+      isPinned: true,
+    };
+    expect(findLibraryClip([group], older.id)).toEqual(older);
+    expect(libraryItemContainingClip([group], older.id)).toEqual(group);
+    expect(replaceLibraryClip([group], updated)).toEqual([
+      {
+        ...group,
+        group: { ...group.group, members: [tiedA, updated] },
+      },
+    ]);
+    expect(libraryItemContainingClip([group], 'missing')).toBeUndefined();
+  });
+
+  test('committed deletion removes members and dissolves groups without losing survivors', () => {
+    expect(removeLibraryClip([group, item(tiedB)], older.id)).toEqual([
+      item(tiedA),
+      item(tiedB),
+    ]);
+    const larger = {
+      ...group,
+      group: { ...group.group, members: [tiedA, older, tiedB] },
+    };
+    expect(removeLibraryClip([larger], older.id)).toEqual([
+      { ...larger, group: { ...larger.group, members: [tiedA, tiedB] } },
+    ]);
+    expect(removeLibraryClip([group, item(tiedB)], tiedB.id)).toEqual([group]);
+    expect(removeLibraryClip([group], 'missing')).toEqual([group]);
+  });
+
   test('orders unique selected IDs newest first with the existing ID tie-breaker', () => {
     expect(
       selectedItemsInLibraryOrder(

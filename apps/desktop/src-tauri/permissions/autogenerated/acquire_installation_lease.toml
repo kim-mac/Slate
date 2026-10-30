@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-acquire-installation-lease"
+description = "Enables the acquire_installation_lease command without any pre-configured scope."
+commands.allow = ["acquire_installation_lease"]
+
+[[permission]]
+identifier = "deny-acquire-installation-lease"
+description = "Denies the acquire_installation_lease command without any pre-configured scope."
+commands.deny = ["acquire_installation_lease"]

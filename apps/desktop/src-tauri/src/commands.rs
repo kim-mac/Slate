@@ -1,4 +1,6 @@
-use serde::Serialize;
+use crate::installation_safety::SafetyCoordinator;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
@@ -14,8 +16,70 @@ use crate::storage::{StorageBootstrapError, StorageState};
 const MAX_CONTENT_BYTES: usize = 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 16 * 1024;
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TitleEdit {
+    // A missing field must not silently acquire the meaning of expected NULL.
+    #[serde(deserialize_with = "deserialize_nullable_title")]
+    expected_title: Option<String>,
+}
+
+fn deserialize_nullable_title<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    Option::<String>::deserialize(deserializer)
+}
+
+fn validate_title(title: Option<String>, required: bool) -> Result<Option<String>, CommandError> {
+    if title
+        .as_ref()
+        .is_some_and(|title| title.len() > MAX_METADATA_BYTES)
+    {
+        return Err(CommandError::new(
+            "title_too_large",
+            "Title must be 16 KiB or less in UTF-8.",
+        ));
+    }
+    if title
+        .as_ref()
+        .is_some_and(|title| title.contains(['\r', '\n']))
+    {
+        return Err(CommandError::new(
+            "invalid_title",
+            "Title must be a single line.",
+        ));
+    }
+    let normalized = normalize_optional(title);
+    if required && normalized.is_none() {
+        return Err(CommandError::new(
+            "invalid_title",
+            "Group title is required.",
+        ));
+    }
+    Ok(normalized)
+}
+
+fn validate_edit_mode(content_only: bool, title_only: bool) -> Result<(), CommandError> {
+    if content_only && title_only {
+        return Err(CommandError::new(
+            "invalid_edit_mode",
+            "Choose one clip field to edit.",
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
-pub async fn get_autostart_enabled(app: AppHandle) -> Result<bool, CommandError> {
+pub async fn get_autostart_enabled(
+    app: AppHandle,
+    safety: State<'_, Arc<SafetyCoordinator>>,
+) -> Result<bool, CommandError> {
+    let _permit = safety.admit().map_err(|_| {
+        CommandError::new(
+            "installation_preparing",
+            "Startup status is temporarily unavailable.",
+        )
+    })?;
     platform::get_autostart_enabled(&app).map_err(|_| {
         CommandError::new(
             "startup_state_unavailable",
@@ -25,7 +89,17 @@ pub async fn get_autostart_enabled(app: AppHandle) -> Result<bool, CommandError>
 }
 
 #[tauri::command]
-pub async fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<bool, CommandError> {
+pub async fn set_autostart_enabled(
+    app: AppHandle,
+    safety: State<'_, Arc<SafetyCoordinator>>,
+    enabled: bool,
+) -> Result<bool, CommandError> {
+    let _permit = safety.admit().map_err(|_| {
+        CommandError::new(
+            "installation_preparing",
+            "Startup changes are temporarily unavailable.",
+        )
+    })?;
     platform::set_autostart_enabled(&app, enabled).map_err(|_| {
         CommandError::new(
             "startup_update_failed",
@@ -47,20 +121,37 @@ impl CommandError {
     }
 }
 
-fn validate_clip_input(mut input: CreateClip) -> Result<CreateClip, CommandError> {
-    if input.content.trim().is_empty() {
+fn validate_clip_content(content: &str) -> Result<(), CommandError> {
+    if content.trim().is_empty() {
         return Err(CommandError::new(
             "invalid_content",
             "Clip content is required.",
         ));
     }
 
-    if input.content.len() > MAX_CONTENT_BYTES {
+    if content.len() > MAX_CONTENT_BYTES {
         return Err(CommandError::new(
             "content_too_large",
             "Clip content must be 1 MiB or less in UTF-8.",
         ));
     }
+    Ok(())
+}
+
+fn validate_update_input(
+    input: CreateClip,
+    content_only: bool,
+) -> Result<CreateClip, CommandError> {
+    if content_only {
+        validate_clip_content(&input.content)?;
+        Ok(input)
+    } else {
+        validate_clip_input(input)
+    }
+}
+
+fn validate_clip_input(mut input: CreateClip) -> Result<CreateClip, CommandError> {
+    validate_clip_content(&input.content)?;
     if [
         input.title.as_ref(),
         input.source_app.as_ref(),
@@ -331,14 +422,31 @@ pub fn delete_group_member(
 pub fn delete_group(
     storage: State<'_, StorageState>,
     group_id: String,
+    expected_member_ids: Vec<String>,
 ) -> Result<(), CommandError> {
-    validate_clip_id(&group_id)?;
+    delete_group_from_storage(&storage, &group_id, &expected_member_ids)
+}
+
+// The command and its tests share this complete delegation, including normal
+// storage admission, input validation and the transactional membership guard.
+fn delete_group_from_storage(
+    storage: &StorageState,
+    group_id: &str,
+    expected_member_ids: &[String],
+) -> Result<(), CommandError> {
+    validate_clip_id(group_id)?;
+    for id in expected_member_ids {
+        validate_clip_id(id)?;
+    }
     match storage
-        .with_service(|service| service.delete_group(&group_id))
-        .map_err(|_| group_operation_error())?
+        .with_service(|service| service.delete_group(group_id, expected_member_ids))
+        .map_err(bootstrap_error)?
     {
         true => Ok(()),
-        false => Err(not_found_error()),
+        false => Err(CommandError::new(
+            "group_changed",
+            "This group changed. Review its clips before deleting.",
+        )),
     }
 }
 
@@ -353,6 +461,26 @@ pub fn set_group_pinned(
         .with_service(|service| service.set_group_pinned(&group_id, is_pinned))
         .map_err(bootstrap_error)?
         .ok_or_else(not_found_error)
+}
+
+#[tauri::command]
+pub fn rename_group(
+    storage: State<'_, StorageState>,
+    group_id: String,
+    title: String,
+    expected_state: String,
+) -> Result<ClipGroup, CommandError> {
+    validate_clip_id(&group_id)?;
+    let title = validate_title(Some(title), true)?.expect("validated required title");
+    storage
+        .with_service(|service| service.rename_group_if_current(&group_id, &title, &expected_state))
+        .map_err(bootstrap_error)?
+        .ok_or_else(|| {
+            CommandError::new(
+                "group_changed",
+                "This group changed or was deleted. Refresh the library and try again.",
+            )
+        })
 }
 
 #[tauri::command]
@@ -371,9 +499,37 @@ pub fn update_clip(
     storage: State<'_, StorageState>,
     id: String,
     input: CreateClip,
+    expected_content: Option<String>,
+    title_edit: Option<TitleEdit>,
 ) -> Result<Clip, CommandError> {
     validate_clip_id(&id)?;
-    let input = validate_clip_input(input)?;
+    validate_edit_mode(expected_content.is_some(), title_edit.is_some())?;
+    if let Some(title_edit) = title_edit {
+        let title = validate_title(input.title, false)?;
+        return storage
+            .with_service(|service| {
+                service.update_title(&id, title_edit.expected_title.as_deref(), title.as_deref())
+            })
+            .map_err(bootstrap_error)?
+            .ok_or_else(|| {
+                CommandError::new(
+                    "clip_changed",
+                    "This clip changed or was deleted. Refresh the library and try again.",
+                )
+            });
+    }
+    let input = validate_update_input(input, expected_content.is_some())?;
+    if let Some(expected_content) = expected_content {
+        return storage
+            .with_service(|service| service.update_content(&id, &expected_content, &input.content))
+            .map_err(bootstrap_error)?
+            .ok_or_else(|| {
+                CommandError::new(
+                    "clip_changed",
+                    "This clip changed or was deleted. Refresh the library and try again.",
+                )
+            });
+    }
     let update = UpdateClip {
         content: input.content,
         content_type: input.content_type,
@@ -424,16 +580,62 @@ pub fn copy_clip_content(
     app: AppHandle,
     storage: State<'_, StorageState>,
     id: String,
+    member_ids: Option<Vec<String>>,
 ) -> Result<(), CommandError> {
     validate_clip_id(&id)?;
-    let content = storage
-        .with_service(|service| service.get(&id))
-        .map_err(bootstrap_error)?
-        .ok_or_else(not_found_error)?
-        .content;
+    let permit = storage.admit_operation().map_err(bootstrap_error)?;
+    let content = if let Some(member_ids) = member_ids {
+        let group = storage
+            .with_admitted_service(permit.as_ref(), |service| service.get_group(&id))
+            .map_err(bootstrap_error)?
+            .ok_or_else(not_found_error)?;
+        group_content_for_copy(&group, &member_ids)?
+    } else {
+        storage
+            .with_admitted_service(permit.as_ref(), |service| service.get(&id))
+            .map_err(bootstrap_error)?
+            .ok_or_else(not_found_error)?
+            .content
+    };
     app.clipboard()
         .write_text(content)
         .map_err(|_| CommandError::new("clipboard_unavailable", "Could not copy clip content."))
+}
+
+fn group_content_for_copy(
+    group: &ClipGroup,
+    displayed_ids: &[String],
+) -> Result<String, CommandError> {
+    // The UI supplies display order. Validate complete, unique membership
+    // against one read snapshot before using it; never copy a partial/stale set.
+    let mut members: std::collections::HashMap<_, _> = group
+        .members
+        .iter()
+        .map(|clip| (clip.id.as_str(), clip.content.as_str()))
+        .collect();
+    let changed = || {
+        CommandError::new(
+            "group_changed",
+            "This group changed. Refresh it and try copying again.",
+        )
+    };
+    if displayed_ids.len() != members.len() || displayed_ids.is_empty() {
+        return Err(changed());
+    }
+    let mut contents = Vec::with_capacity(displayed_ids.len());
+    for id in displayed_ids {
+        let content = members.remove(id.as_str()).ok_or_else(changed)?;
+        if !content.is_empty() {
+            contents.push(content);
+        }
+    }
+    if contents.is_empty() {
+        return Err(CommandError::new(
+            "empty_content",
+            "This group has no content to copy.",
+        ));
+    }
+    Ok(contents.join("\n\n"))
 }
 
 #[tauri::command]
@@ -463,6 +665,330 @@ mod tests {
     use super::*;
     use crate::clips::{ClipService, CreateClip};
 
+    fn deletion_fixture() -> (tempfile::TempDir, StorageState, ClipGroup) {
+        let directory = tempfile::tempdir().unwrap();
+        let storage = StorageState::new(directory.path().into());
+        let group = storage
+            .with_service(|service| {
+                let mut captured = input("A", "text");
+                captured.source_url = Some("https://example.com/confirmed-group".into());
+                service.create(captured.clone())?;
+                service.create(captured)?;
+                Ok(service
+                    .list_library_items()?
+                    .into_iter()
+                    .find_map(|item| match item {
+                        LibraryItem::Group { group } => Some(group),
+                        _ => None,
+                    })
+                    .unwrap())
+            })
+            .unwrap();
+        (directory, storage, group)
+    }
+
+    #[test]
+    fn group_delete_command_delegation_rejects_stale_scope_then_requires_new_ids() {
+        let (_directory, storage, group) = deletion_fixture();
+        let expected: Vec<_> = group.members.iter().map(|clip| clip.id.clone()).collect();
+        let current = storage
+            .with_service(|service| {
+                let mut captured = input("C", "text");
+                captured.source_url = group.members[0].source_url.clone();
+                service.create(captured)?;
+                service.get_group(&group.id)
+            })
+            .unwrap()
+            .unwrap();
+        let before = storage
+            .with_service(ClipService::list_library_items)
+            .unwrap();
+        for _ in 0..2 {
+            let error = delete_group_from_storage(&storage, &group.id, &expected).unwrap_err();
+            assert_eq!(error.code, "group_changed");
+            assert_eq!(
+                error.message,
+                "This group changed. Review its clips before deleting."
+            );
+            assert_eq!(
+                storage
+                    .with_service(ClipService::list_library_items)
+                    .unwrap(),
+                before
+            );
+        }
+        let current_ids: Vec<_> = current.members.iter().map(|clip| clip.id.clone()).collect();
+        delete_group_from_storage(&storage, &group.id, &current_ids).unwrap();
+        assert!(storage.with_service(ClipService::list).unwrap().is_empty());
+        assert_eq!(
+            delete_group_from_storage(&storage, &group.id, &current_ids)
+                .unwrap_err()
+                .code,
+            "group_changed"
+        );
+    }
+
+    #[test]
+    fn group_delete_command_invalid_ids_do_not_bootstrap_storage() {
+        let directory = tempfile::tempdir().unwrap();
+        let storage = StorageState::new(directory.path().into());
+        let valid = Uuid::new_v4().to_string();
+        assert_eq!(
+            delete_group_from_storage(&storage, "invalid", &[])
+                .unwrap_err()
+                .code,
+            "invalid_clip_id"
+        );
+        assert_eq!(
+            delete_group_from_storage(&storage, &valid, &["invalid".into()])
+                .unwrap_err()
+                .code,
+            "invalid_clip_id"
+        );
+        assert!(!storage.database_path().exists());
+        assert!(!storage.marker_path().exists());
+    }
+
+    #[test]
+    fn group_delete_command_missing_mismatched_empty_or_duplicate_scope_is_safe() {
+        let (_directory, storage, group) = deletion_fixture();
+        let expected: Vec<_> = group.members.iter().map(|clip| clip.id.clone()).collect();
+        let before = storage
+            .with_service(ClipService::list_library_items)
+            .unwrap();
+        for scope in [
+            vec![],
+            vec![expected[0].clone()],
+            vec![expected[0].clone(), expected[0].clone()],
+            vec![expected[0].clone(), Uuid::new_v4().to_string()],
+        ] {
+            assert_eq!(
+                delete_group_from_storage(&storage, &group.id, &scope)
+                    .unwrap_err()
+                    .code,
+                "group_changed"
+            );
+        }
+        assert_eq!(
+            delete_group_from_storage(&storage, &Uuid::new_v4().to_string(), &expected)
+                .unwrap_err()
+                .code,
+            "group_changed"
+        );
+        assert_eq!(
+            storage
+                .with_service(ClipService::list_library_items)
+                .unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn group_delete_command_storage_failure_rolls_back_and_remains_retryable() {
+        let (_directory, storage, group) = deletion_fixture();
+        let expected: Vec<_> = group.members.iter().map(|clip| clip.id.clone()).collect();
+        let before = storage
+            .with_service(ClipService::list_library_items)
+            .unwrap();
+        let connection = rusqlite::Connection::open(storage.database_path()).unwrap();
+        connection.execute_batch("CREATE TRIGGER reject_delete BEFORE DELETE ON clips BEGIN SELECT RAISE(ABORT, 'synthetic'); END;").unwrap();
+        assert_eq!(
+            delete_group_from_storage(&storage, &group.id, &expected)
+                .unwrap_err()
+                .code,
+            "storage_unavailable"
+        );
+        assert_eq!(
+            storage
+                .with_service(ClipService::list_library_items)
+                .unwrap(),
+            before
+        );
+        connection
+            .execute_batch("DROP TRIGGER reject_delete")
+            .unwrap();
+        delete_group_from_storage(&storage, &group.id, &expected).unwrap();
+        assert!(storage.with_service(ClipService::list).unwrap().is_empty());
+    }
+
+    #[test]
+    fn group_delete_command_keeps_maintenance_admission_protection() {
+        let directory = tempfile::tempdir().unwrap();
+        let safety = SafetyCoordinator::new();
+        let storage = StorageState::with_safety(directory.path().into(), safety.clone());
+        let attempt = safety.begin_preparation().unwrap();
+        assert_eq!(
+            delete_group_from_storage(
+                &storage,
+                &Uuid::new_v4().to_string(),
+                &[Uuid::new_v4().to_string(), Uuid::new_v4().to_string()]
+            )
+            .unwrap_err()
+            .code,
+            "storage_unavailable"
+        );
+        assert!(!storage.database_path().exists());
+        drop(attempt);
+    }
+
+    #[test]
+    fn group_copy_uses_displayed_order_exact_saved_text_and_skips_empty_members() {
+        let (_directory, service) = service();
+        let mut first_input = input("  First\r\nline 🦀  ", "text");
+        first_input.source_url = None;
+        let mut second_input = input("Second\n\nline", "code");
+        second_input.source_url = None;
+        let first = service.create(first_input).unwrap();
+        let second = service.create(second_input).unwrap();
+        let group = service
+            .merge(&[
+                LibraryItemRef::clip(first.id.clone()),
+                LibraryItemRef::clip(second.id.clone()),
+            ])
+            .unwrap();
+        let before = service.list_library_items().unwrap();
+        let order = vec![second.id.clone(), first.id.clone()];
+        assert_eq!(
+            group_content_for_copy(&group, &order).unwrap(),
+            "Second\n\nline\n\n  First\r\nline 🦀  "
+        );
+        assert_eq!(service.list_library_items().unwrap(), before);
+
+        service
+            .update_content(&second.id, &second.content, " latest saved ")
+            .unwrap()
+            .unwrap();
+        let mut current = service.get_group(&group.id).unwrap().unwrap();
+        assert_eq!(
+            group_content_for_copy(&current, &order).unwrap(),
+            " latest saved \n\n  First\r\nline 🦀  "
+        );
+        current
+            .members
+            .iter_mut()
+            .find(|member| member.id == first.id)
+            .unwrap()
+            .content
+            .clear();
+        assert_eq!(
+            group_content_for_copy(&current, &order).unwrap(),
+            " latest saved "
+        );
+        current
+            .members
+            .iter_mut()
+            .find(|member| member.id == second.id)
+            .unwrap()
+            .content
+            .clear();
+        assert_eq!(
+            group_content_for_copy(&current, &order).unwrap_err().code,
+            "empty_content"
+        );
+    }
+
+    #[test]
+    fn group_copy_rejects_stale_incomplete_duplicate_or_foreign_displayed_membership() {
+        let (_directory, service) = service();
+        let mut first_input = input("first", "text");
+        first_input.source_url = None;
+        let mut second_input = input("second", "text");
+        second_input.source_url = None;
+        let first = service.create(first_input).unwrap();
+        let second = service.create(second_input).unwrap();
+        let group = service
+            .merge(&[
+                LibraryItemRef::clip(first.id.clone()),
+                LibraryItemRef::clip(second.id.clone()),
+            ])
+            .unwrap();
+        for order in [
+            vec![],
+            vec![first.id.clone()],
+            vec![first.id.clone(), first.id.clone()],
+            vec![first.id.clone(), Uuid::new_v4().to_string()],
+            vec![
+                first.id.clone(),
+                second.id.clone(),
+                Uuid::new_v4().to_string(),
+            ],
+        ] {
+            assert_eq!(
+                group_content_for_copy(&group, &order).unwrap_err().code,
+                "group_changed"
+            );
+        }
+        let order = vec![first.id.clone(), second.id.clone()];
+        service.unmerge_member(&group.id, &second.id).unwrap();
+        assert!(service.get_group(&group.id).unwrap().is_none());
+        // A currently resolved different membership must never be copied partially.
+        let mut changed = group;
+        changed.members.pop();
+        assert_eq!(
+            group_content_for_copy(&changed, &order).unwrap_err().code,
+            "group_changed"
+        );
+    }
+
+    #[test]
+    fn title_edit_requires_an_explicit_nullable_expected_title() {
+        assert!(serde_json::from_str::<TitleEdit>("{}").is_err());
+        assert!(serde_json::from_str::<TitleEdit>(r#"{"expectedTitle":17}"#).is_err());
+        assert!(
+            serde_json::from_str::<TitleEdit>(r#"{"expectedTitle":null}"#)
+                .unwrap()
+                .expected_title
+                .is_none()
+        );
+        assert_eq!(
+            serde_json::from_str::<TitleEdit>(r#"{"expectedTitle":"old"}"#)
+                .unwrap()
+                .expected_title
+                .as_deref(),
+            Some("old")
+        );
+    }
+
+    #[test]
+    fn title_commands_validate_exact_bytes_newlines_and_mutually_exclusive_modes() {
+        assert_eq!(
+            validate_title(Some("  new title  ".into()), false)
+                .unwrap()
+                .as_deref(),
+            Some("new title")
+        );
+        assert_eq!(validate_title(Some("  ".into()), false).unwrap(), None);
+        assert_eq!(validate_title(None, false).unwrap(), None);
+        assert_eq!(
+            validate_title(Some("  ".into()), true).unwrap_err().code,
+            "invalid_title"
+        );
+        let exact = "é".repeat(MAX_METADATA_BYTES / 2);
+        assert_eq!(
+            validate_title(Some(exact.clone()), true).unwrap(),
+            Some(exact.clone())
+        );
+        assert_eq!(
+            validate_title(Some(format!(" {}", exact)), false)
+                .unwrap_err()
+                .code,
+            "title_too_large"
+        );
+        for title in ["line\rbreak", "line\nbreak", "\ntrimmed"] {
+            assert_eq!(
+                validate_title(Some(title.into()), false).unwrap_err().code,
+                "invalid_title"
+            );
+        }
+        assert_eq!(
+            validate_edit_mode(true, true).unwrap_err().code,
+            "invalid_edit_mode"
+        );
+        for (content, title) in [(false, false), (true, false), (false, true)] {
+            assert!(validate_edit_mode(content, title).is_ok());
+        }
+    }
+
     fn service() -> (tempfile::TempDir, ClipService) {
         let directory = tempfile::tempdir().expect("a temporary directory should be created");
         let service = ClipService::open(directory.path().join("clips.sqlite3"))
@@ -489,6 +1015,39 @@ mod tests {
         assert_eq!(validated.content, "  keep this spacing  ");
         assert_eq!(validated.title.as_deref(), Some("Useful title"));
         assert_eq!(validated.source_app, None);
+    }
+
+    #[test]
+    fn inline_update_validates_content_only_and_preserves_irrelevant_input_metadata() {
+        let mut stale = input("  revised content  ", "legacy-kind");
+        stale.source_url = Some("file:///legacy-invalid-source".into());
+        stale.title = Some("x".repeat(MAX_METADATA_BYTES + 1));
+        let validated = validate_update_input(stale.clone(), true).unwrap();
+        assert_eq!(validated, stale);
+        assert!(validate_update_input(stale, false).is_err());
+    }
+
+    #[test]
+    fn inline_update_retains_original_empty_and_utf8_content_limits() {
+        assert_eq!(
+            validate_update_input(input(" \r\n\t ", "text"), true)
+                .unwrap_err()
+                .code,
+            "invalid_content"
+        );
+        let boundary = "😀".repeat(MAX_CONTENT_BYTES / 4);
+        assert_eq!(
+            validate_update_input(input(&boundary, "ignored"), true)
+                .unwrap()
+                .content,
+            boundary
+        );
+        assert_eq!(
+            validate_update_input(input(&"😀".repeat(MAX_CONTENT_BYTES / 4 + 1), "text"), true)
+                .unwrap_err()
+                .code,
+            "content_too_large"
+        );
     }
 
     #[test]
