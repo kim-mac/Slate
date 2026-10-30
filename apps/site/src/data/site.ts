@@ -2,7 +2,7 @@ export const site = {
   name: 'Slate',
   title: 'Slate | Save what matters. Without breaking your flow.',
   description:
-    'Slate is a free, open-source productivity app that saves useful snippets from ChatGPT, Claude, and the web to a private local library. Available for Windows, with macOS coming soon.',
+    'Slate is a free, open-source app that saves snippets from ChatGPT, Claude and the web to a private local library on your PC. Windows now, macOS soon.',
   // Canonical production origin; never derive it from a Pages preview URL.
   url: 'https://tryslate.tech' as string | null,
   repositoryUrl: 'https://github.com/kim-mac/Slate',
