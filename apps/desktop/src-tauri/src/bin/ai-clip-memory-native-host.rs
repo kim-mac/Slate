@@ -1,11 +1,19 @@
+#[cfg(feature = "macos-dev")]
+include!("../macos_dev/inert_host.rs");
+
+#[cfg(not(feature = "macos-dev"))]
 use std::io::{self, Write};
 
+#[cfg(not(feature = "macos-dev"))]
 use ai_clip_memory_desktop_lib::app_paths::APP_IDENTIFIER;
+#[cfg(not(feature = "macos-dev"))]
 use ai_clip_memory_desktop_lib::bridge::native_host::{run_with_storage, write_response};
+#[cfg(not(feature = "macos-dev"))]
 use ai_clip_memory_desktop_lib::bridge::protocol::{BridgeErrorCode, BridgeResponse};
-#[cfg(windows)]
+#[cfg(all(windows, not(feature = "macos-dev")))]
 use ai_clip_memory_desktop_lib::installation_safety::gate::InstallationGate;
 
+#[cfg(not(feature = "macos-dev"))]
 fn main() {
     if cfg!(feature = "ux-dev") {
         // No protocol output, SQLite access or process-gate access in this mode.
@@ -53,6 +61,7 @@ fn main() {
     );
 }
 
+#[cfg(not(feature = "macos-dev"))]
 fn write_storage_failure(writer: &mut impl Write) {
     let _ = write_response(
         writer,

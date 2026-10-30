@@ -106,17 +106,23 @@ fn initialize_tray(app: &tauri::App) -> tauri::Result<()> {
         return Ok(());
     }
 
-    let name = if cfg!(feature = "ux-dev") {
+    let name = if cfg!(feature = "macos-dev") {
+        "Slate macOS Development"
+    } else if cfg!(feature = "ux-dev") {
         "Slate UX Development"
     } else {
         "Slate"
     };
-    let open_label = if cfg!(feature = "ux-dev") {
+    let open_label = if cfg!(feature = "macos-dev") {
+        "Open Slate macOS Development"
+    } else if cfg!(feature = "ux-dev") {
         "Open Slate UX Development"
     } else {
         "Open Slate"
     };
-    let quit_label = if cfg!(feature = "ux-dev") {
+    let quit_label = if cfg!(feature = "macos-dev") {
+        "Quit Slate macOS Development"
+    } else if cfg!(feature = "ux-dev") {
         "Quit Slate UX Development"
     } else {
         "Quit Slate"

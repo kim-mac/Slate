@@ -1,4 +1,14 @@
 fn main() {
+    let macos_dev = std::env::var_os("CARGO_FEATURE_MACOS_DEV").is_some();
+    let macos = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos");
+    if (macos && !macos_dev)
+        || (macos_dev
+            && (!macos
+                || std::env::var("PROFILE").as_deref() != Ok("debug")
+                || std::env::var_os("CARGO_FEATURE_UX_DEV").is_some()))
+    {
+        panic!("M1 requires exclusive macos-dev on macOS with the debug profile");
+    }
     if std::env::var_os("CARGO_FEATURE_UX_DEV").is_some()
         && std::env::var("PROFILE").as_deref() != Ok("debug")
     {

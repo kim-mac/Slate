@@ -1,3 +1,13 @@
+#[cfg(all(target_os = "macos", not(feature = "macos-dev")))]
+compile_error!("macOS requires the explicit macos-dev feature in M1");
+#[cfg(all(
+    feature = "macos-dev",
+    any(not(target_os = "macos"), not(debug_assertions))
+))]
+compile_error!("macos-dev is restricted to macOS debug builds");
+#[cfg(all(feature = "macos-dev", feature = "ux-dev"))]
+compile_error!("macos-dev and ux-dev are mutually exclusive");
+
 pub mod app_paths;
 pub mod background;
 pub mod bridge;
@@ -8,11 +18,14 @@ pub mod desktop_capture;
 mod extension_listing;
 pub mod installation_safety;
 mod launcher;
+#[cfg(all(target_os = "macos", feature = "macos-dev"))]
+mod macos_dev;
 mod platform;
 pub mod storage;
+#[cfg(not(feature = "macos-dev"))]
 #[cfg(not(feature = "ux-dev"))]
 pub mod updater;
-#[cfg(feature = "ux-dev")]
+#[cfg(any(feature = "ux-dev", feature = "macos-dev"))]
 #[path = "ux_dev/updater.rs"]
 pub mod updater;
 #[cfg(feature = "ux-dev")]
@@ -26,6 +39,11 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let context = tauri::generate_context!();
+    #[cfg(all(target_os = "macos", feature = "macos-dev"))]
+    let profile = {
+        macos_dev::validate(context.config()).expect("macOS development configuration rejected");
+        macos_dev::Profile::open().expect("macOS development isolation rejected")
+    };
     #[cfg(feature = "ux-dev")]
     let profile = {
         ux_dev::validate(context.config()).expect("UX development identity/configuration rejected");
@@ -50,8 +68,18 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
             let startup = background::startup_plan(std::env::args());
-            #[cfg(not(feature = "ux-dev"))]
+            #[cfg(not(any(feature = "ux-dev", feature = "macos-dev")))]
             let application_data_directory = app.path().app_data_dir()?;
+            #[cfg(all(target_os = "macos", feature = "macos-dev"))]
+            let application_data_directory = {
+                profile.validate_data()?;
+                if app.path().app_data_dir()? != profile.data {
+                    return Err("macOS application-data path does not match guarded profile".into());
+                }
+                let data = profile.data.clone();
+                app.manage(profile);
+                data
+            };
             #[cfg(feature = "ux-dev")]
             let application_data_directory = {
                 let data = profile.data.clone();
@@ -71,6 +99,10 @@ pub fn run() {
             tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
                 .data_directory(app.state::<ux_dev::Profile>().webview.clone())
                 .build()?;
+            #[cfg(all(target_os = "macos", feature = "macos-dev"))]
+            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
+                .data_store_identifier(macos_dev::policy::STORE_ID)
+                .build()?;
             installation_safety::ipc::initialize(app.handle(), &safety);
             app.manage(launcher::LauncherController::default());
             app.manage(desktop_capture::CaptureController::default());
@@ -81,6 +113,8 @@ pub fn run() {
             }
             #[cfg(feature = "ux-dev")]
             ux_dev::write_receipt(app.handle())?;
+            #[cfg(all(target_os = "macos", feature = "macos-dev"))]
+            macos_dev::write_receipt(app.handle())?;
             Ok(())
         })
         .on_page_load(|webview, payload| {
