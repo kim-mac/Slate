@@ -4,7 +4,7 @@
 
 | Component        | Current public version |
 | ---------------- | ---------------------- |
-| Desktop          | 0.3.1                  |
+| Desktop          | 0.3.2                  |
 | Chrome extension | 0.1.1                  |
 
 Start with the [latest official desktop release](https://github.com/kim-mac/Slate/releases/latest)

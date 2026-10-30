@@ -14,7 +14,7 @@ const supportHtml = read('apps/site/dist/support/index.html');
 const support = normalize(supportHtml.replace(/<[^>]*>/g, ' '));
 
 test('README identifies published components and stable official installation links', () => {
-  assert.match(readme, /Desktop\s*\|\s*0\.3\.1/);
+  assert.match(readme, /Desktop\s*\|\s*0\.3\.2/);
   assert.match(readme, /Chrome extension\s*\|\s*0\.1\.1/);
   assert.match(readme, /https:\/\/tryslate\.tech\/download\/windows\//);
   assert.match(
@@ -39,7 +39,7 @@ test('README describes actual capture scope, desktop dependency and current upda
 });
 
 test('security guidance separates published component versions and two signing mechanisms', () => {
-  assert.match(security, /Desktop\s*\|\s*0\.3\.1/);
+  assert.match(security, /Desktop\s*\|\s*0\.3\.2/);
   assert.match(security, /Chrome extension\s*\|\s*0\.1\.1/);
   assert.match(security, /not Authenticode-signed/);
   assert.match(security, /Tauri updater signatures/);

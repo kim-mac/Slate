@@ -285,7 +285,7 @@ test('public pages use the production apex for canonical and sharing metadata', 
       path: '/',
       title: 'Slate | Save what matters. Without breaking your flow.',
       description:
-        'Save useful information from ChatGPT, Claude, the web, and your desktop directly to your private local library without having to copy and paste.',
+        'Slate is a free, open-source productivity app that saves useful snippets from ChatGPT, Claude, and the web to a private local library. Available for Windows, with macOS coming soon.',
     },
     {
       file: 'privacy/index.html',
@@ -412,7 +412,7 @@ test('site ships only its existing UI scripts with no application tracking or co
     assert.doesNotMatch(html, /astro-island|<iframe|<form/);
     const scripts = [
       ...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g),
-    ];
+    ].filter((script) => !/\btype="application\/ld\+json"/.test(script[1]));
     assert.equal(
       scripts.length,
       path === 'index.html' || path === 'download/windows/index.html' ? 2 : 1,

@@ -4,6 +4,34 @@ import Hero from '../components/Hero.astro';
 import Features from '../components/Features.astro';
 import FinalCTA from '../components/FinalCTA.astro';
 import FAQ from '../components/FAQ.astro';
+import { site, canonicalUrl } from '../data/site';
+import { release, downloadUrl } from '../data/releases';
+
+const application = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: site.name,
+  description: site.description,
+  url: canonicalUrl('/'),
+  applicationCategory: 'ProductivityApplication',
+  operatingSystem: 'Windows 11',
+  processorRequirements: 'x64 or ARM64',
+  softwareVersion: release.version,
+  downloadUrl: [
+    downloadUrl(release.downloads.windowsX64),
+    downloadUrl(release.downloads.windowsARM64),
+  ],
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  license: `${site.repositoryUrl}/blob/main/LICENSE`,
+  image: canonicalUrl('/brand/slate-icon.png'),
+  sameAs: site.repositoryUrl,
+  softwareAddOn: {
+    '@type': 'SoftwareApplication',
+    name: 'Slate Chrome extension',
+    url: downloadUrl(release.downloads.chrome),
+    softwareRequirements: 'Slate Desktop is required for browser capture.',
+  },
+};
 ---
 
 <BaseLayout>
@@ -11,4 +39,9 @@ import FAQ from '../components/FAQ.astro';
   <Features />
   <FinalCTA />
   <FAQ />
+  <script
+    type="application/ld+json"
+    is:inline
+    set:html={JSON.stringify(application).replace(/</g, '\\u003c')}
+  />
 </BaseLayout>

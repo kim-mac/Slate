@@ -120,7 +120,8 @@ test('all launch routes preserve accessible structure, safe links, themes and co
       }
     }
     assert.equal(
-      (html.match(/<script\b/g) ?? []).length,
+      (html.match(/<script\b(?![^>]*\btype="application\/ld\+json")/g) ?? [])
+        .length,
       route === 'index.html' || route === 'download/windows/index.html' ? 2 : 1,
     );
     assert.doesNotMatch(html, /<form|astro-island|<iframe|googletagmanager/);

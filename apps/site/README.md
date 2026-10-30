@@ -1,6 +1,6 @@
 # Slate landing page
 
-An independent static Astro site with a locally prepared Slate Desktop 0.3.1 activation and unchanged Chrome extension 0.1.1. The live homepage/download guide and updater manifest still serve public v0.3.0. These uncommitted activation changes must not be pushed or deployed until the frozen v0.3.1 release assets are published, verified and separately approved for activation.
+An independent static Astro site for Slate. The public Windows desktop release is v0.3.2 for x64 and ARM64, and the published Chrome extension remains v0.1.1. macOS is coming soon. Download destinations and current versions come from `src/data/releases.ts`; website development does not publish a desktop or extension release. Production deployment requires separate approval.
 
 ## Local development
 

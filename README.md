@@ -1,8 +1,8 @@
 # Slate
 
-Useful information gets buried in ChatGPT, Claude, Gemini, other AI conversations,
-and browser tabs. Slate helps you save what matters without breaking your flow,
-then find and reuse it from your own private, local-first library.
+Slate is a free, open-source productivity app that saves useful snippets from
+ChatGPT, Claude, and the web to a private local library. Available for Windows,
+with macOS coming soon.
 
 **Capture → find → reuse.** No Slate account required.
 
@@ -42,7 +42,7 @@ is public.
 
 | Component        | Current public version | Availability                                                                                        |
 | ---------------- | ---------------------- | --------------------------------------------------------------------------------------------------- |
-| Desktop          | 0.3.1                  | Windows 11 x64 (Intel/AMD) and ARM64                                                                |
+| Desktop          | 0.3.2                  | Windows 11 x64 (Intel/AMD) and ARM64                                                                |
 | Chrome extension | 0.1.1                  | [Chrome Web Store](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh) |
 | macOS            | Not released           | Planned                                                                                             |
 
