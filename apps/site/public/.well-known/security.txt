@@ -1,0 +1,4 @@
+Contact: mailto:support@tryslate.tech
+Expires: 2027-10-27T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://tryslate.tech/.well-known/security.txt

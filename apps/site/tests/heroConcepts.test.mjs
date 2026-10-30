@@ -51,7 +51,11 @@ test('hero dot layer reuses the preview pattern with a quiet masked center', () 
 test('concept decorations stay homepage-only without adding runtime scripts', () => {
   const html = homepage();
   assert.match(html, /data-hero-concepts/);
-  assert.equal((html.match(/<script\b/g) ?? []).length, 2);
+  assert.equal(
+    (html.match(/<script\b(?![^>]*\btype="application\/ld\+json")/g) ?? [])
+      .length,
+    2,
+  );
   for (const path of [
     'download/windows/index.html',
     'support/index.html',
