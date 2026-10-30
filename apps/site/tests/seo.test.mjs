@@ -7,7 +7,7 @@ import { release, downloadUrl } from '../src/data/releases.ts';
 const read = (path) =>
   readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const description =
-  'Slate is a free, open-source productivity app that saves useful snippets from ChatGPT, Claude, and the web to a private local library. Available for Windows, with macOS coming soon.';
+  'Slate is a free, open-source app that saves snippets from ChatGPT, Claude and the web to a private local library on your PC. Windows now, macOS soon.';
 const home = () => read('dist/index.html');
 const structuredData = (html) =>
   [
@@ -33,6 +33,22 @@ test('canonical product description is consistent without changing visible hero 
     home(),
     /Save useful information from ChatGPT, Claude, the web, and your desktop/,
   );
+});
+
+test('canonical description fits 160 characters and feeds all generated discovery outputs', () => {
+  const canonical = site.description;
+  assert.ok(
+    canonical.length > 0 && canonical.length <= 160,
+    `Canonical description is ${canonical.length} characters; maximum is 160`,
+  );
+  const metadata = [
+    ...home().matchAll(
+      /<meta\b[^>]*(?:name|property)="(?:description|og:description|twitter:description)"[^>]*content="([^"]*)"/g,
+    ),
+  ].map((match) => match[1]);
+  assert.deepEqual(metadata, [canonical, canonical, canonical]);
+  assert.equal(structuredData(home())[0].description, canonical);
+  assert.equal(read('dist/llms.txt').match(/^> (.+)$/m)?.[1], canonical);
 });
 
 test('homepage describes only the released Windows app and its optional companion', () => {

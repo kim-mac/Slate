@@ -285,7 +285,7 @@ test('public pages use the production apex for canonical and sharing metadata', 
       path: '/',
       title: 'Slate | Save what matters. Without breaking your flow.',
       description:
-        'Slate is a free, open-source productivity app that saves useful snippets from ChatGPT, Claude, and the web to a private local library. Available for Windows, with macOS coming soon.',
+        'Slate is a free, open-source app that saves snippets from ChatGPT, Claude and the web to a private local library on your PC. Windows now, macOS soon.',
     },
     {
       file: 'privacy/index.html',
