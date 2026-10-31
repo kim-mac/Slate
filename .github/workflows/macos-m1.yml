@@ -1,0 +1,148 @@
+name: macOS M1 diagnostic (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Reviewed 40-character commit at codex/macos-m1-development HEAD
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-m1-diagnostic
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  development:
+    if: ${{ github.repository == 'kim-mac/Slate' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' }}
+    name: Development / ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      WORKFLOW_SHA: ${{ github.workflow_sha }}
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_TARGET_DIR: ${{ github.workspace }}/dist/test/macos-m1/cargo-${{ matrix.target }}
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+    steps:
+      - name: Validate requested source commit
+        run: |
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ || ! "$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo '::error::Reviewed full commit SHA required; branch names and expressions are not accepted.'
+            exit 1
+          fi
+          remote=$(git -c credential.helper= ls-remote --exit-code https://github.com/kim-mac/Slate.git refs/heads/codex/macos-m1-development)
+          expected=$(printf '%s\t%s' "$SOURCE_SHA" 'refs/heads/codex/macos-m1-development')
+          if [[ "$remote" != "$expected" ]]; then
+            echo '::error::Reviewed commit must match the dedicated macOS development branch HEAD.'
+            exit 1
+          fi
+      # Official Node 24 action releases, verified on 2026-10-26.
+      - name: Check out source and frozen baseline
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: kim-mac/Slate
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify checked-out source and trusted workflow
+        id: verify-source
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor abd997637dedf0955afa15fe68114eba8154ea56 HEAD
+          test "$(git hash-object .github/workflows/macos-m1.yml)" = "$(git rev-parse "$WORKFLOW_SHA:.github/workflows/macos-m1.yml")"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          git diff --quiet abd997637dedf0955afa15fe68114eba8154ea56 HEAD -- apps/site apps/extension packages/shared pnpm-lock.yaml package.json apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/src/updater apps/desktop/src-tauri/src/installation_safety apps/desktop/src-tauri/migrations apps/desktop/src-tauri/windows scripts/windows
+          mkdir -p dist/test/macos-m1
+          {
+            git rev-parse HEAD 'HEAD^{tree}'
+            sw_vers
+            xcodebuild -version
+            xcrun --sdk macosx --show-sdk-version
+          } 2>&1 | tee "dist/test/macos-m1/provenance-${{ matrix.target }}.log"
+      - name: Install pinned Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22.16.0'
+          package-manager-cache: false
+      - name: Install pinned pnpm and Rust
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.19.0 --activate
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --target '${{ matrix.target }}'
+          rustup default 1.98.0
+          test "$(rustc -vV | sed -n 's/^host: //p')" = '${{ matrix.target }}'
+          test "$(node --version)" = 'v22.16.0'
+          test "$(corepack pnpm --version)" = '11.19.0'
+      - name: Record runner and SDK provenance
+        run: |
+          {
+            rustc -vV
+            cargo --version
+            node --version
+            corepack pnpm --version
+          } 2>&1 | tee -a "dist/test/macos-m1/provenance-${{ matrix.target }}.log"
+      - name: Locate dependency store
+        id: pnpm-store
+        run: echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - name: Cache downloaded dependencies
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: |
+            ${{ steps.pnpm-store.outputs.path }}
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: macos-dev-dependencies-${{ runner.arch }}-node22.16.0-pnpm11.19.0-rust1.98.0-${{ hashFiles('pnpm-lock.yaml', 'apps/desktop/src-tauri/Cargo.lock') }}
+      - name: Install locked dependencies without lifecycle scripts
+        run: corepack pnpm install --frozen-lockfile --filter @ai-clip-memory/desktop --filter @ai-clip-memory/extension --filter ai-clip-memory --ignore-scripts
+      - name: Check configuration, source preservation and profile policy
+        run: |
+          node --test scripts/macos/*.test.mjs
+          node scripts/macos/m1.mjs validate
+          node scripts/macos/m1.mjs rust-policy-tests
+          cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
+      - name: Test frontend and extension
+        run: |
+          corepack pnpm --filter @ai-clip-memory/desktop test
+          corepack pnpm --filter @ai-clip-memory/extension test
+          corepack pnpm --filter @ai-clip-memory/desktop --filter @ai-clip-memory/extension typecheck
+          corepack pnpm exec eslint --config eslint.config.mjs apps/desktop/src apps/extension/src packages/shared/src scripts
+      - name: Run full Rust tests including migrations with debug-only feature
+        run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --target '${{ matrix.target }}' --no-default-features --features macos-dev 2>&1 | tee 'dist/test/macos-m1/rust-tests-${{ matrix.target }}.log'
+      - name: Compile ad-hoc development app bundle
+        run: corepack pnpm --filter @ai-clip-memory/desktop tauri build --debug --features macos-dev --target '${{ matrix.target }}' --bundles app -- --no-default-features --locked 2>&1 | tee 'dist/test/macos-m1/compiler-${{ matrix.target }}.log'
+      - name: Inspect bundle and probe inert host without launching the GUI
+        run: node scripts/macos/m1.mjs inspect --bundle "$CARGO_TARGET_DIR/${{ matrix.target }}/debug/bundle/macos/Slate macOS Development.app" --target '${{ matrix.target }}'
+      # No executable/archive upload in the first diagnostic run.
+      - name: Retain diagnostic evidence
+        if: ${{ always() && !cancelled() && steps.verify-source.outcome == 'success' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: slate-macos-m1-evidence-${{ matrix.target }}
+          path: |
+            dist/test/macos-m1/provenance-${{ matrix.target }}.log
+            dist/test/macos-m1/rust-tests-${{ matrix.target }}.log
+            dist/test/macos-m1/compiler-${{ matrix.target }}.log
+            dist/test/macos-m1/inspection-${{ matrix.target }}.json
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 9
