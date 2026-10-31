@@ -10,11 +10,7 @@
         "width": 800,
         "height": 500,
         "create": false,
-        "visible": false,
-        "dataStoreIdentifier": [
-          83, 108, 97, 116, 101, 77, 49, 68, 101, 118, 83, 116, 111, 114, 101,
-          49
-        ]
+        "visible": false
       }
     ]
   },

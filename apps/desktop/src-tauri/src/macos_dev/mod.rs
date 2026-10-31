@@ -18,6 +18,10 @@ fn denied(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::PermissionDenied, message)
 }
 
+pub fn prepare(config: &mut tauri::Config) -> io::Result<()> {
+    config::prepare_context(config, env!("SLATE_MACOS_DEV_EFFECTIVE_CONFIG"))
+}
+
 pub fn validate(config: &tauri::Config) -> io::Result<()> {
     policy::validate_build(
         std::env::consts::OS,
@@ -284,6 +288,7 @@ mod tests {
             serde_json::from_str(include_str!("../../tauri.macos.conf.json")).unwrap();
         // The overlay inherits the approved version from the base configuration.
         config.version = Some("0.3.1".into());
+        config::prepare(&mut config).unwrap();
         assert!(validate(&config).is_ok());
         config.identifier = "com.aiclipmemory.desktop".into();
         assert!(validate(&config).is_err());

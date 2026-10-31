@@ -62,4 +62,18 @@ fn main() {
         ]),
     ))
     .expect("failed to build application permissions");
+
+    // Context codegen intentionally drops bundle-only metadata. Preserve the
+    // complete effective config for the macOS development guard, using the same
+    // locked parser/merge rules as generate_context!, not a second JSON loader.
+    println!("cargo:rerun-if-env-changed=SLATE_M1_CODEGEN_PROBE");
+    if macos_dev || std::env::var("SLATE_M1_CODEGEN_PROBE").as_deref() == Ok("1") {
+        let (config, _) = tauri_codegen::get_config(std::path::Path::new("tauri.conf.json"))
+            .expect("failed to read effective Tauri configuration");
+        println!(
+            "cargo:rustc-env=SLATE_MACOS_DEV_EFFECTIVE_CONFIG={}",
+            serde_json::to_string(&config)
+                .expect("failed to serialize effective Tauri configuration")
+        );
+    }
 }

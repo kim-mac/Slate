@@ -40,6 +40,13 @@ use tauri::Manager;
 pub fn run() {
     let context = tauri::generate_context!();
     #[cfg(all(target_os = "macos", feature = "macos-dev"))]
+    let context = {
+        let mut context = context;
+        macos_dev::prepare(context.config_mut())
+            .expect("macOS development store configuration rejected");
+        context
+    };
+    #[cfg(all(target_os = "macos", feature = "macos-dev"))]
     let profile = {
         macos_dev::validate(context.config()).expect("macOS development configuration rejected");
         macos_dev::Profile::open().expect("macOS development isolation rejected")

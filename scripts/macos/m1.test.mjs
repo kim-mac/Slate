@@ -164,7 +164,6 @@ const fixture = () => ({
         title: 'Slate macOS Development',
         create: false,
         visible: false,
-        dataStoreIdentifier: store,
       },
     ],
   },
@@ -229,6 +228,12 @@ test('guard rejects identity, store, startup, signing, and packaging drift', asy
     },
     (c) => {
       c.app.windows[0].dataStoreIdentifier = [1];
+    },
+    (c) => {
+      c.app.windows[0].dataStoreIdentifier = store;
+    },
+    (c) => {
+      c.app.windows[0]['data-store-identifier'] = store;
     },
     (c) => {
       c.app.windows.push({ label: 'extra' });

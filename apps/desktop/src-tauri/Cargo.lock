@@ -31,6 +31,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tauri-codegen",
  "tauri-plugin-autostart",
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-global-shortcut",

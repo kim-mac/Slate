@@ -18,12 +18,27 @@ test('macOS startup requires explicit debug feature and validates before constru
     /compile_error!\("macos-dev is restricted to macOS debug builds/,
   );
   assert.match(source, /macos_dev::validate\(context.config\(\)\)/);
+  assert.match(source, /macos_dev::prepare\(context.config_mut\(\)\)/);
+  assert.ok(
+    source.indexOf('macos_dev::prepare(context.config_mut())') <
+      source.indexOf('macos_dev::validate(context.config())'),
+  );
   assert.ok(
     source.indexOf('macos_dev::Profile::open()') <
       source.indexOf('tauri::Builder::default()'),
   );
   assert.match(source, /data_store_identifier\(macos_dev::policy::STORE_ID\)/);
   assert.match(source, /profile.validate_data\(\)/);
+  const guard = read(`${rust}src/macos_dev/mod.rs`);
+  assert.match(guard, /env!\("SLATE_MACOS_DEV_EFFECTIVE_CONFIG"\)/);
+  assert.doesNotMatch(
+    guard,
+    /std::env::(?:var|var_os)\("SLATE_MACOS_DEV_EFFECTIVE_CONFIG"/,
+  );
+  assert.match(
+    read(`${rust}build.rs`),
+    /tauri_codegen::get_config\(std::path::Path::new\("tauri.conf.json"\)\)/,
+  );
 });
 
 test('macOS compiles the inert updater and a separate standalone host entry point', () => {

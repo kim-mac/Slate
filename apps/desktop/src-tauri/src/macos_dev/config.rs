@@ -6,6 +6,32 @@ fn denied(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::PermissionDenied, message)
 }
 
+/// Restore the build-time effective config before applying the typed store.
+/// Tauri's generated context omits bundle-only fields required by our guard.
+pub fn prepare_context(config: &mut tauri::Config, effective: &str) -> io::Result<()> {
+    let mut candidate = serde_json::from_str(effective)?;
+    prepare(&mut candidate)?;
+    *config = candidate;
+    Ok(())
+}
+
+/// Apply the fixed store through Tauri's typed configuration API before any
+/// profile/window access. tauri-utils 2.10.1 emits a Vec for this array-valued
+/// JSON field; keep it out of codegen without allowing a default WebKit store.
+pub fn prepare(config: &mut tauri::Config) -> io::Result<()> {
+    let mut candidate = config.clone();
+    let [window] = candidate.app.windows.as_mut_slice() else {
+        return Err(denied("exactly one guarded development window required"));
+    };
+    if window.data_store_identifier.is_some() {
+        return Err(denied("development store must be assigned by typed policy"));
+    }
+    window.data_store_identifier = Some(policy::STORE_ID);
+    validate(&candidate)?;
+    *config = candidate;
+    Ok(())
+}
+
 pub fn validate(config: &tauri::Config) -> io::Result<()> {
     let updater_disabled = config.plugins.0.get("updater").is_some_and(|updater| {
         updater.get("pubkey").and_then(|v| v.as_str()) == Some("")

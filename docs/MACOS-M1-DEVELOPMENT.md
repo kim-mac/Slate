@@ -22,6 +22,14 @@ M1 is an isolated, debug-only porting profile, not a supported public macOS rele
 
 This isolates supported application paths; it is not an OS sandbox against another malicious process running as the same user. Do not redirect the development directory while the app is running. Profile guards never inspect production SQLite contents.
 
+### Tauri data-store code-generation compatibility
+
+The locked Tauri 2.12.3 / tauri-build, tauri-codegen and tauri-macros 2.7.2 / tauri-utils 2.10.1 stack emits a `Vec<u8>` for the array-valued JSON `dataStoreIdentifier`. The first native diagnostic run failed on both architectures for this reason. The published tauri-utils 2.10.2 generator has the same mismatch, so dependency versions remain unchanged.
+
+The compile-time overlay therefore leaves that field unset. The build script records the complete effective configuration using the same locked `tauri_codegen::get_config` parser/merge rules as the context macro. This also preserves bundle-only metadata which Tauri intentionally omits from the generated runtime context. Immediately after `generate_context!`, macOS development startup restores that configuration and applies the unchanged `policy::STORE_ID` through `Context::config_mut()`, validates a candidate, and only then replaces the context configuration. Any preassigned identifier or unsafe configuration is rejected without mutation. The existing runtime validator still rejects an absent or different store, and the explicit window builder still selects the fixed identifier. Preparation and validation complete before profile access, plugins or windows; no WebView can launch using the default store. The two direct build dependencies (`serde_json` and pinned `tauri-codegen`) were already in the lockfile; no package version changes are required. Windows startup does not select this restoration path.
+
+The `macos_development` integration tests exercise the real context macro and typed preparation on native CI. On Windows the same code-generation boundary can be tested by passing the actual overlay as process-scoped `TAURI_CONFIG` with `SLATE_M1_CODEGEN_PROBE=1` while running that integration-test target. This does not launch the application or access user data. Native compilation, bundle inspection and actual WKWebView persistence still require their separately approved macOS checks.
+
 ## Local checks on Windows
 
 From this worktree root:

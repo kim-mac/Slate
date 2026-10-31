@@ -74,11 +74,12 @@ export function validateConfig(config) {
   assert.match(main.title, /development/i, 'Development window title required');
   assert.equal(main.create, false, 'Window must wait for runtime guard');
   assert.equal(main.visible, false, 'Window must start hidden');
-  assert.deepEqual(
+  assert.equal(
     main.dataStoreIdentifier,
-    store,
-    'Isolated persistent WKWebView store required',
+    undefined,
+    'WKWebView store must be assigned by typed policy before validation',
   );
+  assert.equal(main['data-store-identifier'], undefined);
   assert.equal(
     config.plugins?.updater?.pubkey,
     '',
@@ -205,6 +206,15 @@ export function validateRepository(directory = root) {
       path.join(directory, 'apps/desktop/src-tauri/src/macos_dev/policy.rs'),
     ),
     'Standalone profile policy required',
+  );
+  const policy = read('apps/desktop/src-tauri/src/macos_dev/policy.rs');
+  const storeLiteral = policy.match(
+    /pub const STORE_ID: \[u8; 16\] = \[([\d,\s]+)\];/,
+  );
+  assert.deepEqual(
+    storeLiteral?.[1].match(/\d+/g)?.map(Number),
+    store,
+    'The fixed persistent WKWebView store must not change',
   );
   const history = spawnSync(
     'git',
