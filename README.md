@@ -42,7 +42,7 @@ is public.
 | Component        | Current public version | Availability                                                                                        |
 | ---------------- | ---------------------- | --------------------------------------------------------------------------------------------------- |
 | Desktop          | 0.3.2                  | Windows 11 x64 (Intel/AMD) and ARM64                                                                |
-| Chrome extension | 0.1.1                  | [Chrome Web Store](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh) |
+| Chrome extension | 0.1.2                  | [Chrome Web Store](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh) |
 | macOS            | Not released           | Planned                                                                                             |
 
 **Get started:**
