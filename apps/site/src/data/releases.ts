@@ -4,7 +4,7 @@ export type Destination =
 
 export const release = {
   version: '0.3.2',
-  extensionVersion: '0.1.1',
+  extensionVersion: '0.1.2',
   downloads: {
     windowsX64: {
       state: 'verified',

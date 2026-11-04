@@ -35,9 +35,13 @@ for (const [name, policy] of Object.entries(policies)) {
     );
   });
 
-  test(`${name} policy clearly gates session-status disclosure to the upcoming extension`, () => {
-    assert.match(policy, /Upcoming extension v0\.1\.2: recent save status/);
-    assert.match(policy, /not in the published extension v0\.1\.1/);
+  test(`${name} policy describes the published extension's recent save status`, () => {
+    assert.match(policy, /Recent save status/);
+    assert.match(policy, /In extension v0\.1\.2, the .*storage.* permission/);
+    assert.doesNotMatch(
+      policy,
+      /Upcoming extension|forthcoming behavior|v0\.1\.1/,
+    );
     assert.match(policy, /Chrome session storage/);
     assert.match(policy, /capture outcome and timestamp/);
     assert.match(policy, /connection recovery and last-save feedback/);
