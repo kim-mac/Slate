@@ -31,7 +31,7 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
           ) : (
             'Slate Chrome extension'
           )}{' '}
-          from the Chrome Web Store.
+          (v{release.extensionVersion}) from the Chrome Web Store.
         </li>
         <li>
           Keep the Slate desktop app installed. Browser capture requires it.
@@ -110,6 +110,12 @@ const chromeUrl = downloadUrl(release.downloads.chrome);
         if it still does not open.
       </p>
       <h3>The extension cannot connect</h3>
+      <p>
+        Open the Slate toolbar popup to see feedback from your last relevant
+        save attempt. This is not a live connection check. If you still need the
+        desktop app, <strong>Get Slate Desktop</strong> opens the official Slate
+        website when you select it.
+      </p>
       <p>
         Confirm Slate Desktop is installed for your Windows account and the
         official extension is installed and enabled. Restart Chrome after

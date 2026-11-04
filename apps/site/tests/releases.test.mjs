@@ -22,7 +22,7 @@ test('Windows artifact metadata is centralized and matches the frozen release', 
     release.downloads.windowsARM64.sha256,
     '0B4CD2DC092DFC3E6B512B7C2A185CBED6E2CB302E3FB17C839F32A2CEB9984B',
   );
-  assert.equal(release.extensionVersion, '0.1.1');
+  assert.equal(release.extensionVersion, '0.1.2');
 });
 
 test('Windows activation destinations match the exact approved release assets', async () => {
@@ -51,7 +51,7 @@ test('published Chrome destination resolves to the official Slate Web Store list
   assert.equal(release.downloads.chrome.state, 'verified');
   assert.equal(release.downloads.chrome.url, expected);
   assert.equal(downloadUrl(release.downloads.chrome), expected);
-  assert.equal(release.extensionVersion, '0.1.1');
+  assert.equal(release.extensionVersion, '0.1.2');
 });
 
 test('unpublished macOS destination remains fail-closed', async () => {

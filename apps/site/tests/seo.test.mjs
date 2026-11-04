@@ -78,6 +78,7 @@ test('homepage describes only the released Windows app and its optional companio
     downloadUrl(release.downloads.windowsARM64),
   ]);
   assert.equal(app.sameAs, site.repositoryUrl);
+  assert.equal(app.softwareAddOn.softwareVersion, release.extensionVersion);
   assert.equal(app.softwareAddOn.url, downloadUrl(release.downloads.chrome));
   assert.match(app.softwareAddOn.softwareRequirements, /Slate Desktop/);
   for (const key of ['review', 'aggregateRating', 'screenshot'])
@@ -97,6 +98,9 @@ test('generated llms.txt reuses release metadata and gives accurate capture and 
   assert.match(text, /^# Slate\n/);
   assert.ok(text.includes(description));
   assert.ok(text.includes(`Desktop version: ${release.version}`));
+  assert.ok(
+    text.includes(`Chrome extension version: ${release.extensionVersion}`),
+  );
   assert.match(text, /Windows 11.*x64.*ARM64/);
   assert.match(text, /macOS.*coming soon/);
   assert.match(text, /MIT/);
@@ -118,7 +122,7 @@ test('generated llms.txt reuses release metadata and gives accurate capture and 
     assert.ok(text.includes(url));
   assert.doesNotMatch(
     text,
-    /0\.1\.2|cloud sync|Download for macOS|guaranteed.*index/i,
+    /0\.1\.1|cloud sync|Download for macOS|guaranteed.*index/i,
   );
 });
 
@@ -194,14 +198,24 @@ test('immutable caching is restricted to the verified fingerprinted Astro output
   );
 });
 
-test('public documentation agrees on released desktop and preserves pending extension availability', () => {
+test('public documentation agrees on released desktop and extension versions', () => {
   for (const path of ['../../../README.md', '../../../SECURITY.md']) {
     const text = readFileSync(new URL(path, import.meta.url), 'utf8');
     assert.match(
       text,
       new RegExp(`Desktop\\s*\\|\\s*${release.version.replaceAll('.', '\\.')}`),
     );
-    assert.match(text, /Chrome extension\s*\|\s*0\.1\.1/);
+    assert.ok(
+      text.split('\n').some((line) => {
+        const [, component, version] = line
+          .split('|')
+          .map((cell) => cell.trim());
+        return (
+          component === 'Chrome extension' &&
+          version === release.extensionVersion
+        );
+      }),
+    );
   }
   const readme = read('README.md');
   assert.doesNotMatch(

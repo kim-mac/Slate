@@ -32,13 +32,13 @@ Native Messaging is local process communication, not a cloud upload. The native
 host supplied with Slate Desktop writes to the library directly; the desktop
 window does not relay each capture.
 
-## Upcoming extension v0.1.2: recent save status
+## Recent save status
 
-This describes forthcoming behavior, not in the published extension v0.1.1. The
-storage permission allows a limited capture outcome and timestamp in Chrome
-session storage for connection recovery and last-save feedback. The outcome can
-be saved, unavailable, or unknown. This recovery-status record does not contain
-clip content, selected text, page URLs, page titles, or raw error messages.
+In extension v0.1.2, the `storage` permission allows a limited capture outcome
+and timestamp in Chrome session storage for connection recovery and last-save
+feedback. The outcome can be saved, unavailable, or unknown. This recovery-status
+record does not contain clip content, selected text, page URLs, page titles, or
+raw error messages.
 Captured content and source metadata still go to the local library as described
 above.
 

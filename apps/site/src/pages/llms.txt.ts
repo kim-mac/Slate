@@ -18,6 +18,7 @@ export const GET: APIRoute = () => {
 ## Availability
 
 - Desktop version: ${release.version}
+- Chrome extension version: ${release.extensionVersion}, available on the Chrome Web Store.
 - Available for Windows 11 on x64 (Intel/AMD) and ARM64 PCs.
 - macOS is coming soon; no macOS download or release date is available.
 - Free and open source under the MIT license.

@@ -19,7 +19,8 @@ import { release } from '../data/releases';
       Slate is local-first: your captures stay on your computer, not in a Slate
       cloud library. This policy covers Slate Desktop for Windows, its Chrome
       extension, and this website. Current releases are Desktop{' '}
-      {release.version} and extension 0.1.1. No Slate account is required.
+      {release.version} and extension {release.extensionVersion}. No Slate
+      account is required.
     </p>
     <section>
       <h2>Local storage, not a cloud library</h2>
@@ -94,18 +95,16 @@ import { release } from '../data/releases';
         runtime-downloaded executable code.
       </p>
     </section>
-    <section aria-labelledby="upcoming-extension-status">
-      <h2 id="upcoming-extension-status">
-        Upcoming extension v0.1.2: recent save status
-      </h2>
+    <section aria-labelledby="recent-save-status">
+      <h2 id="recent-save-status">Recent save status</h2>
       <p>
-        This describes forthcoming behavior, not in the published extension
-        v0.1.1. The storage permission allows a limited capture outcome and
-        timestamp in Chrome session storage for connection recovery and
-        last-save feedback. The outcome can be saved, unavailable, or unknown.
-        This recovery-status record does not contain clip content, selected
-        text, page URLs, page titles, or raw error messages. Captured content
-        and source metadata still go to your local library as described below.
+        In extension v{release.extensionVersion}, the <strong>storage</strong>
+        permission allows a limited capture outcome and timestamp in Chrome
+        session storage for connection recovery and last-save feedback. The
+        outcome can be saved, unavailable, or unknown. This recovery-status
+        record does not contain clip content, selected text, page URLs, page
+        titles, or raw error messages. Captured content and source metadata
+        still go to your local library as described below.
       </p>
       <p>
         The record can survive service-worker restarts within the browser

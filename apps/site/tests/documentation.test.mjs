@@ -15,7 +15,7 @@ const support = normalize(supportHtml.replace(/<[^>]*>/g, ' '));
 
 test('README identifies published components and stable official installation links', () => {
   assert.match(readme, /Desktop\s*\|\s*0\.3\.2/);
-  assert.match(readme, /Chrome extension\s*\|\s*0\.1\.1/);
+  assert.match(readme, /Chrome extension\s*\|\s*0\.1\.2/);
   assert.match(readme, /https:\/\/tryslate\.tech\/download\/windows\//);
   assert.match(
     readme,
@@ -40,7 +40,7 @@ test('README describes actual capture scope, desktop dependency and current upda
 
 test('security guidance separates published component versions and two signing mechanisms', () => {
   assert.match(security, /Desktop\s*\|\s*0\.3\.2/);
-  assert.match(security, /Chrome extension\s*\|\s*0\.1\.1/);
+  assert.match(security, /Chrome extension\s*\|\s*0\.1\.2/);
   assert.match(security, /not Authenticode-signed/);
   assert.match(security, /Tauri updater signatures/);
   assert.match(security, /signed-version/);
@@ -82,7 +82,10 @@ test('Support explains view refresh, native host, tray and safe failure recovery
   assert.match(support, /Quit[\s\S]*tray/);
   assert.match(support, /Do not delete your library or choose Delete app data/);
   assert.match(support, /Do not disable signature verification/);
-  assert.doesNotMatch(support, /v0\.1\.2|Get Slate Desktop|Retry\/Cancel/);
+  assert.match(support, /last relevant save attempt/);
+  assert.match(support, /not a live connection check/);
+  assert.match(support, /Get Slate Desktop.*official Slate website/);
+  assert.doesNotMatch(support, /Retry\/Cancel/);
 });
 
 test('Support explains official installer trust without bypassing Windows protection', () => {
