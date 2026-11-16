@@ -3,7 +3,7 @@
 Slate is a free, open-source app that saves snippets from ChatGPT, Claude and the
 web to a private local library on your PC. Windows now, macOS soon.
 
-**Capture → find → reuse.** No Slate account required.
+**Capture → find → reuse.** No account required. Local.
 
 **[Website](https://tryslate.tech/) · [Download for Windows](https://tryslate.tech/download/windows/) · [macOS - Coming soon] · [Chrome extension](https://chromewebstore.google.com/detail/slate/hgbfaclkpmcecikjepoejgjccddjbekh)**
 
